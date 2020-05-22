@@ -39,8 +39,8 @@
 
 struct cebuf {
 	void			*base;
+	size_t			maxsz;
 	size_t			length;
-	size_t			offset;
 
 	struct cebuf		*prev;
 	char			*path;

@@ -213,12 +213,20 @@ editor_draw_buffer(void)
 static void
 editor_cmd_input(struct cebuf *buf, char key)
 {
-	if (key == '\n') {
+	switch (key) {
+	case '\n':
 		editor_cmd_normal_mode();
-		return;
+		break;
+	case '\b':
+		if (buf->length > 1)
+			buf->length--;
+		break;
+	case '\t':
+		break;
+	default:
+		ce_buffer_append(buf, &key, sizeof(key));
+		break;
 	}
-
-	ce_buffer_append(buf, &key, sizeof(key));
 }
 
 static void
@@ -304,6 +312,8 @@ editor_cmd_insert_mode(void)
 static void
 editor_cmd_command_mode(void)
 {
+	ce_term_setpos(cmdbuf->line, cmdbuf->column + 1);
+
 	ce_buffer_reset(cmdbuf);
 	ce_buffer_append(cmdbuf, &colon_char, sizeof(colon_char));
 
@@ -316,10 +326,16 @@ editor_cmd_command_mode(void)
 static void
 editor_cmd_normal_mode(void)
 {
-	ce_buffer_reset(cmdbuf);
-
 	if (curbuf != NULL)
 		curbuf = curbuf->prev;
+
+	if (mode == EDITOR_MODE_COMMAND) {
+		ce_buffer_reset(cmdbuf);
+		if (curbuf != NULL)
+			ce_term_setpos(curbuf->line, curbuf->column);
+		else
+			ce_term_setpos(TERM_CURSOR_MIN, TERM_CURSOR_MIN);
+	}
 
 	mode = EDITOR_MODE_NORMAL;
 }

@@ -117,11 +117,7 @@ ce_buffer_free(struct cebuf *buf)
 void
 ce_buffer_reset(struct cebuf *buf)
 {
-	free(buf->base);
-
 	buf->length = 0;
-	buf->offset = 0;
-	buf->base = NULL;
 }
 
 void
@@ -152,25 +148,26 @@ ce_buffer_append(struct cebuf *buf, const void *data, size_t len)
 	void		*r;
 	size_t		nlen;
 
-	if ((buf->offset + len) < buf->offset) {
+	if ((buf->length + len) < buf->length) {
 		fatal("%s: overflow %zu+%zu < %zu",
-		    __func__, buf->offset, len, buf->offset);
+		    __func__, buf->length, len, buf->length);
 	}
 
-	nlen = buf->offset + len;
-	if (nlen > buf->length) {
+	nlen = buf->length + len;
+	if (nlen > buf->maxsz) {
+		nlen = nlen + 1024;
 		if ((r = realloc(buf->base, nlen)) == NULL) {
 			fatal("%s: realloc %zu -> %zu: %s", __func__,
 			    buf->length, nlen, errno_s);
 		}
 
 		buf->base = r;
-		buf->length = nlen;
+		buf->maxsz = nlen;
 	}
 
 	p = buf->base;
-	memcpy(p + buf->offset, data, len);
-	buf->offset += len;
+	memcpy(p + buf->length, data, len);
+	buf->length += len;
 }
 
 static void
