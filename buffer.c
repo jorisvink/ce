@@ -233,22 +233,16 @@ ce_buffer_map(void)
 	line = active->orig_line;
 	ce_term_setpos(active->orig_line, active->orig_column);
 
-	if (active->lcnt == 0) {
+	for (idx = active->top; idx < active->lcnt; idx++) {
 		ce_term_setpos(line, TERM_CURSOR_MIN);
 		ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
-		ce_term_write(active->data, active->length);
-	} else {
-		for (idx = active->top; idx < active->lcnt; idx++) {
-			ce_term_setpos(line, TERM_CURSOR_MIN);
-			ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
-			ce_term_write(active->lines[idx].data,
-			    active->lines[idx].length);
+		ce_term_write(active->lines[idx].data,
+		    active->lines[idx].byte_length);
 
-			line++;
+		line++;
 
-			if (line > ce_term_height() - 2)
-				break;
-		}
+		if (line > ce_term_height() - 2)
+			break;
 	}
 
 	ce_term_setpos(active->line, active->column);
@@ -289,8 +283,8 @@ ce_buffer_move_up(void)
 	active->line--;
 
 	line = buffer_line_index(active);
-	if (active->column > active->lines[line].length) {
-		active->column = active->lines[line].length;
+	if (active->column > active->lines[line].columns) {
+		active->column = active->lines[line].columns;
 		ce_term_setpos(active->line, active->column);
 	} else {
 		ce_term_writestr(TERM_SEQUENCE_CURSOR_UP);
@@ -322,8 +316,8 @@ ce_buffer_move_down(void)
 		active->line = next;
 
 		line = buffer_line_index(active);
-		if (active->column > active->lines[line].length) {
-			active->column = active->lines[line].length;
+		if (active->column > active->lines[line].columns) {
+			active->column = active->lines[line].columns;
 			ce_term_setpos(active->line, active->column);
 		} else {
 			ce_term_writestr(TERM_SEQUENCE_CURSOR_DOWN);
@@ -366,7 +360,7 @@ ce_buffer_move_right(void)
 
 	next = active->column + 1;
 	line = buffer_line_index(active);
-	if (next <= active->lines[line].length) {
+	if (next <= active->lines[line].columns) {
 		active->column++;
 		ce_term_writestr(TERM_SEQUENCE_CURSOR_RIGHT);
 	}
@@ -378,7 +372,7 @@ ce_buffer_jump_right(void)
 	u_int16_t	line;
 
 	line = buffer_line_index(active);
-	active->column = active->lines[line].length;
+	active->column = active->lines[line].columns;
 	ce_term_setpos(active->line, active->column);
 }
 
@@ -415,24 +409,57 @@ ce_buffer_find_lines(struct cebuf *buf)
 		elm = buf->lcnt + 1;
 		buf->lines = realloc(buf->lines, elm * sizeof(struct celine));
 		if (buf->lines == NULL) {
-			fatal("%s: calloc(%zu): %s", __func__,
-			    elm * sizeof(char *), errno_s);
+			fatal("%s: realloc(%zu): %s", __func__,
+			    elm * sizeof(struct celine), errno_s);
 		}
 
-		data[idx] = '\0';
-
 		buf->lines[buf->lcnt].data = start;
-		buf->lines[buf->lcnt].offset = idx;
-		buf->lines[buf->lcnt].length = strlen(start);
+		buf->lines[buf->lcnt].file_offset = idx;
+		buf->lines[buf->lcnt].byte_length = &data[idx] - start;
 
-		if (buf->lines[buf->lcnt].length == 0)
-			buf->lines[buf->lcnt].length = 1;
-
-		data[idx] = '\n';
+		ce_buffer_line_columns(&buf->lines[buf->lcnt]);
 
 		start = &data[idx + 1];
 		buf->lcnt++;
 	}
+
+	if (buf->lcnt == 0) {
+		buf->lcnt = 1;
+
+		if ((buf->lines = calloc(1, sizeof(struct celine))) == NULL) {
+			fatal("%s: calloc(%zu): %s", __func__,
+			    sizeof(struct celine), errno_s);
+		}
+
+		buf->lines[0].file_offset = 0;
+		buf->lines[0].data = buf->data;
+		buf->lines[0].byte_length = buf->length;
+
+		ce_buffer_line_columns(&buf->lines[0]);
+	}
+}
+
+void
+ce_buffer_line_columns(struct celine *line)
+{
+	size_t		idx;
+	char		*data;
+
+	if (line->byte_length == 0)
+		line->byte_length = 1;
+
+	data = line->data;
+	line->columns = 0;
+
+	for (idx = 0; idx < line->byte_length; idx++) {
+		if (data[idx] == '\t')
+			line->columns += 8 - (line->columns % 8);
+		else
+			line->columns++;
+	}
+
+	if (line->columns == 0)
+		line->columns = 1;
 }
 
 static u_int16_t

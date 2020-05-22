@@ -26,6 +26,7 @@ int
 main(int argc, char *argv[])
 {
 	ce_buffer_init(argc, argv);
+
 	ce_term_setup();
 	ce_editor_loop();
 	ce_buffer_cleanup();

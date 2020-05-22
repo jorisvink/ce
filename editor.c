@@ -90,6 +90,8 @@ ce_editor_loop(void)
 	int			ret;
 	struct pollfd		pfd;
 
+	memset(&pfd, 0, sizeof(pfd));
+
 	pfd.events = POLLIN;
 	pfd.fd = STDIN_FILENO;
 
@@ -97,8 +99,8 @@ ce_editor_loop(void)
 		fatal("%s: failed to allocate cmdbuf", __func__);
 
 	cmdbuf->cb = editor_cmd_input;
+	cmdbuf->line = ce_term_height();
 	cmdbuf->orig_line = ce_term_height();
-	cmdbuf->line = cmdbuf->orig_line;
 
 	while (!quit) {
 		editor_draw_status();
@@ -238,6 +240,8 @@ editor_cmd_input(struct cebuf *buf, char key)
 		buf->column++;
 		break;
 	}
+
+	ce_buffer_find_lines(buf);
 }
 
 static void
@@ -257,8 +261,9 @@ editor_cmd_command_mode(void)
 {
 	editor_cmd_reset();
 
-	ce_buffer_append(cmdbuf, &colon_char, sizeof(colon_char));
 	cmdbuf->column++;
+	ce_buffer_append(cmdbuf, &colon_char, sizeof(colon_char));
+	ce_buffer_find_lines(cmdbuf);
 
 	ce_buffer_activate(cmdbuf);
 

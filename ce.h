@@ -45,30 +45,54 @@
 #define TERM_SEQUENCE_FOREGROUND_BLACK	TERM_ESCAPE "30m"
 #define TERM_SEQUENCE_FOREGROUND_WHITE	TERM_ESCAPE "37m"
 
+/*
+ * Represents a single line in a file.
+ */
 struct celine {
+	/* Line data. */
 	void			*data;
-	size_t			offset;
-	size_t			length;
+
+	/* Offset where in the file this line begins. */
+	size_t			file_offset;
+
+	/* Length of the line in bytes. */
+	size_t			byte_length;
+
+	/* Length of the line in columns. */
+	u_int16_t		columns;
 };
 
+/*
+ * A buffer from either a file or internal.
+ */
 struct cebuf {
+	/* The data inside the buffer, its max size and current length. */
 	void			*data;
 	size_t			maxsz;
 	size_t			length;
 
+	/* Pointer to previous buffer. */
 	struct cebuf		*prev;
+
+	/* If backed by a file, the path. */
 	char			*path;
 
+	/* Current line / column offsets. */
 	u_int16_t		line;
 	u_int16_t		column;
 
+	/* Origin line and column. */
 	u_int16_t		orig_line;
 	u_int16_t		orig_column;
 
+	/* The "top" of where to begin to render the lines. */
 	size_t			top;
+
+	/* Number of lines in this buffer. */
 	size_t			lcnt;
 	struct celine		*lines;
 
+	/* Callback for special buffers (like cmdbuf). */
 	void			(*cb)(struct cebuf *, char);
 
 	TAILQ_ENTRY(cebuf)	list;
@@ -84,6 +108,7 @@ void		ce_buffer_free(struct cebuf *);
 void		ce_buffer_reset(struct cebuf *);
 void		ce_buffer_activate(struct cebuf *);
 void		ce_buffer_find_lines(struct cebuf *);
+void		ce_buffer_line_columns(struct celine *);
 void		ce_buffer_command(struct cebuf *, char );
 void		ce_buffer_append(struct cebuf *, const void *, size_t);
 
