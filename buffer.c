@@ -279,6 +279,13 @@ ce_buffer_move_up(void)
 	if (active->line == TERM_CURSOR_MIN)
 		return;
 
+	if (active->line < TERM_SCROLL_OFFSET) {
+		if (active->top > 0) {
+			active->top--;
+			return;
+		}
+	}
+
 	active->line--;
 
 	line = buffer_line_index(active);
@@ -302,6 +309,12 @@ ce_buffer_move_down(void)
 
 	if (active->line == ce_term_height() - 2)
 		return;
+
+	if (active->line >= (ce_term_height() - 2 - TERM_SCROLL_OFFSET)) {
+		if (active->top < active->lcnt)
+			active->top++;
+		return;
+	}
 
 	next = active->line + 1;
 
@@ -430,7 +443,7 @@ buffer_line_index(struct cebuf *buf)
 	if (active->line == 0)
 		fatal("%s: line == 0", __func__);
 
-	line = active->line - 1;
+	line = active->top + (active->line - 1);
 	if (line >= buf->lcnt)
 		fatal("%s: line %u > lcnt %zu", __func__, line, active->lcnt);
 

@@ -24,6 +24,9 @@
 
 #include "ce.h"
 
+#define TERM_MIN_ROWS		25
+#define TERM_MIN_COLS		50
+
 static struct termios	cur;
 static struct termios	old;
 static struct winsize	winsz;
@@ -39,6 +42,11 @@ ce_term_setup(void)
 
 	if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &winsz) == -1)
 		fatal("%s: ioctl(): %s", __func__, errno_s);
+
+	if (winsz.ws_row < TERM_MIN_ROWS)
+		fatal("terminal too small (minimum %d rows)", TERM_MIN_ROWS);
+	if (winsz.ws_col < TERM_MIN_COLS)
+		fatal("terminal too small (minimum %d columns)", TERM_MIN_COLS);
 
 	if (tcgetattr(STDIN_FILENO, &old) == -1)
 		fatal("%s: tcgetattr: %s", __func__, errno_s);

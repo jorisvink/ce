@@ -200,8 +200,8 @@ editor_draw_status(void)
 
 	ce_term_setpos(ce_term_height() - 1, TERM_CURSOR_MIN);
 	ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
-	ce_term_writef("[ %ux%u ] %s [%zu lines]",
-	    curbuf->line, curbuf->column, modestr, curbuf->lcnt);
+	ce_term_writef("[ %zux%u ] %s [%zu lines]",
+	    curbuf->top + curbuf->line, curbuf->column, modestr, curbuf->lcnt);
 
 	ce_term_writestr(TERM_SEQUENCE_CURSOR_RESTORE);
 

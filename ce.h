@@ -24,6 +24,8 @@
 
 #define errno_s				strerror(errno)
 
+#define TERM_SCROLL_OFFSET		10
+
 #define TERM_CURSOR_MIN			1
 #define TERM_ESCAPE			"\033["
 
