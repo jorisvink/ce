@@ -24,8 +24,9 @@
 
 #include "ce.h"
 
-static void	buffer_seterr(const char *, ...)
-		    __attribute__((format (printf, 1, 2)));
+static void		buffer_seterr(const char *, ...)
+			    __attribute__((format (printf, 1, 2)));
+static u_int16_t	buffer_line_index(struct cebuf *);
 
 static struct cebuflist		buffers;
 static char			*errstr = NULL;
@@ -39,21 +40,24 @@ ce_buffer_init(int argc, char **argv)
 
 	TAILQ_INIT(&buffers);
 
-	for (i = 1; i < argc; i++) {
-		if (ce_buffer_alloc(argv[i]) == NULL)
-			fatal("%s", errstr);
-	}
-
 	if ((scratch = calloc(1, sizeof(*scratch))) == NULL) {
 		fatal("%s: calloc(%zu): %s", __func__,
 		    sizeof(*scratch), errno_s);
 	}
 
+	scratch->top = 0;
 	scratch->orig_line = TERM_CURSOR_MIN;
 	scratch->orig_column = TERM_CURSOR_MIN;
 
 	scratch->line = scratch->orig_line;
 	scratch->column = scratch->orig_column;
+
+	active = scratch;
+
+	for (i = 1; i < argc; i++) {
+		if (ce_buffer_alloc(argv[i]) == NULL)
+			fatal("%s", errstr);
+	}
 
 	if ((active = TAILQ_FIRST(&buffers)) == NULL)
 		active = scratch;
@@ -92,8 +96,11 @@ ce_buffer_alloc(const char *path)
 		fatal("%s: calloc(%zu): %s", __func__, sizeof(*buf), errno_s);
 
 	buf->prev = active;
+
+	buf->top = 0;
 	buf->orig_line = TERM_CURSOR_MIN;
 	buf->orig_column = TERM_CURSOR_MIN;
+
 	buf->line = buf->orig_line;
 	buf->column = buf->orig_column;
 
@@ -101,6 +108,9 @@ ce_buffer_alloc(const char *path)
 
 	if (path == NULL)
 		return (buf);
+
+	if ((buf->path = strdup(path)) == NULL)
+		fatal("%s: strdup: %s", __func__, errno_s);
 
 	if ((fd = open(path, O_RDONLY)) == -1) {
 		buffer_seterr("cannot open %s: %s", path, errno_s);
@@ -142,7 +152,11 @@ ce_buffer_alloc(const char *path)
 		break;
 	}
 
+	ce_buffer_find_lines(buf);
+
 	ret = buf;
+	active = buf;
+
 	buf = NULL;
 
 cleanup:
@@ -208,8 +222,8 @@ ce_buffer_as_string(struct cebuf *buf)
 void
 ce_buffer_map(void)
 {
+	size_t		idx;
 	int		line;
-	char		*end, *line_end, *line_start;
 
 	if (active->data == NULL)
 		return;
@@ -217,42 +231,140 @@ ce_buffer_map(void)
 	line = active->orig_line;
 	ce_term_setpos(active->orig_line, active->orig_column);
 
-	line_end = NULL;
-	line_start = active->data;
-
-	end = line_start + active->length;
-
-	while (line_end < end) {
-		if ((line_end = strchr(line_start, '\n')) == NULL) {
-			ce_term_write(line_start, end - line_start);
-			break;
-		}
-
+	if (active->lcnt == 0) {
 		ce_term_setpos(line, TERM_CURSOR_MIN);
 		ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
-		ce_term_write(line_start, line_end - line_start);
+		ce_term_write(active->data, active->length);
+	} else {
+		for (idx = active->top; idx < active->lcnt; idx++) {
+			ce_term_setpos(line, TERM_CURSOR_MIN);
+			ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
+			ce_term_write(active->lines[idx].data,
+			    active->lines[idx].length);
 
-		line++;
+			line++;
 
-		if (line > ce_term_height() - 2)
-			break;
-
-		line_start = line_end + 1;
+			if (line > ce_term_height() - 2)
+				break;
+		}
 	}
 
 	ce_term_setpos(active->line, active->column);
 }
 
 void
-ce_buffer_command(char cmd)
+ce_buffer_command(struct cebuf *buf, char cmd)
 {
-	if (active->cb != NULL) {
-		active->cb(active, cmd);
+	if (buf->cb != NULL) {
+		active->cb(buf, cmd);
 		return;
 	}
 
-	ce_buffer_append(active, &cmd, sizeof(cmd));
+#if 0
+	ce_buffer_append(buf, &cmd, sizeof(cmd));
 	active->column++;
+#endif
+}
+
+void
+ce_buffer_move_up(void)
+{
+	u_int16_t	line;
+
+	if (active->line < TERM_CURSOR_MIN)
+		fatal("%s: line (%u) < min", __func__, active->line);
+
+	if (active->line == TERM_CURSOR_MIN)
+		return;
+
+	active->line--;
+
+	line = buffer_line_index(active);
+	if (active->column > active->lines[line].length) {
+		active->column = active->lines[line].length;
+		ce_term_setpos(active->line, active->column);
+	} else {
+		ce_term_writestr(TERM_SEQUENCE_CURSOR_UP);
+	}
+}
+
+void
+ce_buffer_move_down(void)
+{
+	u_int16_t	line, next;
+
+	if (active->line > ce_term_height() - 2) {
+		fatal("%s: line (%u) > %u",
+		    __func__, active->line, ce_term_height() - 2);
+	}
+
+	if (active->line == ce_term_height() - 2)
+		return;
+
+	next = active->line + 1;
+
+	if (next <= active->lcnt) {
+		active->line = next;
+
+		line = buffer_line_index(active);
+		if (active->column > active->lines[line].length) {
+			active->column = active->lines[line].length;
+			ce_term_setpos(active->line, active->column);
+		} else {
+			ce_term_writestr(TERM_SEQUENCE_CURSOR_DOWN);
+		}
+	}
+}
+
+void
+ce_buffer_move_left(void)
+{
+	if (active->column < TERM_CURSOR_MIN)
+		fatal("%s: col (%u) < min", __func__, active->column);
+
+	if (active->column == TERM_CURSOR_MIN)
+		return;
+
+	active->column--;
+	ce_term_writestr(TERM_SEQUENCE_CURSOR_LEFT);
+}
+
+void
+ce_buffer_jump_left(void)
+{
+	active->column = TERM_CURSOR_MIN;
+	ce_term_setpos(active->line, active->column);
+}
+
+void
+ce_buffer_move_right(void)
+{
+	u_int16_t	next, line;
+
+	if (active->column > ce_term_width()) {
+		fatal("%s: col (%u) > %u", __func__,
+		    active->column, ce_term_width());
+	}
+
+	if (active->column == ce_term_width())
+		return;
+
+	next = active->column + 1;
+	line = buffer_line_index(active);
+	if (next <= active->lines[line].length) {
+		active->column++;
+		ce_term_writestr(TERM_SEQUENCE_CURSOR_RIGHT);
+	}
+}
+
+void
+ce_buffer_jump_right(void)
+{
+	u_int16_t	line;
+
+	line = buffer_line_index(active);
+	active->column = active->lines[line].length;
+	ce_term_setpos(active->line, active->column);
 }
 
 void
@@ -282,6 +394,62 @@ ce_buffer_append(struct cebuf *buf, const void *data, size_t len)
 	p = buf->data;
 	memcpy(p + buf->length, data, len);
 	buf->length += len;
+}
+
+void
+ce_buffer_find_lines(struct cebuf *buf)
+{
+	size_t		idx, elm;
+	char		*start, *data;
+
+	free(buf->lines);
+
+	buf->lcnt = 0;
+	buf->lines = NULL;
+
+	data = buf->data;
+	start = data;
+
+	for (idx = 0; idx < buf->length; idx++) {
+		if (data[idx] != '\n')
+			continue;
+
+		elm = buf->lcnt + 1;
+		buf->lines = realloc(buf->lines, elm * sizeof(struct celine));
+		if (buf->lines == NULL) {
+			fatal("%s: calloc(%zu): %s", __func__,
+			    elm * sizeof(char *), errno_s);
+		}
+
+		data[idx] = '\0';
+
+		buf->lines[buf->lcnt].data = start;
+		buf->lines[buf->lcnt].offset = idx;
+		buf->lines[buf->lcnt].length = strlen(start);
+
+		if (buf->lines[buf->lcnt].length == 0)
+			buf->lines[buf->lcnt].length = 1;
+
+		data[idx] = '\n';
+
+		start = &data[idx + 1];
+		buf->lcnt++;
+	}
+}
+
+static u_int16_t
+buffer_line_index(struct cebuf *buf)
+{
+	u_int16_t	line;
+
+	if (active->line == 0)
+		fatal("%s: line == 0", __func__);
+
+	line = active->line - 1;
+	if (line >= buf->lcnt)
+		fatal("%s: line %u > lcnt %zu", __func__, line, active->lcnt);
+
+	return (line);
 }
 
 static void

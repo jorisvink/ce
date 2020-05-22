@@ -42,12 +42,6 @@ static void	editor_draw_status(void);
 
 static void	editor_cmd_quit(void);
 static void	editor_cmd_reset(void);
-static void	editor_cmd_move_up(void);
-static void	editor_cmd_move_down(void);
-static void	editor_cmd_move_left(void);
-static void	editor_cmd_jump_left(void);
-static void	editor_cmd_move_right(void);
-static void	editor_cmd_jump_right(void);
 
 static void	editor_cmd_insert_mode(void);
 static void	editor_cmd_normal_mode(void);
@@ -56,12 +50,12 @@ static void	editor_cmd_command_mode(void);
 static void	editor_cmd_input(struct cebuf *, char);
 
 static struct keymap normal_map[] = {
-	{ 'k',		editor_cmd_move_up },
-	{ 'j',		editor_cmd_move_down },
-	{ 'l',		editor_cmd_move_right },
-	{ '$',		editor_cmd_jump_right },
-	{ 'h',		editor_cmd_move_left },
-	{ '0',		editor_cmd_jump_left },
+	{ 'k',		ce_buffer_move_up },
+	{ 'j',		ce_buffer_move_down },
+	{ 'l',		ce_buffer_move_right },
+	{ '$',		ce_buffer_jump_right },
+	{ 'h',		ce_buffer_move_left },
+	{ '0',		ce_buffer_jump_left },
 	{ 'i',		editor_cmd_insert_mode },
 	{ ':',		editor_cmd_command_mode },
 };
@@ -155,7 +149,7 @@ editor_event(void)
 	if (mode == EDITOR_MODE_NORMAL)
 		return;
 
-	ce_buffer_command(key);
+	ce_buffer_command(curbuf, key);
 }
 
 static void
@@ -206,7 +200,8 @@ editor_draw_status(void)
 
 	ce_term_setpos(ce_term_height() - 1, TERM_CURSOR_MIN);
 	ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
-	ce_term_writef("[ %dx%d ] %s", curbuf->line, curbuf->column, modestr);
+	ce_term_writef("[ %ux%u ] %s [%zu lines]",
+	    curbuf->line, curbuf->column, modestr, curbuf->lcnt);
 
 	ce_term_writestr(TERM_SEQUENCE_CURSOR_RESTORE);
 
@@ -249,88 +244,6 @@ static void
 editor_cmd_quit(void)
 {
 	quit = 1;
-}
-
-static void
-editor_cmd_move_up(void)
-{
-	struct cebuf	*curbuf = ce_buffer_active();
-
-	if (curbuf->line < TERM_CURSOR_MIN)
-		fatal("%s: line (%d) < 0", __func__, curbuf->line);
-
-	if (curbuf->line == TERM_CURSOR_MIN)
-		return;
-
-	curbuf->line--;
-	ce_term_writestr(TERM_SEQUENCE_CURSOR_UP);
-}
-
-static void
-editor_cmd_move_down(void)
-{
-	struct cebuf	*curbuf = ce_buffer_active();
-
-	if (curbuf->line > ce_term_height() - 2) {
-		fatal("%s: line (%d) > %d",
-		    __func__, curbuf->line, ce_term_height() - 2);
-	}
-
-	if (curbuf->line == ce_term_height() - 2)
-		return;
-
-	curbuf->line++;
-	ce_term_writestr(TERM_SEQUENCE_CURSOR_DOWN);
-}
-
-static void
-editor_cmd_move_left(void)
-{
-	struct cebuf	*curbuf = ce_buffer_active();
-
-	if (curbuf->column < TERM_CURSOR_MIN)
-		fatal("%s: col (%d) < 0", __func__, curbuf->column);
-
-	if (curbuf->column == TERM_CURSOR_MIN)
-		return;
-
-	curbuf->column--;
-	ce_term_writestr(TERM_SEQUENCE_CURSOR_LEFT);
-}
-
-static void
-editor_cmd_jump_left(void)
-{
-	struct cebuf	*curbuf = ce_buffer_active();
-
-	curbuf->column = TERM_CURSOR_MIN;
-	ce_term_setpos(curbuf->line, curbuf->column);
-}
-
-static void
-editor_cmd_move_right(void)
-{
-	struct cebuf	*curbuf = ce_buffer_active();
-
-	if (curbuf->column > ce_term_width()) {
-		fatal("%s: col (%d) > %d", __func__,
-		    curbuf->column, ce_term_width());
-	}
-
-	if (curbuf->column == ce_term_width())
-		return;
-
-	curbuf->column++;
-	ce_term_writestr(TERM_SEQUENCE_CURSOR_RIGHT);
-}
-
-static void
-editor_cmd_jump_right(void)
-{
-	struct cebuf	*curbuf = ce_buffer_active();
-
-	curbuf->column = ce_term_width();
-	ce_term_setpos(curbuf->line, curbuf->column);
 }
 
 static void
