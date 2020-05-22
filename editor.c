@@ -102,6 +102,9 @@ ce_editor_loop(void)
 	cmdbuf->line = ce_term_height();
 	cmdbuf->orig_line = ce_term_height();
 
+	if ((cmdbuf->path = strdup("<cmd>")) == NULL)
+		fatal("%s: failed to set path for cmdbuf", __func__);
+
 	while (!quit) {
 		editor_draw_status();
 
@@ -151,7 +154,7 @@ editor_event(void)
 	if (mode == EDITOR_MODE_NORMAL)
 		return;
 
-	ce_buffer_command(curbuf, key);
+	ce_buffer_input(curbuf, key);
 }
 
 static void
@@ -202,8 +205,9 @@ editor_draw_status(void)
 
 	ce_term_setpos(ce_term_height() - 1, TERM_CURSOR_MIN);
 	ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
-	ce_term_writef("[ %zux%u ] %s [%zu lines]",
-	    curbuf->top + curbuf->line, curbuf->column, modestr, curbuf->lcnt);
+	ce_term_writef("[%s] [ %zu,%zu-%u ] [%zu lines] %s",
+	    curbuf->path, curbuf->top + curbuf->line, curbuf->loff + 1,
+	    curbuf->column, curbuf->lcnt, modestr);
 
 	ce_term_writestr(TERM_SEQUENCE_CURSOR_RESTORE);
 
@@ -273,10 +277,10 @@ editor_cmd_command_mode(void)
 static void
 editor_cmd_normal_mode(void)
 {
-	ce_buffer_restore();
-
-	if (mode == EDITOR_MODE_COMMAND)
+	if (mode == EDITOR_MODE_COMMAND) {
+		ce_buffer_restore();
 		editor_cmd_reset();
+	}
 
 	mode = EDITOR_MODE_NORMAL;
 }

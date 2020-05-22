@@ -88,6 +88,9 @@ struct cebuf {
 	/* The "top" of where to begin to render the lines. */
 	size_t			top;
 
+	/* The byte offset in the current line we're at. */
+	size_t			loff;
+
 	/* Number of lines in this buffer. */
 	size_t			lcnt;
 	struct celine		*lines;
@@ -108,8 +111,8 @@ void		ce_buffer_free(struct cebuf *);
 void		ce_buffer_reset(struct cebuf *);
 void		ce_buffer_activate(struct cebuf *);
 void		ce_buffer_find_lines(struct cebuf *);
+void		ce_buffer_input(struct cebuf *, char );
 void		ce_buffer_line_columns(struct celine *);
-void		ce_buffer_command(struct cebuf *, char );
 void		ce_buffer_append(struct cebuf *, const void *, size_t);
 
 void		ce_buffer_move_up(void);

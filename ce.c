@@ -22,15 +22,42 @@
 
 #include "ce.h"
 
+static FILE	*fp = NULL;
+
 int
 main(int argc, char *argv[])
 {
+	int		ch, debug;
+
+	debug = 0;
+
+	while ((ch = getopt(argc, argv, "d")) != -1) {
+		switch (ch) {
+		case 'd':
+			debug = 1;
+			break;
+		}
+	}
+
+	if (debug) {
+		if ((fp = fopen("ce.log", "a")) == NULL)
+			fatal("failed to open debug log");
+	}
+
+	argc -= optind;
+	argv += optind;
+
+	ce_debug("%d args, argv[0] = %s", argc, argv[0]);
+
 	ce_buffer_init(argc, argv);
 
 	ce_term_setup();
 	ce_editor_loop();
 	ce_buffer_cleanup();
 	ce_term_restore();
+
+	if (debug)
+		(void)fclose(fp);
 
 	return (0);
 }
@@ -40,11 +67,15 @@ ce_debug(const char *fmt, ...)
 {
 	va_list		args;
 
+	if (fp == NULL)
+		return;
+
 	va_start(args, fmt);
-	vfprintf(stderr, fmt, args);
+	vfprintf(fp, fmt, args);
 	va_end(args);
 
-	fprintf(stderr, "\n");
+	fprintf(fp, "\n");
+	fflush(fp);
 }
 
 void
