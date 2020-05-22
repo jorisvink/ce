@@ -26,7 +26,9 @@
 
 static void		buffer_seterr(const char *, ...)
 			    __attribute__((format (printf, 1, 2)));
+
 static u_int16_t	buffer_line_index(struct cebuf *);
+static void		buffer_grow(struct cebuf *, size_t);
 
 static struct cebuflist		buffers;
 static char			*errstr = NULL;
@@ -371,25 +373,8 @@ void
 ce_buffer_append(struct cebuf *buf, const void *data, size_t len)
 {
 	u_int8_t	*p;
-	void		*r;
-	size_t		nlen;
 
-	if ((buf->length + len) < buf->length) {
-		fatal("%s: overflow %zu+%zu < %zu",
-		    __func__, buf->length, len, buf->length);
-	}
-
-	nlen = buf->length + len;
-	if (nlen > buf->maxsz) {
-		nlen = nlen + 1024;
-		if ((r = realloc(buf->data, nlen)) == NULL) {
-			fatal("%s: realloc %zu -> %zu: %s", __func__,
-			    buf->length, nlen, errno_s);
-		}
-
-		buf->data = r;
-		buf->maxsz = nlen;
-	}
+	buffer_grow(buf, len);
 
 	p = buf->data;
 	memcpy(p + buf->length, data, len);
@@ -450,6 +435,30 @@ buffer_line_index(struct cebuf *buf)
 		fatal("%s: line %u > lcnt %zu", __func__, line, active->lcnt);
 
 	return (line);
+}
+
+static void
+buffer_grow(struct cebuf *buf, size_t len)
+{
+	void		*r;
+	size_t		nlen;
+
+	if ((buf->length + len) < buf->length) {
+		fatal("%s: overflow %zu+%zu < %zu",
+		    __func__, buf->length, len, buf->length);
+	}
+
+	nlen = buf->length + len;
+	if (nlen > buf->maxsz) {
+		nlen = nlen + 1024;
+		if ((r = realloc(buf->data, nlen)) == NULL) {
+			fatal("%s: realloc %zu -> %zu: %s", __func__,
+			    buf->length, nlen, errno_s);
+		}
+
+		buf->data = r;
+		buf->maxsz = nlen;
+	}
 }
 
 static void
