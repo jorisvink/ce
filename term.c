@@ -17,6 +17,7 @@
 #include <sys/types.h>
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <termios.h>
 #include <unistd.h>
 
@@ -26,6 +27,7 @@ static struct termios	cur;
 static struct termios	old;
 
 static int 		can_restore = 0;
+static struct cebuf	*termbuf = NULL;
 
 void
 ce_term_setup(void)
@@ -47,8 +49,12 @@ ce_term_setup(void)
 	if (tcsetattr(STDIN_FILENO, TCSANOW, &cur) == -1)
 		fatal("%s: tcsetattr: %s", __func__, errno_s);
 
-	can_restore = 1;
+	if ((termbuf = calloc(1, sizeof(*termbuf))) == NULL) {
+		fatal("%s: calloc(%zu): %s", __func__,
+		    sizeof(*termbuf), errno_s);
+	}
 
+	can_restore = 1;
 	ce_term_writestr(TERM_SEQUENCE_CLEAR);
 }
 
@@ -116,10 +122,20 @@ ce_term_writef(const char *fmt, ...)
 void
 ce_term_write(const void *data, size_t len)
 {
+	ce_buffer_append(termbuf, data, len);
+}
+
+void
+ce_term_flush(void)
+{
 	ssize_t		sz;
 
+	if (termbuf->data == NULL || termbuf->length == 0)
+		return;
+
 	for (;;) {
-		if ((sz = write(STDOUT_FILENO, data, len)) == -1) {
+		sz = write(STDOUT_FILENO, termbuf->data, termbuf->length);
+		if (sz == -1) {
 			if (errno == EINTR)
 				continue;
 			fatal("%s: write: %s", __func__, errno_s);
@@ -127,4 +143,6 @@ ce_term_write(const void *data, size_t len)
 
 		break;
 	}
+
+	ce_buffer_reset(termbuf);
 }

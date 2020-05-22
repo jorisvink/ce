@@ -11,7 +11,7 @@ SRC=	ce.c buffer.c editor.c term.c
 
 CFLAGS+=-Wall -Werror -Wstrict-prototypes -Wmissing-prototypes
 CFLAGS+=-Wmissing-declarations -Wshadow -Wpointer-arith -Wcast-qual
-CFLAGS+=-Wsign-compare -std=c99 -pedantic
+CFLAGS+=-Wsign-compare -std=c99 -pedantic -ggdb
 CFLAGS+=-DPREFIX='"$(PREFIX)"' -fstack-protector-all
 
 OBJS=	$(SRC:%.c=$(OBJDIR)/%.o)

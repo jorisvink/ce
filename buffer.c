@@ -15,7 +15,6 @@
  */
 
 #include <sys/types.h>
-#include <sys/mman.h>
 #include <sys/stat.h>
 
 #include <fcntl.h>
@@ -30,17 +29,35 @@ static void	buffer_seterr(const char *, ...)
 
 static struct cebuflist		buffers;
 static char			*errstr = NULL;
+static struct cebuf		*active = NULL;
+static struct cebuf		*scratch = NULL;
 
 void
 ce_buffer_init(void)
 {
 	TAILQ_INIT(&buffers);
+
+	if ((scratch = calloc(1, sizeof(*scratch))) == NULL) {
+		fatal("%s: calloc(%zu): %s", __func__,
+		    sizeof(*scratch), errno_s);
+	}
+
+	scratch->orig_line = TERM_CURSOR_MIN;
+	scratch->orig_column = TERM_CURSOR_MIN;
+
+	scratch->line = scratch->orig_line;
+	scratch->column = scratch->orig_column;
+
+	active = scratch;
 }
 
 void
 ce_buffer_cleanup(void)
 {
 	struct cebuf	*buf;
+
+	free(scratch->data);
+	free(scratch);
 
 	while ((buf = TAILQ_FIRST(&buffers)) != NULL)
 		ce_buffer_free(buf);
@@ -57,13 +74,16 @@ ce_buffer_alloc(const char *path)
 {
 	int			fd;
 	struct stat		st;
+	ssize_t			bytes;
 	struct cebuf		*buf, *ret;
 
+	fd = -1;
 	ret = NULL;
 
 	if ((buf = calloc(1, sizeof(*buf))) == NULL)
 		fatal("%s: calloc(%zu): %s", __func__, sizeof(*buf), errno_s);
 
+	buf->prev = active;
 	TAILQ_INSERT_HEAD(&buffers, buf, list);
 
 	if (path == NULL)
@@ -84,22 +104,48 @@ ce_buffer_alloc(const char *path)
 		goto cleanup;
 	}
 
-	buf->length = (size_t)st.st_size;
+	buf->maxsz = (size_t)st.st_size;
+	buf->length = buf->maxsz;
 
-	buf->base = mmap(NULL, buf->length, PROT_READ, MAP_PRIVATE, fd, 0);
-	if (buf->base == MAP_FAILED) {
-		buffer_seterr("mmap error on %s: %s", path, errno_s);
-		goto cleanup;
+	if ((buf->data = calloc(1, buf->maxsz)) == NULL)
+		fatal("%s: calloc(%zu): %s", __func__, buf->maxsz, errno_s);
+
+	for (;;) {
+		bytes = read(fd, buf->data, buf->maxsz);
+		if (bytes == -1) {
+			if (errno == EINTR)
+				continue;
+			buffer_seterr("failed to read from %s: %s",
+			    path, errno_s);
+			goto cleanup;
+		}
+
+		if ((size_t)bytes != buf->maxsz) {
+			buffer_seterr("read error on %s (%zd/%zu)",
+			    path, bytes, buf->maxsz);
+			goto cleanup;
+		}
+
+		break;
 	}
 
 	ret = buf;
 	buf = NULL;
 
 cleanup:
+	if (fd != -1)
+		(void)close(fd);
+
 	if (buf != NULL)
 		ce_buffer_free(buf);
 
 	return (ret);
+}
+
+struct cebuf *
+ce_buffer_active(void)
+{
+	return (active);
 }
 
 void
@@ -107,9 +153,7 @@ ce_buffer_free(struct cebuf *buf)
 {
 	TAILQ_REMOVE(&buffers, buf, list);
 
-	if (buf->base != NULL)
-		(void)munmap(buf->base, buf->length);
-
+	free(buf->data);
 	free(buf->path);
 	free(buf);
 }
@@ -118,27 +162,47 @@ void
 ce_buffer_reset(struct cebuf *buf)
 {
 	buf->length = 0;
+	buf->line = buf->orig_line;
+	buf->column = buf->orig_column;
 }
 
 void
-ce_buffer_map(struct cebuf *buf)
+ce_buffer_restore(void)
 {
-	ce_term_writestr(TERM_SEQUENCE_CURSOR_SAVE);
-	ce_term_setpos(buf->line, buf->column);
+	if (active->prev == NULL)
+		return;
 
-	if (buf->base != NULL)
-		ce_term_write(buf->base, buf->length);
-
-	ce_term_writestr(TERM_SEQUENCE_CURSOR_RESTORE);
+	active = active->prev;
 }
 
 void
-ce_buffer_command(struct cebuf *buf, char cmd)
+ce_buffer_activate(struct cebuf *buf)
 {
-	if (buf->cb != NULL) {
-		buf->cb(buf, cmd);
+	buf->prev = active;
+	active = buf;
+}
+
+void
+ce_buffer_map(void)
+{
+	ce_term_setpos(active->orig_line, active->orig_column);
+
+	if (active->data != NULL) {
+		ce_term_write(active->data, active->length);
+		ce_term_setpos(active->line, active->column);
+	}
+}
+
+void
+ce_buffer_command(char cmd)
+{
+	if (active->cb != NULL) {
+		active->cb(active, cmd);
 		return;
 	}
+
+	ce_buffer_append(active, &cmd, sizeof(cmd));
+	active->column++;
 }
 
 void
@@ -156,16 +220,16 @@ ce_buffer_append(struct cebuf *buf, const void *data, size_t len)
 	nlen = buf->length + len;
 	if (nlen > buf->maxsz) {
 		nlen = nlen + 1024;
-		if ((r = realloc(buf->base, nlen)) == NULL) {
+		if ((r = realloc(buf->data, nlen)) == NULL) {
 			fatal("%s: realloc %zu -> %zu: %s", __func__,
 			    buf->length, nlen, errno_s);
 		}
 
-		buf->base = r;
+		buf->data = r;
 		buf->maxsz = nlen;
 	}
 
-	p = buf->base;
+	p = buf->data;
 	memcpy(p + buf->length, data, len);
 	buf->length += len;
 }

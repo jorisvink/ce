@@ -37,8 +37,14 @@
 #define TERM_SEQUENCE_LINE_ERASE	TERM_ESCAPE "K"
 #define TERM_SEQUENCE_FMT_SET_CURSOR	TERM_ESCAPE "%d;%dH"
 
+#define TERM_SEQUENCE_BACKGROUND_BLACK	TERM_ESCAPE "40m"
+#define TERM_SEQUENCE_BACKGROUND_WHITE	TERM_ESCAPE "47m"
+
+#define TERM_SEQUENCE_FOREGROUND_BLACK	TERM_ESCAPE "30m"
+#define TERM_SEQUENCE_FOREGROUND_WHITE	TERM_ESCAPE "37m"
+
 struct cebuf {
-	void			*base;
+	void			*data;
 	size_t			maxsz;
 	size_t			length;
 
@@ -48,6 +54,9 @@ struct cebuf {
 	int			line;
 	int			column;
 
+	int			orig_line;
+	int			orig_column;
+
 	void			(*cb)(struct cebuf *, char);
 
 	TAILQ_ENTRY(cebuf)	list;
@@ -55,20 +64,25 @@ struct cebuf {
 
 TAILQ_HEAD(cebuflist, cebuf);
 
+void		ce_buffer_map(void);
 void		ce_buffer_init(void);
 void		ce_buffer_cleanup(void);
-void		ce_buffer_map(struct cebuf *);
+void		ce_buffer_restore(void);
+void		ce_buffer_command(char );
 void		ce_buffer_free(struct cebuf *);
 void		ce_buffer_reset(struct cebuf *);
-void		ce_buffer_command(struct cebuf *, char );
+void		ce_buffer_activate(struct cebuf *);
 void		ce_buffer_append(struct cebuf *, const void *, size_t);
 
 const char	*ce_buffer_strerror(void);
+
+struct cebuf	*ce_buffer_active(void);
 struct cebuf	*ce_buffer_alloc(const char *);
 
 int	ce_term_width(void);
 int	ce_term_height(void);
 void	ce_term_setup(void);
+void	ce_term_flush(void);
 void	ce_term_restore(void);
 void	ce_term_setpos(int, int);
 void	ce_term_writestr(const char *);
