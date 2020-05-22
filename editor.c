@@ -16,18 +16,17 @@
 
 #include <sys/types.h>
 
-#include <errno.h>
 #include <poll.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <unistd.h>
 
 #include "ce.h"
 
 #define EDITOR_MODE_NORMAL	0
 #define EDITOR_MODE_INSERT	1
-#define EDITOR_MODE_MAX		2
+#define EDITOR_MODE_COMMAND	2
+#define EDITOR_MODE_MAX		3
 
 #define KEY_MAP_LEN(x)		((sizeof(x) / sizeof(x[0])))
 
@@ -40,6 +39,7 @@ static void	editor_event(void);
 static void	editor_read(int, void *, size_t);
 
 static void	editor_draw_status(void);
+static void	editor_draw_buffer(void);
 
 static void	editor_cmd_quit(void);
 static void	editor_cmd_move_up(void);
@@ -51,6 +51,9 @@ static void	editor_cmd_jump_right(void);
 
 static void	editor_cmd_insert_mode(void);
 static void	editor_cmd_normal_mode(void);
+static void	editor_cmd_command_mode(void);
+
+static void	editor_cmd_input(struct cebuf *, char);
 
 static struct keymap normal_map[] = {
 	{ 'q',		editor_cmd_quit },
@@ -61,28 +64,36 @@ static struct keymap normal_map[] = {
 	{ 'h',		editor_cmd_move_left },
 	{ '0',		editor_cmd_jump_left },
 	{ 'i',		editor_cmd_insert_mode },
+	{ ':',		editor_cmd_command_mode },
 };
 
 static struct keymap insert_map[] = {
 	{ '\x1b',	editor_cmd_normal_mode },
 };
 
-#define normal_map_len	(sizeof(normal_map) / sizeof(normal_map[0]))
+static struct keymap command_map[] = {
+	{ '\x1b',	editor_cmd_normal_mode },
+};
 
 static struct {
 	int			mode;
 	const struct keymap	*map;
 	size_t			maplen;
 } keymaps[] = {
-	{ EDITOR_MODE_NORMAL,	normal_map, KEY_MAP_LEN(normal_map) },
-	{ EDITOR_MODE_INSERT,	insert_map, KEY_MAP_LEN(insert_map) },
+	{ EDITOR_MODE_NORMAL,	normal_map,	KEY_MAP_LEN(normal_map) },
+	{ EDITOR_MODE_INSERT,	insert_map,	KEY_MAP_LEN(insert_map) },
+	{ EDITOR_MODE_COMMAND,	command_map,	KEY_MAP_LEN(command_map) },
 };
 
 static int		quit = 0;
-
 static int		col = TERM_CURSOR_MIN;
 static int		line = TERM_CURSOR_MIN;
 static int		mode = EDITOR_MODE_NORMAL;
+
+static const char	colon_char = ':';
+
+static struct cebuf	*cmdbuf = NULL;
+static struct cebuf	*curbuf = NULL;
 
 void
 ce_editor_loop(void)
@@ -93,8 +104,22 @@ ce_editor_loop(void)
 	pfd.events = POLLIN;
 	pfd.fd = STDIN_FILENO;
 
+	if ((curbuf = ce_buffer_alloc(NULL)) == NULL)
+		fatal("%s: failed to allocate empty initial buffer", __func__);
+
+	curbuf->line = TERM_CURSOR_MIN;
+	curbuf->column = TERM_CURSOR_MIN;
+
+	if ((cmdbuf = ce_buffer_alloc(NULL)) == NULL)
+		fatal("%s: failed to allocate cmdbuf", __func__);
+
+	cmdbuf->cb = editor_cmd_input;
+	cmdbuf->line = ce_term_height();
+	cmdbuf->column = TERM_CURSOR_MIN;
+
 	while (!quit) {
 		editor_draw_status();
+		editor_draw_buffer();
 
 		ret = poll(&pfd, 1, 1000);
 		if (ret == -1) {
@@ -128,9 +153,14 @@ editor_event(void)
 	for (idx = 0; idx < keymaps[mode].maplen; idx++) {
 		if (key == keymaps[mode].map[idx].key) {
 			keymaps[mode].map[idx].command();
-			break;
+			return;
 		}
 	}
+
+	if (curbuf == NULL)
+		return;
+
+	ce_buffer_command(curbuf, key);
 }
 
 static void
@@ -159,13 +189,36 @@ editor_read(int fd, void *data, size_t len)
 static void
 editor_draw_status(void)
 {
-	ce_term_write(TERM_SEQUENCE_CURSOR_SAVE);
-	ce_term_setpos(ce_term_height(), TERM_CURSOR_MIN);
+	ce_term_writestr(TERM_SEQUENCE_CURSOR_SAVE);
 
-	ce_term_write(TERM_SEQUENCE_LINE_ERASE);
+	ce_term_setpos(ce_term_height() - 1, TERM_CURSOR_MIN);
+	ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
 	ce_term_writef("[ %dx%d ]", line, col);
 
-	ce_term_write(TERM_SEQUENCE_CURSOR_RESTORE);
+	ce_term_setpos(ce_term_height(), TERM_CURSOR_MIN);
+	ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
+
+	ce_term_writestr(TERM_SEQUENCE_CURSOR_RESTORE);
+}
+
+static void
+editor_draw_buffer(void)
+{
+	if (curbuf == NULL)
+		return;
+
+	ce_buffer_map(curbuf);
+}
+
+static void
+editor_cmd_input(struct cebuf *buf, char key)
+{
+	if (key == '\n') {
+		editor_cmd_normal_mode();
+		return;
+	}
+
+	ce_buffer_append(buf, &key, sizeof(key));
 }
 
 static void
@@ -184,22 +237,22 @@ editor_cmd_move_up(void)
 		return;
 
 	line--;
-	ce_term_write(TERM_SEQUENCE_CURSOR_UP);
+	ce_term_writestr(TERM_SEQUENCE_CURSOR_UP);
 }
 
 static void
 editor_cmd_move_down(void)
 {
-	if (line > ce_term_height() - 1) {
+	if (line > ce_term_height() - 2) {
 		fatal("%s: line (%d) > %d",
-		    __func__, line, ce_term_height() - 1);
+		    __func__, line, ce_term_height() - 2);
 	}
 
-	if (line == ce_term_height() - 1)
+	if (line == ce_term_height() - 2)
 		return;
 
 	line++;
-	ce_term_write(TERM_SEQUENCE_CURSOR_DOWN);
+	ce_term_writestr(TERM_SEQUENCE_CURSOR_DOWN);
 }
 
 static void
@@ -212,7 +265,7 @@ editor_cmd_move_left(void)
 		return;
 
 	col--;
-	ce_term_write(TERM_SEQUENCE_CURSOR_LEFT);
+	ce_term_writestr(TERM_SEQUENCE_CURSOR_LEFT);
 }
 
 static void
@@ -226,13 +279,13 @@ static void
 editor_cmd_move_right(void)
 {
 	if (col > ce_term_width())
-		fatal("%s: col (%d) > %d", __func__, col, ce_term_width() - 1);
+		fatal("%s: col (%d) > %d", __func__, col, ce_term_width());
 
 	if (col == ce_term_width())
 		return;
 
 	col++;
-	ce_term_write(TERM_SEQUENCE_CURSOR_RIGHT);
+	ce_term_writestr(TERM_SEQUENCE_CURSOR_RIGHT);
 }
 
 static void
@@ -249,7 +302,24 @@ editor_cmd_insert_mode(void)
 }
 
 static void
+editor_cmd_command_mode(void)
+{
+	ce_buffer_reset(cmdbuf);
+	ce_buffer_append(cmdbuf, &colon_char, sizeof(colon_char));
+
+	cmdbuf->prev = curbuf;
+	curbuf = cmdbuf;
+
+	mode = EDITOR_MODE_COMMAND;
+}
+
+static void
 editor_cmd_normal_mode(void)
 {
+	ce_buffer_reset(cmdbuf);
+
+	if (curbuf != NULL)
+		curbuf = curbuf->prev;
+
 	mode = EDITOR_MODE_NORMAL;
 }

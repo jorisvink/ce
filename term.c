@@ -16,16 +16,11 @@
 
 #include <sys/types.h>
 
-#include <errno.h>
-#include <stdarg.h>
 #include <stdio.h>
-#include <string.h>
 #include <termios.h>
 #include <unistd.h>
 
 #include "ce.h"
-
-static void	term_write(const void *, size_t);
 
 static struct termios	cur;
 static struct termios	old;
@@ -54,7 +49,7 @@ ce_term_setup(void)
 
 	can_restore = 1;
 
-	ce_term_write(TERM_SEQUENCE_CLEAR);
+	ce_term_writestr(TERM_SEQUENCE_CLEAR);
 }
 
 void
@@ -89,14 +84,13 @@ ce_term_setpos(int line, int col)
 	if (line < TERM_CURSOR_MIN || line > ce_term_height())
 		fatal("%s: invalid line %d", __func__, line);
 
-	ce_log("%s(%d, %d)", __func__, line, col);
 	ce_term_writef(TERM_SEQUENCE_FMT_SET_CURSOR, line, col);
 }
 
 void
-ce_term_write(const char *data)
+ce_term_writestr(const char *data)
 {
-	term_write(data, strlen(data));
+	ce_term_write(data, strlen(data));
 }
 
 void
@@ -112,15 +106,15 @@ ce_term_writef(const char *fmt, ...)
 		fatal("%s: failed to format buffer", __func__);
 
 	if ((size_t)len >= sizeof(buf))
-		fatal("%s: format too large (%d) bytes", len);
+		fatal("%s: format too large (%d) bytes", __func__, len);
 
 	va_end(args);
 
-	term_write(buf, len);
+	ce_term_write(buf, len);
 }
 
-static void
-term_write(const void *data, size_t len)
+void
+ce_term_write(const void *data, size_t len)
 {
 	ssize_t		sz;
 

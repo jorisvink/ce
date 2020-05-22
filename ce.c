@@ -16,46 +16,22 @@
 
 #include <sys/types.h>
 
-#include <errno.h>
-#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <unistd.h>
 
 #include "ce.h"
 
-static FILE	*logfp = NULL;
-
 int
 main(int argc, char *argv[])
 {
-	if ((logfp = fopen("ce.log", "a")) == NULL)
-		fatal("%s: fopen: %s", __func__, errno_s);
-
-	ce_log("ce starting...");
-
+	ce_buffer_init();
 	ce_term_setup();
 	ce_editor_loop();
+	ce_buffer_cleanup();
 	ce_term_restore();
 
-	ce_log("ce closing...");
-	fclose(logfp);
-
 	return (0);
-}
-
-void
-ce_log(const char *fmt, ...)
-{
-	va_list		args;
-
-	va_start(args, fmt);
-	vfprintf(logfp, fmt, args);
-	va_end(args);
-
-	fprintf(logfp, "\n");
-	fflush(logfp);
 }
 
 void
