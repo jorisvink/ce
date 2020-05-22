@@ -15,6 +15,7 @@
  */
 
 #include <sys/types.h>
+#include <sys/ioctl.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -25,6 +26,7 @@
 
 static struct termios	cur;
 static struct termios	old;
+static struct winsize	winsz;
 
 static int 		can_restore = 0;
 static struct cebuf	*termbuf = NULL;
@@ -34,6 +36,9 @@ ce_term_setup(void)
 {
 	memset(&old, 0, sizeof(old));
 	memset(&cur, 0, sizeof(cur));
+
+	if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &winsz) == -1)
+		fatal("%s: ioctl(): %s", __func__, errno_s);
 
 	if (tcgetattr(STDIN_FILENO, &old) == -1)
 		fatal("%s: tcgetattr: %s", __func__, errno_s);
@@ -70,15 +75,13 @@ ce_term_restore(void)
 int
 ce_term_height(void)
 {
-	/* XXX */
-	return (25);
+	return (winsz.ws_row);
 }
 
 int
 ce_term_width(void)
 {
-	/* XXX */
-	return (80);
+	return (winsz.ws_col);
 }
 
 void
