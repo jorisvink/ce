@@ -87,11 +87,15 @@ ce_term_width(void)
 void
 ce_term_setpos(int line, int col)
 {
-	if (col < TERM_CURSOR_MIN || col > ce_term_width())
-		fatal("%s: invalid column %d", __func__, col);
+	if (col < TERM_CURSOR_MIN || col > ce_term_width()) {
+		fatal("%s: invalid column %d (%d)",
+		    __func__, col, ce_term_width());
+	}
 
-	if (line < TERM_CURSOR_MIN || line > ce_term_height())
-		fatal("%s: invalid line %d", __func__, line);
+	if (line < TERM_CURSOR_MIN || line > ce_term_height()) {
+		fatal("%s: invalid line %d (%d)",
+		    __func__, line, ce_term_height());
+	}
 
 	ce_term_writef(TERM_SEQUENCE_FMT_SET_CURSOR, line, col);
 }

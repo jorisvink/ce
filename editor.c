@@ -39,7 +39,6 @@ static void	editor_event(void);
 static void	editor_read(int, void *, size_t);
 
 static void	editor_draw_status(void);
-static void	editor_draw_buffer(void);
 
 static void	editor_cmd_quit(void);
 static void	editor_cmd_reset(void);
@@ -57,7 +56,6 @@ static void	editor_cmd_command_mode(void);
 static void	editor_cmd_input(struct cebuf *, char);
 
 static struct keymap normal_map[] = {
-	{ 'q',		editor_cmd_quit },
 	{ 'k',		editor_cmd_move_up },
 	{ 'j',		editor_cmd_move_down },
 	{ 'l',		editor_cmd_move_right },
@@ -106,14 +104,12 @@ ce_editor_loop(void)
 
 	cmdbuf->cb = editor_cmd_input;
 	cmdbuf->orig_line = ce_term_height();
-	cmdbuf->orig_column = TERM_CURSOR_MIN;
-
 	cmdbuf->line = cmdbuf->orig_line;
-	cmdbuf->column = cmdbuf->orig_column;
 
 	while (!quit) {
 		editor_draw_status();
-		editor_draw_buffer();
+
+		ce_buffer_map();
 		ce_term_flush();
 
 		ret = poll(&pfd, 1, 1000);
@@ -219,16 +215,17 @@ editor_draw_status(void)
 }
 
 static void
-editor_draw_buffer(void)
-{
-	ce_buffer_map();
-}
-
-static void
 editor_cmd_input(struct cebuf *buf, char key)
 {
+	const char	*cmd;
+
 	switch (key) {
 	case '\n':
+		cmd = ce_buffer_as_string(buf);
+		if (!strcmp(cmd, ":q")) {
+			editor_cmd_quit();
+			return;
+		}
 		editor_cmd_normal_mode();
 		break;
 	case '\b':

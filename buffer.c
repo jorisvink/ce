@@ -33,9 +33,16 @@ static struct cebuf		*active = NULL;
 static struct cebuf		*scratch = NULL;
 
 void
-ce_buffer_init(void)
+ce_buffer_init(int argc, char **argv)
 {
+	int		i;
+
 	TAILQ_INIT(&buffers);
+
+	for (i = 1; i < argc; i++) {
+		if (ce_buffer_alloc(argv[i]) == NULL)
+			fatal("%s", errstr);
+	}
 
 	if ((scratch = calloc(1, sizeof(*scratch))) == NULL) {
 		fatal("%s: calloc(%zu): %s", __func__,
@@ -48,7 +55,8 @@ ce_buffer_init(void)
 	scratch->line = scratch->orig_line;
 	scratch->column = scratch->orig_column;
 
-	active = scratch;
+	if ((active = TAILQ_FIRST(&buffers)) == NULL)
+		active = scratch;
 }
 
 void
@@ -84,6 +92,11 @@ ce_buffer_alloc(const char *path)
 		fatal("%s: calloc(%zu): %s", __func__, sizeof(*buf), errno_s);
 
 	buf->prev = active;
+	buf->orig_line = TERM_CURSOR_MIN;
+	buf->orig_column = TERM_CURSOR_MIN;
+	buf->line = buf->orig_line;
+	buf->column = buf->orig_column;
+
 	TAILQ_INSERT_HEAD(&buffers, buf, list);
 
 	if (path == NULL)
@@ -182,15 +195,52 @@ ce_buffer_activate(struct cebuf *buf)
 	active = buf;
 }
 
+const char *
+ce_buffer_as_string(struct cebuf *buf)
+{
+	const char	null = '\0';
+
+	ce_buffer_append(buf, &null, sizeof(null));
+
+	return (buf->data);
+}
+
 void
 ce_buffer_map(void)
 {
+	int		line;
+	char		*end, *line_end, *line_start;
+
+	if (active->data == NULL)
+		return;
+
+	line = active->orig_line;
 	ce_term_setpos(active->orig_line, active->orig_column);
 
-	if (active->data != NULL) {
-		ce_term_write(active->data, active->length);
-		ce_term_setpos(active->line, active->column);
+	line_end = NULL;
+	line_start = active->data;
+
+	end = line_start + active->length;
+
+	while (line_end < end) {
+		if ((line_end = strchr(line_start, '\n')) == NULL) {
+			ce_term_write(line_start, end - line_start);
+			break;
+		}
+
+		ce_term_setpos(line, TERM_CURSOR_MIN);
+		ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
+		ce_term_write(line_start, line_end - line_start);
+
+		line++;
+
+		if (line > ce_term_height() - 2)
+			break;
+
+		line_start = line_end + 1;
 	}
+
+	ce_term_setpos(active->line, active->column);
 }
 
 void

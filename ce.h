@@ -65,16 +65,17 @@ struct cebuf {
 TAILQ_HEAD(cebuflist, cebuf);
 
 void		ce_buffer_map(void);
-void		ce_buffer_init(void);
 void		ce_buffer_cleanup(void);
 void		ce_buffer_restore(void);
 void		ce_buffer_command(char );
+void		ce_buffer_init(int, char **);
 void		ce_buffer_free(struct cebuf *);
 void		ce_buffer_reset(struct cebuf *);
 void		ce_buffer_activate(struct cebuf *);
 void		ce_buffer_append(struct cebuf *, const void *, size_t);
 
 const char	*ce_buffer_strerror(void);
+const char	*ce_buffer_as_string(struct cebuf *);
 
 struct cebuf	*ce_buffer_active(void);
 struct cebuf	*ce_buffer_alloc(const char *);
