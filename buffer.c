@@ -583,6 +583,7 @@ buffer_update_cursor_column(struct cebuf *buf)
 	size_t			off;
 	u_int16_t		index;
 	struct celine		*line;
+	int			istab;
 
 	index = buffer_line_index(buf);
 	line = &buf->lines[index];
@@ -592,12 +593,16 @@ buffer_update_cursor_column(struct cebuf *buf)
 
 	buf->loff = buffer_line_columns_to_offset(line, buf->column - 1);
 
-	if (buffer_line_data(buf, 0) == '\t')
-		off = buf->loff;
-	else
-		off = buf->loff + 1;
+	istab = buffer_line_data(buf, 0) == '\t';
+
+	off = buf->loff + 1;
 
 	buf->column = buffer_line_offset_to_columns(line->data, off);
+
+	if (istab) {
+		buf->column += 1;
+		buf->loff += 1;
+	}
 }
 
 static void
