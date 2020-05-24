@@ -106,8 +106,10 @@ ce_editor_loop(void)
 		fatal("%s: failed to set path for cmdbuf", __func__);
 
 	while (!quit) {
-		editor_draw_status();
+		if (ce_buffer_active() != cmdbuf)
+			ce_term_writestr(TERM_SEQUENCE_CLEAR_ONLY);
 
+		editor_draw_status();
 		ce_buffer_map();
 		ce_term_flush();
 

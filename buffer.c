@@ -240,7 +240,6 @@ ce_buffer_map(void)
 
 	for (idx = active->top; idx < active->lcnt; idx++) {
 		ce_term_setpos(line, TERM_CURSOR_MIN);
-		ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
 		ce_term_write(active->lines[idx].data,
 		    active->lines[idx].byte_length);
 
@@ -297,7 +296,7 @@ ce_buffer_move_up(void)
 void
 ce_buffer_move_down(void)
 {
-	u_int16_t	next;
+	u_int16_t	next, line;
 
 	if (active->line > ce_term_height() - 2) {
 		fatal("%s: line (%u) > %u",
@@ -307,12 +306,14 @@ ce_buffer_move_down(void)
 	if (active->line == ce_term_height() - 2)
 		return;
 
+	line = buffer_line_index(active);
+
 	if (active->line >= (ce_term_height() - 2 - TERM_SCROLL_OFFSET)) {
-		if (active->top < active->lcnt)
+		if (line < active->lcnt - 1)
 			active->top++;
 	} else {
 		next = active->line + 1;
-		if (next <= active->lcnt)
+		if (next < active->lcnt)
 			active->line = next;
 	}
 
@@ -579,6 +580,7 @@ buffer_line_data(struct cebuf *buf, int prev)
 static void
 buffer_update_cursor_column(struct cebuf *buf)
 {
+	size_t			off;
 	u_int16_t		index;
 	struct celine		*line;
 
@@ -589,7 +591,13 @@ buffer_update_cursor_column(struct cebuf *buf)
 		buf->column = line->columns;
 
 	buf->loff = buffer_line_columns_to_offset(line, buf->column - 1);
-	buf->column = buffer_line_offset_to_columns(line->data, buf->loff + 1);
+
+	if (buffer_line_data(buf, 0) == '\t')
+		off = buf->loff;
+	else
+		off = buf->loff + 1;
+
+	buf->column = buffer_line_offset_to_columns(line->data, off);
 }
 
 static void
