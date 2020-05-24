@@ -602,6 +602,16 @@ buffer_update_cursor_column(struct cebuf *buf)
 	if (istab) {
 		buf->column += 1;
 		buf->loff += 1;
+
+		if (buf->column > line->columns) {
+			fatal("%s: colum %u > columns %u", __func__,
+			    buf->column ,line->columns);
+		}
+
+		if (buf->loff > line->byte_length - 1) {
+			fatal("%s: loff %zu > length %zu", __func__,
+			    buf->loff, line->byte_length);
+		}
 	}
 }
 
