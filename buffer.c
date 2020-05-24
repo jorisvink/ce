@@ -30,7 +30,10 @@ static void		buffer_seterr(const char *, ...)
 
 static u_int16_t	buffer_line_index(struct cebuf *);
 static char		buffer_line_data(struct cebuf *, int);
-static u_int16_t	buffer_data_columns(const void *, size_t);
+static void		buffer_update_cursor_column(struct cebuf *);
+static u_int16_t	buffer_line_offset_to_columns(const void *, size_t);
+static size_t		buffer_line_columns_to_offset(struct celine *,
+			    u_int16_t);
 
 static struct cebuflist		buffers;
 static char			*errstr = NULL;
@@ -262,12 +265,6 @@ ce_buffer_input(struct cebuf *buf, char byte)
 
 	line = buffer_line_index(buf);
 
-	ce_debug("appending '%c':", byte);
-	ce_debug("   line=%u column=%u", line, active->column);
-	ce_debug("   file_offset=%zu", buf->lines[line].file_offset);
-	ce_debug("   insert at %zu",
-	    buf->lines[line].file_offset + active->column);
-
 #if 0
 	ce_buffer_append(buf, &cmd, sizeof(cmd));
 	active->column++;
@@ -286,14 +283,14 @@ ce_buffer_move_up(void)
 	if (active->line < TERM_SCROLL_OFFSET) {
 		if (active->top > 0) {
 			active->top--;
+		} else {
+			active->line--;
 		}
 	} else {
 		active->line--;
 	}
 
-	active->loff = 0;
-	active->column = TERM_CURSOR_MIN;
-
+	buffer_update_cursor_column(active);
 	ce_term_setpos(active->line, active->column);
 }
 
@@ -319,9 +316,7 @@ ce_buffer_move_down(void)
 			active->line = next;
 	}
 
-	active->loff = 0;
-	active->column = TERM_CURSOR_MIN;
-
+	buffer_update_cursor_column(active);
 	ce_term_setpos(active->line, active->column);
 }
 
@@ -341,10 +336,8 @@ ce_buffer_move_left(void)
 	byte = buffer_line_data(active, 1);
 
 	if (byte == '\t') {
-		prev = buffer_data_columns(active->lines[line].data,
-		    active->loff - 1);
-		if (prev != 1)
-			prev += 1;
+		prev = buffer_line_offset_to_columns(active->lines[line].data,
+		    active->loff - 1) + 1;
 	} else {
 		prev = active->column - 1;
 	}
@@ -400,7 +393,7 @@ ce_buffer_jump_right(void)
 	line = buffer_line_index(active);
 
 	active->column = active->lines[line].columns;
-	active->loff = active->lines[line].byte_length;
+	active->loff = active->lines[line].byte_length - 1;
 
 	ce_term_setpos(active->line, active->column);
 }
@@ -474,15 +467,19 @@ ce_buffer_line_columns(struct celine *line)
 	if (line->byte_length == 0)
 		line->byte_length = 1;
 
-	line->columns = buffer_data_columns(line->data, line->byte_length);
+	line->columns = buffer_line_offset_to_columns(line->data,
+	    line->byte_length);
 }
 
 static u_int16_t
-buffer_data_columns(const void *data, size_t length)
+buffer_line_offset_to_columns(const void *data, size_t length)
 {
 	size_t			idx;
 	u_int16_t		cols;
 	const u_int8_t		*ptr;
+
+	if (length == 0)
+		return (TERM_CURSOR_MIN);
 
 	cols = 0;
 	ptr = data;
@@ -494,10 +491,43 @@ buffer_data_columns(const void *data, size_t length)
 			cols++;
 	}
 
-	if (cols == 0)
-		cols = 1;
-
 	return (cols);
+}
+
+static size_t
+buffer_line_columns_to_offset(struct celine *line, u_int16_t column)
+{
+	const u_int8_t		*ptr;
+	size_t			idx, off;
+	u_int16_t		cols, next;
+
+	off = 0;
+	cols = 0;
+	ptr = line->data;
+
+	for (idx = 0; idx < line->byte_length; idx++) {
+		if (ptr[idx] == '\t') {
+			next = cols + (8 - (cols % 8));
+			if (next >= column) {
+				break;
+			}
+		} else {
+			next = cols + 1;
+		}
+
+		if (cols == column)
+			break;
+
+		cols = next;
+		off++;
+	}
+
+	if (off > line->byte_length) {
+		fatal("%s: off %zu > byte_len %zu",
+		    __func__, off, line->byte_length);
+	}
+
+	return (off);
 }
 
 static u_int16_t
@@ -544,6 +574,22 @@ buffer_line_data(struct cebuf *buf, int prev)
 	ptr = buf->lines[line].data;
 
 	return (ptr[idx]);
+}
+
+static void
+buffer_update_cursor_column(struct cebuf *buf)
+{
+	u_int16_t		index;
+	struct celine		*line;
+
+	index = buffer_line_index(buf);
+	line = &buf->lines[index];
+
+	if (buf->column > line->columns)
+		buf->column = line->columns;
+
+	buf->loff = buffer_line_columns_to_offset(line, buf->column - 1);
+	buf->column = buffer_line_offset_to_columns(line->data, buf->loff + 1);
 }
 
 static void
