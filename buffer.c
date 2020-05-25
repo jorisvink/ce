@@ -47,18 +47,7 @@ ce_buffer_init(int argc, char **argv)
 
 	TAILQ_INIT(&buffers);
 
-	if ((scratch = calloc(1, sizeof(*scratch))) == NULL) {
-		fatal("%s: calloc(%zu): %s", __func__,
-		    sizeof(*scratch), errno_s);
-	}
-
-	scratch->top = 0;
-	scratch->orig_line = TERM_CURSOR_MIN;
-	scratch->orig_column = TERM_CURSOR_MIN;
-
-	scratch->line = scratch->orig_line;
-	scratch->column = scratch->orig_column;
-
+	scratch = ce_buffer_alloc(NULL);
 	active = scratch;
 
 	for (i = 0; i < argc; i++) {
@@ -74,9 +63,6 @@ void
 ce_buffer_cleanup(void)
 {
 	struct cebuf	*buf;
-
-	free(scratch->data);
-	free(scratch);
 
 	while ((buf = TAILQ_FIRST(&buffers)) != NULL)
 		ce_buffer_free(buf);
@@ -113,8 +99,14 @@ ce_buffer_alloc(const char *path)
 
 	TAILQ_INSERT_HEAD(&buffers, buf, list);
 
-	if (path == NULL)
+	if (path == NULL) {
+		if ((buf->data = calloc(1, 1024)) == NULL) {
+			fatal("%s: calloc(%zu): %s",
+			    __func__, buf->maxsz, errno_s);
+		}
+		ce_buffer_find_lines(buf);
 		return (buf);
+	}
 
 	if ((buf->path = strdup(path)) == NULL)
 		fatal("%s: strdup: %s", __func__, errno_s);
@@ -255,14 +247,46 @@ ce_buffer_map(void)
 void
 ce_buffer_input(struct cebuf *buf, char byte)
 {
-	u_int16_t		line;
+	u_int8_t		*ptr;
+	u_int16_t		index;
+	struct celine		*line;
+	size_t			offset;
 
 	if (buf->cb != NULL) {
 		buf->cb(buf, byte);
 		return;
 	}
 
-	line = buffer_line_index(buf);
+	index = buffer_line_index(buf);
+	line = &buf->lines[index];
+	offset = line->file_offset + buf->loff;
+
+	ce_debug("inserting '%c' at line %u, offset=%zu", byte, index,
+	    buf->loff);
+	ce_debug("file offset is %zu", line->file_offset);
+	ce_debug("offset in buffer %zu bytes", offset);
+
+	buffer_grow(buf, buf->length + 1);
+
+	ptr = buf->data;
+
+	switch (byte) {
+	case '\b':
+		break;
+	case '\n':
+		break;
+	default:
+		memmove(&ptr[offset + 1], &ptr[offset], buf->length - offset);
+
+		ptr[offset] = byte;
+
+		buf->loff++;
+		buf->column++;
+		buf->length++;
+		break;
+	}
+
+	ce_buffer_find_lines(buf);
 
 #if 0
 	ce_buffer_append(buf, &cmd, sizeof(cmd));
@@ -414,7 +438,7 @@ ce_buffer_append(struct cebuf *buf, const void *data, size_t len)
 void
 ce_buffer_find_lines(struct cebuf *buf)
 {
-	size_t		idx, elm;
+	size_t		idx, elm, off;
 	char		*start, *data;
 
 	free(buf->lines);
@@ -424,6 +448,7 @@ ce_buffer_find_lines(struct cebuf *buf)
 
 	data = buf->data;
 	start = data;
+	off = 0;
 
 	for (idx = 0; idx < buf->length; idx++) {
 		if (data[idx] != '\n')
@@ -437,13 +462,14 @@ ce_buffer_find_lines(struct cebuf *buf)
 		}
 
 		buf->lines[buf->lcnt].data = start;
-		buf->lines[buf->lcnt].file_offset = idx;
+		buf->lines[buf->lcnt].file_offset = off;
 		buf->lines[buf->lcnt].byte_length = &data[idx] - start;
 
 		ce_buffer_line_columns(&buf->lines[buf->lcnt]);
 
 		start = &data[idx + 1];
 		buf->lcnt++;
+		off = idx + 1;
 	}
 
 	if (buf->lcnt == 0) {
