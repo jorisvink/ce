@@ -53,9 +53,6 @@ struct celine {
 	/* Line data. */
 	void			*data;
 
-	/* Offset where in the file this line begins. */
-	size_t			offset;
-
 	/* Length of the line in bytes. */
 	size_t			length;
 

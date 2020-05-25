@@ -391,7 +391,7 @@ ce_buffer_append(struct cebuf *buf, const void *data, size_t len)
 void
 ce_buffer_find_lines(struct cebuf *buf)
 {
-	size_t		idx, elm, off;
+	size_t		idx, elm;
 	char		*start, *data;
 
 	free(buf->lines);
@@ -401,7 +401,6 @@ ce_buffer_find_lines(struct cebuf *buf)
 
 	data = buf->data;
 	start = data;
-	off = 0;
 
 	for (idx = 0; idx < buf->length; idx++) {
 		if (data[idx] != '\n')
@@ -415,14 +414,12 @@ ce_buffer_find_lines(struct cebuf *buf)
 		}
 
 		buf->lines[buf->lcnt].data = start;
-		buf->lines[buf->lcnt].offset = off;
 		buf->lines[buf->lcnt].length = &data[idx] - start;
 
 		ce_buffer_line_columns(&buf->lines[buf->lcnt]);
 
 		start = &data[idx + 1];
 		buf->lcnt++;
-		off = idx + 1;
 	}
 
 	if (buf->lcnt == 0) {
@@ -433,7 +430,6 @@ ce_buffer_find_lines(struct cebuf *buf)
 			    sizeof(struct celine), errno_s);
 		}
 
-		buf->lines[0].offset = 0;
 		buf->lines[0].data = buf->data;
 		buf->lines[0].length = buf->length;
 
