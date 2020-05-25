@@ -108,7 +108,6 @@ void		ce_buffer_init(int, char **);
 void		ce_buffer_free(struct cebuf *);
 void		ce_buffer_reset(struct cebuf *);
 void		ce_buffer_activate(struct cebuf *);
-void		ce_buffer_find_lines(struct cebuf *);
 void		ce_buffer_input(struct cebuf *, char );
 void		ce_buffer_line_columns(struct celine *);
 void		ce_buffer_append(struct cebuf *, const void *, size_t);

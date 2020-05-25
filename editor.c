@@ -247,7 +247,8 @@ editor_cmd_input(struct cebuf *buf, char key)
 		break;
 	}
 
-	ce_buffer_find_lines(buf);
+	cmdbuf->lines[0].length = buf->length;
+	ce_buffer_line_columns(&cmdbuf->lines[0]);
 }
 
 static void
@@ -267,9 +268,11 @@ editor_cmd_command_mode(void)
 {
 	editor_cmd_reset();
 
-	cmdbuf->column++;
 	ce_buffer_append(cmdbuf, &colon_char, sizeof(colon_char));
-	ce_buffer_find_lines(cmdbuf);
+
+	cmdbuf->column++;
+	cmdbuf->lines[0].length = cmdbuf->length;
+	ce_buffer_line_columns(&cmdbuf->lines[0]);
 
 	ce_buffer_activate(cmdbuf);
 

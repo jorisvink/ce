@@ -30,6 +30,7 @@ static void		buffer_seterr(const char *, ...)
 
 static u_int16_t	buffer_line_index(struct cebuf *);
 static struct celine	*buffer_line_current(struct cebuf *);
+static void		buffer_populate_lines(struct cebuf *);
 static void		buffer_line_column_to_data(struct cebuf *);
 static void		buffer_update_cursor_column(struct cebuf *);
 static u_int16_t	buffer_line_data_to_columns(const void *, size_t);
@@ -104,7 +105,8 @@ ce_buffer_alloc(const char *path)
 			fatal("%s: calloc(%zu): %s",
 			    __func__, buf->maxsz, errno_s);
 		}
-		ce_buffer_find_lines(buf);
+		buf->maxsz = 1024;
+		buffer_populate_lines(buf);
 		return (buf);
 	}
 
@@ -151,7 +153,7 @@ ce_buffer_alloc(const char *path)
 		break;
 	}
 
-	ce_buffer_find_lines(buf);
+	buffer_populate_lines(buf);
 
 	ret = buf;
 	active = buf;
@@ -389,7 +391,13 @@ ce_buffer_append(struct cebuf *buf, const void *data, size_t len)
 }
 
 void
-ce_buffer_find_lines(struct cebuf *buf)
+ce_buffer_line_columns(struct celine *line)
+{
+	line->columns = buffer_line_data_to_columns(line->data, line->length);
+}
+
+static void
+buffer_populate_lines(struct cebuf *buf)
 {
 	size_t		idx, elm;
 	char		*start, *data;
@@ -435,12 +443,6 @@ ce_buffer_find_lines(struct cebuf *buf)
 
 		ce_buffer_line_columns(&buf->lines[0]);
 	}
-}
-
-void
-ce_buffer_line_columns(struct celine *line)
-{
-	line->columns = buffer_line_data_to_columns(line->data, line->length);
 }
 
 static u_int16_t
