@@ -57,7 +57,7 @@ struct celine {
 	size_t			file_offset;
 
 	/* Length of the line in bytes. */
-	size_t			byte_length;
+	size_t			length;
 
 	/* Length of the line in columns. */
 	u_int16_t		columns;

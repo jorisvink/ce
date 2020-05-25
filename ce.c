@@ -31,11 +31,14 @@ main(int argc, char *argv[])
 
 	debug = 0;
 
-	while ((ch = getopt(argc, argv, "d")) != -1) {
+	while ((ch = getopt(argc, argv, "dv")) != -1) {
 		switch (ch) {
 		case 'd':
 			debug = 1;
 			break;
+		case 'v':
+			printf("coma editor 0.1\n");
+			exit(0);
 		}
 	}
 

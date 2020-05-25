@@ -29,11 +29,10 @@ static void		buffer_seterr(const char *, ...)
 			    __attribute__((format (printf, 1, 2)));
 
 static u_int16_t	buffer_line_index(struct cebuf *);
+static struct celine	*buffer_line_current(struct cebuf *);
 static char		buffer_line_data(struct cebuf *, int);
 static void		buffer_update_cursor_column(struct cebuf *);
-static u_int16_t	buffer_line_offset_to_columns(const void *, size_t);
-static size_t		buffer_line_columns_to_offset(struct celine *,
-			    u_int16_t);
+static u_int16_t	buffer_line_data_to_columns(const void *, size_t);
 
 static struct cebuflist		buffers;
 static char			*errstr = NULL;
@@ -233,7 +232,7 @@ ce_buffer_map(void)
 	for (idx = active->top; idx < active->lcnt; idx++) {
 		ce_term_setpos(line, TERM_CURSOR_MIN);
 		ce_term_write(active->lines[idx].data,
-		    active->lines[idx].byte_length);
+		    active->lines[idx].length);
 
 		line++;
 
@@ -247,51 +246,10 @@ ce_buffer_map(void)
 void
 ce_buffer_input(struct cebuf *buf, char byte)
 {
-	u_int8_t		*ptr;
-	u_int16_t		index;
-	struct celine		*line;
-	size_t			offset;
-
 	if (buf->cb != NULL) {
 		buf->cb(buf, byte);
 		return;
 	}
-
-	index = buffer_line_index(buf);
-	line = &buf->lines[index];
-	offset = line->file_offset + buf->loff;
-
-	ce_debug("inserting '%c' at line %u, offset=%zu", byte, index,
-	    buf->loff);
-	ce_debug("file offset is %zu", line->file_offset);
-	ce_debug("offset in buffer %zu bytes", offset);
-
-	buffer_grow(buf, buf->length + 1);
-
-	ptr = buf->data;
-
-	switch (byte) {
-	case '\b':
-		break;
-	case '\n':
-		break;
-	default:
-		memmove(&ptr[offset + 1], &ptr[offset], buf->length - offset);
-
-		ptr[offset] = byte;
-
-		buf->loff++;
-		buf->column++;
-		buf->length++;
-		break;
-	}
-
-	ce_buffer_find_lines(buf);
-
-#if 0
-	ce_buffer_append(buf, &cmd, sizeof(cmd));
-	active->column++;
-#endif
 }
 
 void
@@ -320,7 +278,7 @@ ce_buffer_move_up(void)
 void
 ce_buffer_move_down(void)
 {
-	u_int16_t	next, line;
+	u_int16_t	next, index;
 
 	if (active->line > ce_term_height() - 2) {
 		fatal("%s: line (%u) > %u",
@@ -330,14 +288,14 @@ ce_buffer_move_down(void)
 	if (active->line == ce_term_height() - 2)
 		return;
 
-	line = buffer_line_index(active);
+	index = buffer_line_index(active);
 
 	if (active->line >= (ce_term_height() - 2 - TERM_SCROLL_OFFSET)) {
-		if (line < active->lcnt - 1)
+		if (index < active->lcnt - 1)
 			active->top++;
 	} else {
 		next = active->line + 1;
-		if (next < active->lcnt)
+		if (next <= active->lcnt)
 			active->line = next;
 	}
 
@@ -348,27 +306,21 @@ ce_buffer_move_down(void)
 void
 ce_buffer_move_left(void)
 {
-	char		byte;
-	u_int16_t	prev, line;
+	struct celine		*line;
 
 	if (active->column < TERM_CURSOR_MIN)
 		fatal("%s: col (%u) < min", __func__, active->column);
 
+	line = buffer_line_current(active);
+
 	if (active->column == TERM_CURSOR_MIN)
 		return;
 
-	line = buffer_line_index(active);
-	byte = buffer_line_data(active, 1);
-
-	if (byte == '\t') {
-		prev = buffer_line_offset_to_columns(active->lines[line].data,
-		    active->loff - 1) + 1;
-	} else {
-		prev = active->column - 1;
-	}
+	if (active->loff == 0)
+		return;
 
 	active->loff--;
-	active->column = prev;
+	active->column = buffer_line_data_to_columns(line->data, active->loff);
 
 	ce_term_setpos(active->line, active->column);
 }
@@ -384,41 +336,44 @@ ce_buffer_jump_left(void)
 void
 ce_buffer_move_right(void)
 {
-	char		byte;
-	u_int16_t	next, line;
+	struct celine	*line;
 
 	if (active->column > ce_term_width()) {
 		fatal("%s: col (%u) > %u", __func__,
 		    active->column, ce_term_width());
 	}
 
+	line = buffer_line_current(active);
+
 	if (active->column == ce_term_width())
 		return;
 
-	line = buffer_line_index(active);
-	byte = buffer_line_data(active, 0);
+	if (active->loff == line->length)
+		return;
 
-	if (byte == '\t')
-		next = active->column + (8 - (active->column % 8)) + 1;
-	else
-		next = active->column + 1;
-
-	if (next <= active->lines[line].columns) {
-		active->column = next;
+	if (active->loff < line->length - 1)
 		active->loff++;
-		ce_term_setpos(active->line, active->column);
-	}
+
+	active->column = buffer_line_data_to_columns(line->data, active->loff);
+
+	ce_debug("loff %zu column %u (%c)",
+	    active->loff, active->column, buffer_line_data(active, 0));
+
+	ce_term_setpos(active->line, active->column);
 }
 
 void
 ce_buffer_jump_right(void)
 {
-	u_int16_t	line;
+	struct celine	*line;
 
-	line = buffer_line_index(active);
+	line = buffer_line_current(active);
 
-	active->column = active->lines[line].columns;
-	active->loff = active->lines[line].byte_length - 1;
+	active->loff = line->length;
+	active->column = buffer_line_data_to_columns(line->data,
+	    active->loff - 1);
+
+	ce_debug("column %u (%zu)", active->column, active->loff);
 
 	ce_term_setpos(active->line, active->column);
 }
@@ -463,7 +418,7 @@ ce_buffer_find_lines(struct cebuf *buf)
 
 		buf->lines[buf->lcnt].data = start;
 		buf->lines[buf->lcnt].file_offset = off;
-		buf->lines[buf->lcnt].byte_length = &data[idx] - start;
+		buf->lines[buf->lcnt].length = &data[idx] - start;
 
 		ce_buffer_line_columns(&buf->lines[buf->lcnt]);
 
@@ -482,7 +437,7 @@ ce_buffer_find_lines(struct cebuf *buf)
 
 		buf->lines[0].file_offset = 0;
 		buf->lines[0].data = buf->data;
-		buf->lines[0].byte_length = buf->length;
+		buf->lines[0].length = buf->length;
 
 		ce_buffer_line_columns(&buf->lines[0]);
 	}
@@ -491,93 +446,64 @@ ce_buffer_find_lines(struct cebuf *buf)
 void
 ce_buffer_line_columns(struct celine *line)
 {
-	if (line->byte_length == 0)
-		line->byte_length = 1;
-
-	line->columns = buffer_line_offset_to_columns(line->data,
-	    line->byte_length);
+	line->columns = buffer_line_data_to_columns(line->data, line->length);
 }
 
 static u_int16_t
-buffer_line_offset_to_columns(const void *data, size_t length)
+buffer_line_data_to_columns(const void *data, size_t length)
 {
 	size_t			idx;
 	u_int16_t		cols;
 	const u_int8_t		*ptr;
 
-	if (length == 0)
-		return (TERM_CURSOR_MIN);
-
-	cols = 0;
 	ptr = data;
+	cols = TERM_CURSOR_MIN;
 
 	for (idx = 0; idx < length; idx++) {
-		if (ptr[idx] == '\t')
-			cols += 8 - (cols % 8);
-		else
+		if (ptr[idx] == '\t') {
+			if ((cols % 8) == 0)
+				cols += 1;
+			else
+				cols += 8 - (cols % 8) + 1;
+		} else {
 			cols++;
+		}
 	}
 
 	return (cols);
 }
 
-static size_t
-buffer_line_columns_to_offset(struct celine *line, u_int16_t column)
+static struct celine *
+buffer_line_current(struct cebuf *buf)
 {
-	const u_int8_t		*ptr;
-	size_t			idx, off;
-	u_int16_t		cols, next;
+	u_int16_t	index;
 
-	off = 0;
-	cols = 0;
-	ptr = line->data;
+	index = buffer_line_index(buf);
 
-	for (idx = 0; idx < line->byte_length; idx++) {
-		if (ptr[idx] == '\t') {
-			next = cols + (8 - (cols % 8));
-			if (next >= column) {
-				break;
-			}
-		} else {
-			next = cols + 1;
-		}
-
-		if (cols == column)
-			break;
-
-		cols = next;
-		off++;
-	}
-
-	if (off > line->byte_length) {
-		fatal("%s: off %zu > byte_len %zu",
-		    __func__, off, line->byte_length);
-	}
-
-	return (off);
+	return (&buf->lines[index]);
 }
 
 static u_int16_t
 buffer_line_index(struct cebuf *buf)
 {
-	u_int16_t	line;
+	u_int16_t	index;
 
 	if (buf->line == 0)
 		fatal("%s: line == 0", __func__);
 
-	line = buf->top + (buf->line - 1);
-	if (line >= buf->lcnt)
-		fatal("%s: line %u > lcnt %zu", __func__, line, buf->lcnt);
+	index = buf->top + (buf->line - 1);
+	if (index >= buf->lcnt)
+		fatal("%s: index %u > lcnt %zu", __func__, index, buf->lcnt);
 
-	return (line);
+	return (index);
 }
 
 static char
 buffer_line_data(struct cebuf *buf, int prev)
 {
 	size_t		idx;
-	u_int16_t	line;
 	char		*ptr;
+	struct celine	*line;
 
 	if (prev) {
 		if (buf->loff == 0)
@@ -588,17 +514,17 @@ buffer_line_data(struct cebuf *buf, int prev)
 		idx = buf->loff;
 	}
 
-	line = buffer_line_index(buf);
+	line = buffer_line_current(buf);
 
-	if (buf->lines[line].byte_length == 0)
-		fatal("%s: byte_length == 0", __func__);
+	if (line->length == 0)
+		return ('\0');
 
-	if (idx > buf->lines[line].byte_length - 1) {
+	if (idx > line->length - 1) {
 		fatal("%s: loff %zu > %zu", __func__,
-		    buf->loff, buf->lines[line].byte_length - 1);
+		    buf->loff, line->length - 1);
 	}
 
-	ptr = buf->lines[line].data;
+	ptr = line->data;
 
 	return (ptr[idx]);
 }
@@ -606,38 +532,26 @@ buffer_line_data(struct cebuf *buf, int prev)
 static void
 buffer_update_cursor_column(struct cebuf *buf)
 {
-	size_t			off;
-	u_int16_t		index;
 	struct celine		*line;
-	int			istab;
+	u_int16_t		column;
 
-	index = buffer_line_index(buf);
-	line = &buf->lines[index];
+	column = buf->column;
+	line = buffer_line_current(buf);
 
-	if (buf->column > line->columns)
-		buf->column = line->columns;
+	if (line->length == 0) {
+		buf->loff = 0;
+	} else if (buf->loff > line->length - 1) {
+		buf->loff = line->length - 1;
+		ce_debug("clamped loff to %zu", buf->loff);
+	}
 
-	buf->loff = buffer_line_columns_to_offset(line, buf->column - 1);
+	buf->column = buffer_line_data_to_columns(line->data, buf->loff);
+	if (buf->column > column)
+		buf->column = column;
 
-	istab = buffer_line_data(buf, 0) == '\t';
-
-	off = buf->loff + 1;
-
-	buf->column = buffer_line_offset_to_columns(line->data, off);
-
-	if (istab) {
-		buf->column += 1;
-		buf->loff += 1;
-
-		if (buf->column > line->columns) {
-			fatal("%s: colum %u > columns %u", __func__,
-			    buf->column ,line->columns);
-		}
-
-		if (buf->loff > line->byte_length - 1) {
-			fatal("%s: loff %zu > length %zu", __func__,
-			    buf->loff, line->byte_length);
-		}
+	if (buf->column > line->columns) {
+		fatal("%s: colum %u > columns %u", __func__,
+		    buf->column, line->columns);
 	}
 }
 
