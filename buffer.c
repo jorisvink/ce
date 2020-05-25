@@ -415,7 +415,7 @@ ce_buffer_find_lines(struct cebuf *buf)
 		}
 
 		buf->lines[buf->lcnt].data = start;
-		buf->lines[buf->lcnt].file_offset = off;
+		buf->lines[buf->lcnt].offset = off;
 		buf->lines[buf->lcnt].length = &data[idx] - start;
 
 		ce_buffer_line_columns(&buf->lines[buf->lcnt]);
@@ -433,7 +433,7 @@ ce_buffer_find_lines(struct cebuf *buf)
 			    sizeof(struct celine), errno_s);
 		}
 
-		buf->lines[0].file_offset = 0;
+		buf->lines[0].offset = 0;
 		buf->lines[0].data = buf->data;
 		buf->lines[0].length = buf->length;
 
