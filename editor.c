@@ -136,7 +136,7 @@ ce_editor_loop(void)
 static void
 editor_event(void)
 {
-	char			key;
+	u_int8_t		key;
 	size_t			idx;
 	struct cebuf		*curbuf = ce_buffer_active();
 
@@ -151,9 +151,6 @@ editor_event(void)
 			return;
 		}
 	}
-
-	if (curbuf == NULL)
-		return;
 
 	if (mode == EDITOR_MODE_NORMAL)
 		return;

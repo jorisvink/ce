@@ -47,17 +47,43 @@
 #define TERM_SEQUENCE_FOREGROUND_WHITE	TERM_ESCAPE "37m"
 
 /*
+ * An operation that happened on a line.
+ */
+struct ceop {
+	/* The operation command. */
+	u_int16_t		cmd;
+
+	/* The length of the associated data. */
+	size_t			length;
+
+	/* Additional data for the operation. */
+	u_int8_t		data[4];
+
+	TAILQ_ENTRY(ceop)	list;
+};
+
+/*
  * Represents a single line in a file.
  */
+#define CE_LINE_ALLOCATED	0x0001
 struct celine {
+	/* Flags. */
+	u_int32_t		flags;
+
 	/* Line data. */
 	void			*data;
+
+	/* Size of allocation in case line is allocated. */
+	size_t			maxsz;
 
 	/* Length of the line in bytes. */
 	size_t			length;
 
 	/* Length of the line in columns. */
 	u_int16_t		columns;
+
+	/* List of operations on this line. */
+	TAILQ_HEAD(, ceop)	ops;
 };
 
 /*
@@ -108,8 +134,8 @@ void		ce_buffer_init(int, char **);
 void		ce_buffer_free(struct cebuf *);
 void		ce_buffer_reset(struct cebuf *);
 void		ce_buffer_activate(struct cebuf *);
-void		ce_buffer_input(struct cebuf *, char );
 void		ce_buffer_line_columns(struct celine *);
+void		ce_buffer_input(struct cebuf *, u_int8_t);
 void		ce_buffer_append(struct cebuf *, const void *, size_t);
 
 void		ce_buffer_page_up(void);

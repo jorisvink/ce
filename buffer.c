@@ -34,6 +34,8 @@ static void		buffer_populate_lines(struct cebuf *);
 static void		buffer_line_column_to_data(struct cebuf *);
 static void		buffer_update_cursor_column(struct cebuf *);
 static u_int16_t	buffer_line_data_to_columns(const void *, size_t);
+static void		buffer_line_insert_byte(struct cebuf *,
+			    struct celine *, u_int8_t);
 
 static struct cebuflist		buffers;
 static char			*errstr = NULL;
@@ -247,11 +249,43 @@ ce_buffer_map(void)
 }
 
 void
-ce_buffer_input(struct cebuf *buf, char byte)
+ce_buffer_input(struct cebuf *buf, u_int8_t byte)
 {
+	void			*ptr;
+	struct celine		*line;
+
 	if (buf->cb != NULL) {
 		buf->cb(buf, byte);
 		return;
+	}
+
+	line = buffer_line_current(buf);
+
+	if (!(line->flags & CE_LINE_ALLOCATED)) {
+		line->maxsz = line->length + 32;
+		if ((ptr = calloc(1, line->maxsz)) == NULL) {
+			fatal("%s: calloc(%zu): %s", __func__, line->length,
+			    strerror(errno));
+		}
+
+		memcpy(ptr, line->data, line->length);
+
+		/* We don't leak data as it points to inside buf->data. */
+		line->data = ptr;
+		line->flags |= CE_LINE_ALLOCATED;
+
+		ce_debug("line %u has been allocated", buffer_line_index(buf));
+	}
+
+	ce_debug("byte: 0x%02x", byte);
+
+	switch (byte) {
+	case '\b':
+	case '\n':
+		break;
+	default:
+		buffer_line_insert_byte(buf, line, byte);
+		break;
 	}
 }
 
@@ -458,6 +492,8 @@ buffer_populate_lines(struct cebuf *buf)
 			    elm * sizeof(struct celine), errno_s);
 		}
 
+		TAILQ_INIT(&buf->lines[buf->lcnt].ops);
+
 		buf->lines[buf->lcnt].data = start;
 		buf->lines[buf->lcnt].length = &data[idx] - start;
 
@@ -474,6 +510,8 @@ buffer_populate_lines(struct cebuf *buf)
 			fatal("%s: calloc(%zu): %s", __func__,
 			    sizeof(struct celine), errno_s);
 		}
+
+		TAILQ_INIT(&buf->lines[buf->lcnt].ops);
 
 		buf->lines[0].data = buf->data;
 		buf->lines[0].length = buf->length;
@@ -573,6 +611,28 @@ buffer_line_index(struct cebuf *buf)
 		fatal("%s: index %u > lcnt %zu", __func__, index, buf->lcnt);
 
 	return (index);
+}
+
+static void
+buffer_line_insert_byte(struct cebuf *buf, struct celine *line, u_int8_t byte)
+{
+	u_int8_t	*ptr;
+
+	if (line->length + 1 > line->maxsz) {
+		line->maxsz = line->length + 32;
+		if ((line->data = realloc(line->data, line->maxsz)) == NULL) {
+			fatal("%s: realloc(%zu): %s", __func__,
+			    line->maxsz, strerror(errno));
+		}
+	}
+
+	ptr = line->data;
+	memmove(&ptr[buf->loff + 1], &ptr[buf->loff], line->length - buf->loff);
+
+	ptr[buf->loff] = byte;
+	line->length++;
+
+	ce_buffer_move_right();
 }
 
 static void
