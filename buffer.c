@@ -404,9 +404,13 @@ ce_buffer_jump_right(void)
 
 	line = buffer_line_current(active);
 
-	active->loff = line->length;
+	if (line->length > 0)
+		active->loff = line->length - 1;
+	else
+		active->loff = 0;
+
 	active->column = buffer_line_data_to_columns(line->data,
-	    active->loff - 1);
+	    active->loff);
 
 	ce_term_setpos(active->line, active->column);
 }
