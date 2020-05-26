@@ -261,7 +261,7 @@ ce_buffer_move_up(void)
 	if (active->line < TERM_CURSOR_MIN)
 		fatal("%s: line (%u) < min", __func__, active->line);
 
-	if (active->line == TERM_CURSOR_MIN)
+	if (active->line == TERM_CURSOR_MIN && active->top == 0)
 		return;
 
 	if (active->line < TERM_SCROLL_OFFSET) {
@@ -273,6 +273,18 @@ ce_buffer_move_up(void)
 	} else {
 		active->line--;
 	}
+
+	buffer_update_cursor_column(active);
+	ce_term_setpos(active->line, active->column);
+}
+
+void
+ce_buffer_page_up(void)
+{
+	if (active->top > ce_term_height() - 2)
+		active->top -= ce_term_height() - 2;
+	else
+		active->top = 0;
 
 	buffer_update_cursor_column(active);
 	ce_term_setpos(active->line, active->column);
@@ -292,6 +304,8 @@ ce_buffer_move_down(void)
 		return;
 
 	index = buffer_line_index(active);
+	if (index == active->lcnt - 1)
+		return;
 
 	if (active->line >= (ce_term_height() - 2 - TERM_SCROLL_OFFSET)) {
 		if (index < active->lcnt - 1)
@@ -300,6 +314,25 @@ ce_buffer_move_down(void)
 		next = active->line + 1;
 		if (next <= active->lcnt)
 			active->line = next;
+	}
+
+	buffer_update_cursor_column(active);
+	ce_term_setpos(active->line, active->column);
+}
+
+void
+ce_buffer_page_down(void)
+{
+	size_t		next, index;
+
+	next = active->top + (ce_term_height() - 2);
+
+	index = next + (active->line - 1);
+	if (index >= active->lcnt) {
+		active->top = (active->lcnt - 1) - 15;
+		active->line = TERM_CURSOR_MIN;
+	} else {
+		active->top += ce_term_height() - 2;
 	}
 
 	buffer_update_cursor_column(active);

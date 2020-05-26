@@ -56,6 +56,8 @@ static struct keymap normal_map[] = {
 	{ '$',		ce_buffer_jump_right },
 	{ 'h',		ce_buffer_move_left },
 	{ '0',		ce_buffer_jump_left },
+	{ 0x06,		ce_buffer_page_down },
+	{ 0x02,		ce_buffer_page_up },
 	{ 'i',		editor_cmd_insert_mode },
 	{ ':',		editor_cmd_command_mode },
 };

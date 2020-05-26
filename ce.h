@@ -112,7 +112,9 @@ void		ce_buffer_input(struct cebuf *, char );
 void		ce_buffer_line_columns(struct celine *);
 void		ce_buffer_append(struct cebuf *, const void *, size_t);
 
+void		ce_buffer_page_up(void);
 void		ce_buffer_move_up(void);
+void		ce_buffer_page_down(void);
 void		ce_buffer_move_down(void);
 void		ce_buffer_move_left(void);
 void		ce_buffer_jump_left(void);
