@@ -89,8 +89,8 @@ static struct cebuf	*cmdbuf = NULL;
 void
 ce_editor_loop(void)
 {
-	int			ret;
 	struct pollfd		pfd;
+	int			ret, dirty;
 
 	memset(&pfd, 0, sizeof(pfd));
 
@@ -107,13 +107,19 @@ ce_editor_loop(void)
 	if ((cmdbuf->path = strdup("<cmd>")) == NULL)
 		fatal("%s: failed to set path for cmdbuf", __func__);
 
-	while (!quit) {
-		if (ce_buffer_active() != cmdbuf)
-			ce_term_writestr(TERM_SEQUENCE_CLEAR_ONLY);
+	dirty = 1;
 
-		editor_draw_status();
-		ce_buffer_map();
-		ce_term_flush();
+	while (!quit) {
+		if (dirty) {
+			if (ce_buffer_active() != cmdbuf)
+				ce_term_writestr(TERM_SEQUENCE_CLEAR_ONLY);
+
+			editor_draw_status();
+			ce_buffer_map();
+			ce_term_flush();
+
+			dirty = 0;
+		}
 
 		ret = poll(&pfd, 1, 1000);
 		if (ret == -1) {
@@ -128,8 +134,10 @@ ce_editor_loop(void)
 		if (pfd.revents & (POLLHUP | POLLERR))
 			fatal("%s: poll error", __func__);
 
-		if (pfd.revents & POLLIN)
+		if (pfd.revents & POLLIN) {
+			dirty = 1;
 			editor_event();
+		}
 	}
 }
 
