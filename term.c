@@ -95,7 +95,9 @@ ce_term_width(void)
 void
 ce_term_setpos(u_int16_t line, u_int16_t col)
 {
-	if (col < TERM_CURSOR_MIN || col > ce_term_width()) {
+	u_int16_t	adj, orig;
+
+	if (col < TERM_CURSOR_MIN) {
 		fatal("%s: invalid column %u (%u)",
 		    __func__, col, ce_term_width());
 	}
@@ -105,7 +107,12 @@ ce_term_setpos(u_int16_t line, u_int16_t col)
 		    __func__, line, ce_term_height());
 	}
 
-	ce_term_writef(TERM_SEQUENCE_FMT_SET_CURSOR, line, col);
+	orig = col;
+	adj = col / (ce_term_width() + 1);
+	if ((col = col % ce_term_width()) == 0)
+		col = ce_term_width();
+
+	ce_term_writef(TERM_SEQUENCE_FMT_SET_CURSOR, line + adj, col);
 }
 
 void

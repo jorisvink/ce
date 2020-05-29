@@ -101,6 +101,9 @@ struct cebuf {
 	/* If backed by a file, the path. */
 	char			*path;
 
+	/* Current cursor line. */
+	u_int16_t		cursor_line;
+
 	/* Current line / column offsets. */
 	u_int16_t		line;
 	u_int16_t		column;

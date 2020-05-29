@@ -207,10 +207,10 @@ editor_draw_status(void)
 		fatal("%s: unknown mode %d", __func__, mode);
 	}
 
+	ce_term_writestr(TERM_SEQUENCE_CURSOR_SAVE);
+
 	ce_term_writestr(TERM_SEQUENCE_BACKGROUND_WHITE);
 	ce_term_writestr(TERM_SEQUENCE_FOREGROUND_BLACK);
-
-	ce_term_writestr(TERM_SEQUENCE_CURSOR_SAVE);
 
 	ce_term_setpos(ce_term_height() - 1, TERM_CURSOR_MIN);
 	ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
