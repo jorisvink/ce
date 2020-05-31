@@ -326,10 +326,6 @@ ce_buffer_move_up(void)
 	else
 		active->cursor_line -= last;
 
-	line = buffer_line_current(active);
-	ce_debug("%zu.%u.%u = '%.*s'", active->top, active->line,
-	    active->cursor_line, (int)line->length, (const char *)line->data);
-
 	buffer_update_cursor_column(active);
 	ce_term_setpos(active->cursor_line, active->column);
 }
