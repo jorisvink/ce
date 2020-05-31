@@ -134,6 +134,7 @@ void		ce_buffer_map(void);
 void		ce_buffer_cleanup(void);
 void		ce_buffer_restore(void);
 int		ce_buffer_save_active(void);
+void		ce_buffer_delete_line(void);
 void		ce_buffer_init(int, char **);
 void		ce_buffer_free(struct cebuf *);
 void		ce_buffer_reset(struct cebuf *);

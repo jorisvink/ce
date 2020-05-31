@@ -41,6 +41,7 @@ static void		buffer_populate_lines(struct cebuf *);
 static void		buffer_line_column_to_data(struct cebuf *);
 static void		buffer_update_cursor_column(struct cebuf *);
 static u_int16_t	buffer_line_data_to_columns(const void *, size_t);
+static void		buffer_line_allocate(struct cebuf *, struct celine *);
 static void		buffer_line_erase_byte(struct cebuf *, struct celine *);
 static void		buffer_line_insert_byte(struct cebuf *,
 			    struct celine *, u_int8_t);
@@ -263,7 +264,6 @@ ce_buffer_map(void)
 void
 ce_buffer_input(struct cebuf *buf, u_int8_t byte)
 {
-	void			*ptr;
 	struct celine		*line;
 
 	if (buf->cb != NULL) {
@@ -272,22 +272,7 @@ ce_buffer_input(struct cebuf *buf, u_int8_t byte)
 	}
 
 	line = buffer_line_current(buf);
-
-	if (!(line->flags & CE_LINE_ALLOCATED)) {
-		line->maxsz = line->length + 32;
-		if ((ptr = calloc(1, line->maxsz)) == NULL) {
-			fatal("%s: calloc(%zu): %s", __func__, line->length,
-			    strerror(errno));
-		}
-
-		memcpy(ptr, line->data, line->length);
-
-		/* We don't leak data as it points to inside buf->data. */
-		line->data = ptr;
-		line->flags |= CE_LINE_ALLOCATED;
-
-		ce_debug("line %zu has been allocated", buffer_line_index(buf));
-	}
+	buffer_line_allocate(buf, line);
 
 	switch (byte) {
 	case '\b':
@@ -300,6 +285,37 @@ ce_buffer_input(struct cebuf *buf, u_int8_t byte)
 	default:
 		buffer_line_insert_byte(buf, line, byte);
 		break;
+	}
+}
+
+void
+ce_buffer_delete_line(void)
+{
+	size_t			index;
+	struct celine		*line;
+
+	index = buffer_line_index(active);
+	line = buffer_line_current(active);
+	ce_debug("removing line %zu", index);
+
+	if (line->flags & CE_LINE_ALLOCATED)
+		free(line->data);
+
+	ce_debug("moving %zu lines", active->lcnt - index);
+
+	memmove(&active->lines[index], &active->lines[index + 1],
+	    (active->lcnt - index - 1) * sizeof(struct celine));
+
+	active->lcnt--;
+	ce_debug("index = %zu, lcnt == %zu", index, active->lcnt);
+
+	if (index == active->lcnt) {
+		ce_buffer_move_up();
+	} else {
+		line = buffer_line_current(active);
+		buffer_line_allocate(active, line);
+		buffer_update_cursor_column(active);
+		ce_term_setpos(active->cursor_line, active->column);
 	}
 }
 
@@ -806,6 +822,28 @@ buffer_line_index(struct cebuf *buf)
 		fatal("%s: index %zu > lcnt %zu", __func__, index, buf->lcnt);
 
 	return (index);
+}
+
+static void
+buffer_line_allocate(struct cebuf *buf, struct celine *line)
+{
+	u_int8_t	*ptr;
+
+	if (!(line->flags & CE_LINE_ALLOCATED)) {
+		line->maxsz = line->length + 32;
+		if ((ptr = calloc(1, line->maxsz)) == NULL) {
+			fatal("%s: calloc(%zu): %s", __func__, line->length,
+			    strerror(errno));
+		}
+
+		memcpy(ptr, line->data, line->length);
+
+		/* We don't leak data as it points to inside buf->data. */
+		line->data = ptr;
+		line->flags |= CE_LINE_ALLOCATED;
+
+		ce_debug("line %zu has been allocated", buffer_line_index(buf));
+	}
 }
 
 static void

@@ -246,6 +246,11 @@ editor_cmd_input(struct cebuf *buf, char key)
 			}
 			ce_buffer_activate(buf);
 			break;
+		case 'd':
+			ce_buffer_restore();
+			ce_buffer_delete_line();
+			ce_buffer_activate(buf);
+			break;
 		}
 		editor_cmd_normal_mode();
 		break;
