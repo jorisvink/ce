@@ -297,7 +297,6 @@ void
 ce_buffer_move_up(void)
 {
 	struct celine		*line;
-	int			scroll;
 	u_int16_t		lines, last;
 
 	if (active->cursor_line < TERM_CURSOR_MIN)
@@ -306,11 +305,8 @@ ce_buffer_move_up(void)
 	if (active->cursor_line == TERM_CURSOR_MIN && active->top == 0)
 		return;
 
-	scroll = 0;
-
 	if (active->cursor_line < TERM_SCROLL_OFFSET) {
 		if (active->top > 0) {
-			scroll = 1;
 			active->top--;
 			line = &active->lines[active->top];
 			lines = (line->columns / ce_term_width()) + 1;
@@ -341,10 +337,30 @@ ce_buffer_move_up(void)
 void
 ce_buffer_page_up(void)
 {
+	size_t			index;
+	struct celine		*line;
+	u_int16_t		curline, lines, height;
+
 	if (active->top > ce_term_height() - 2)
 		active->top -= ce_term_height() - 2;
 	else
 		active->top = 0;
+
+	curline = 1;
+	height = (ce_term_height() - 2) / 2;
+
+	for (index = active->top; curline < height; index++) {
+		if (index == active->lcnt - 1)
+			break;
+
+		line = &active->lines[index];
+		lines = (line->columns / ce_term_width()) + 1;
+
+		curline += lines;
+	}
+
+	active->line = index - (active->top - 1);
+	active->cursor_line = curline;
 
 	buffer_update_cursor_column(active);
 	ce_term_setpos(active->cursor_line, active->column);
@@ -399,7 +415,9 @@ ce_buffer_move_down(void)
 void
 ce_buffer_page_down(void)
 {
-	size_t		next, index;
+	struct celine		*line;
+	size_t			next, index;
+	u_int16_t		lines, curline, height;
 
 	next = active->top + (ce_term_height() - 2);
 
@@ -407,11 +425,26 @@ ce_buffer_page_down(void)
 	if (index >= active->lcnt) {
 		active->top = (active->lcnt - 1) - 15;
 		active->line = TERM_CURSOR_MIN;
+		active->cursor_line = TERM_CURSOR_MIN;
 	} else {
 		active->top += ce_term_height() - 2;
 	}
 
-//	active->cursor_line = active->line;
+	curline = 1;
+	height = (ce_term_height() - 2) / 2;
+
+	for (index = active->top; curline < height; index++) {
+		if (index == active->lcnt - 1)
+			break;
+
+		line = &active->lines[index];
+		lines = (line->columns / ce_term_width()) + 1;
+
+		curline += lines;
+	}
+
+	active->line = index - (active->top - 1);
+	active->cursor_line = curline;
 
 	buffer_update_cursor_column(active);
 	ce_term_setpos(active->cursor_line, active->column);
