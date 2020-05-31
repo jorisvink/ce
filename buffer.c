@@ -353,7 +353,6 @@ ce_buffer_move_up(void)
 		active->cursor_line -= last;
 
 	buffer_update_cursor_column(active);
-	ce_term_setpos(active->cursor_line, active->column);
 }
 
 void
@@ -432,7 +431,6 @@ ce_buffer_move_down(void)
 	active->cursor_line += last;
 
 	buffer_update_cursor_column(active);
-	ce_term_setpos(active->cursor_line, active->column);
 }
 
 void
@@ -470,7 +468,6 @@ ce_buffer_page_down(void)
 	active->cursor_line = curline;
 
 	buffer_update_cursor_column(active);
-	ce_term_setpos(active->cursor_line, active->column);
 }
 
 void
@@ -492,8 +489,6 @@ ce_buffer_move_left(void)
 	active->loff--;
 	active->column = buffer_line_data_to_columns(line->data, active->loff);
 	cursor_column = active->column;
-
-	ce_term_setpos(active->cursor_line, active->column);
 }
 
 void
@@ -501,7 +496,6 @@ ce_buffer_jump_left(void)
 {
 	active->loff = 0;
 	active->column = TERM_CURSOR_MIN;
-	ce_term_setpos(active->cursor_line, active->column);
 }
 
 void
@@ -519,8 +513,6 @@ ce_buffer_move_right(void)
 
 	active->column = buffer_line_data_to_columns(line->data, active->loff);
 	cursor_column = active->column;
-
-	ce_term_setpos(active->cursor_line, active->column);
 }
 
 void
@@ -530,15 +522,13 @@ ce_buffer_jump_right(void)
 
 	line = buffer_line_current(active);
 
-	if (line->length > 0)
-		active->loff = line->length - 1;
+	if (line->length > 1)
+		active->loff = line->length - 2;
 	else
 		active->loff = 0;
 
 	active->column = buffer_line_data_to_columns(line->data,
 	    active->loff);
-
-	ce_term_setpos(active->cursor_line, active->column);
 }
 
 void
