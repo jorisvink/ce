@@ -16,24 +16,32 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/uio.h>
 
+#include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 
 #include "ce.h"
+
+/* Conservative. */
+#define BUFFER_MAX_IOVEC		64
 
 static void		buffer_grow(struct cebuf *, size_t);
 static void		buffer_seterr(const char *, ...)
 			    __attribute__((format (printf, 1, 2)));
 
-static u_int16_t	buffer_line_index(struct cebuf *);
+static size_t		buffer_line_index(struct cebuf *);
 static struct celine	*buffer_line_current(struct cebuf *);
 static void		buffer_populate_lines(struct cebuf *);
 static void		buffer_line_column_to_data(struct cebuf *);
 static void		buffer_update_cursor_column(struct cebuf *);
 static u_int16_t	buffer_line_data_to_columns(const void *, size_t);
+static void		buffer_line_erase_byte(struct cebuf *, struct celine *);
 static void		buffer_line_insert_byte(struct cebuf *,
 			    struct celine *, u_int8_t);
 
@@ -278,13 +286,15 @@ ce_buffer_input(struct cebuf *buf, u_int8_t byte)
 		line->data = ptr;
 		line->flags |= CE_LINE_ALLOCATED;
 
-		ce_debug("line %u has been allocated", buffer_line_index(buf));
+		ce_debug("line %zu has been allocated", buffer_line_index(buf));
 	}
-
-	ce_debug("byte: 0x%02x", byte);
 
 	switch (byte) {
 	case '\b':
+	case 0x7f:
+		if (buf->loff > 0)
+			buffer_line_erase_byte(buf, line);
+		break;
 	case '\n':
 		break;
 	default:
@@ -366,8 +376,9 @@ void
 ce_buffer_move_down(void)
 {
 	struct celine	*line;
+	size_t		index;
 	int		scroll;
-	u_int16_t	next, index, lines, last;
+	u_int16_t	next, lines, last;
 
 	if (active->cursor_line > ce_term_height() - 2) {
 		fatal("%s: line (%u) > %u",
@@ -532,6 +543,125 @@ ce_buffer_line_columns(struct celine *line)
 	line->columns = buffer_line_data_to_columns(line->data, line->length);
 }
 
+int
+ce_buffer_save_active(void)
+{
+	struct iovec		*iov;
+	int			fd, len, ret;
+	char			path[PATH_MAX];
+	size_t			elms, off, cnt, line, maxsz, next;
+
+	fd = -1;
+	ret = -1;
+	iov = NULL;
+
+	if (active->path == NULL) {
+		buffer_seterr("buffer has no active path");
+		return (-1);
+	}
+
+	len = snprintf(path, sizeof(path), ".%s.ces", active->path);
+	if (len == -1 || (size_t)len >= sizeof(path)) {
+		buffer_seterr("failed to create path for saving file");
+		return (-1);
+	}
+
+	if ((fd = open(path, O_CREAT | O_TRUNC | O_WRONLY, 0600)) == -1) {
+		buffer_seterr("open(%s): %s", path, errno_s);
+		goto cleanup;
+	}
+
+	maxsz = 32;
+	if ((iov = calloc(maxsz, sizeof(struct iovec))) == NULL) {
+		fatal("%s: calloc(%zu): %s", __func__,
+		    maxsz * sizeof(struct iovec), strerror(errno));
+	}
+
+	off = 1;
+	elms = 0;
+
+	/*
+	 * Collapse all lines into as little elements as possible by
+	 * making use of the fact that if a line was un-edited it will
+	 * automatically flow into the next line so we can expand
+	 * the iov_data by accounting for line+1 its length into iov_len.
+	 */
+	for (line = 0; line < active->lcnt; line++) {
+		iov[elms].iov_base = active->lines[line].data;
+		iov[elms].iov_len = active->lines[line].length;
+
+		if (!(active->lines[line].flags & CE_LINE_ALLOCATED)) {
+			for (next = line + 1; next < active->lcnt; next++) {
+				if (active->lines[next].flags &
+				    CE_LINE_ALLOCATED)
+					break;
+
+				iov[elms].iov_len += active->lines[next].length;
+			}
+
+			line = next - 1;
+		}
+
+		elms++;
+
+		if (elms > maxsz - 1) {
+			maxsz += 32;
+			iov = realloc(iov, maxsz * sizeof(struct iovec));
+			if (iov == NULL) {
+				fatal("%s: realloc(%zu): %s", __func__,
+				    maxsz * sizeof(struct iovec),
+				    strerror(errno));
+			}
+		}
+	}
+
+	off = 0;
+	while (elms > 0) {
+		if (elms > BUFFER_MAX_IOVEC)
+			cnt = BUFFER_MAX_IOVEC;
+		else
+			cnt = elms;
+
+		for (;;) {
+			if (writev(fd, iov + off, cnt) == -1) {
+				if (errno == EINTR)
+					continue;
+				buffer_seterr("writev(%s): %s",
+				    path, strerror(errno));
+				goto cleanup;
+			}
+
+			break;
+		}
+
+		elms -= cnt;
+		off += cnt;
+	}
+
+	if (close(fd) == -1) {
+		buffer_seterr("close(%s): %s", path, strerror(errno));
+		goto cleanup;
+	}
+
+	fd = -1;
+
+	if (rename(path, active->path) == -1) {
+		buffer_seterr("rename(%s): %s", path, strerror(errno));
+		goto cleanup;
+	}
+
+	ret = 0;
+
+cleanup:
+	free(iov);
+	(void)unlink(path);
+
+	if (fd != -1)
+		(void)close(fd);
+
+	return (ret);
+}
+
 static void
 buffer_populate_lines(struct cebuf *buf)
 {
@@ -560,7 +690,7 @@ buffer_populate_lines(struct cebuf *buf)
 		TAILQ_INIT(&buf->lines[buf->lcnt].ops);
 
 		buf->lines[buf->lcnt].data = start;
-		buf->lines[buf->lcnt].length = &data[idx] - start;
+		buf->lines[buf->lcnt].length = (&data[idx] - start) + 1;
 
 		ce_buffer_line_columns(&buf->lines[buf->lcnt]);
 
@@ -656,24 +786,24 @@ buffer_line_column_to_data(struct cebuf *buf)
 static struct celine *
 buffer_line_current(struct cebuf *buf)
 {
-	u_int16_t	index;
+	size_t		index;
 
 	index = buffer_line_index(buf);
 
 	return (&buf->lines[index]);
 }
 
-static u_int16_t
+static size_t
 buffer_line_index(struct cebuf *buf)
 {
-	u_int16_t	index;
+	size_t		index;
 
 	if (buf->line == 0)
 		fatal("%s: line == 0", __func__);
 
 	index = buf->top + (buf->line - 1);
 	if (index >= buf->lcnt)
-		fatal("%s: index %u > lcnt %zu", __func__, index, buf->lcnt);
+		fatal("%s: index %zu > lcnt %zu", __func__, index, buf->lcnt);
 
 	return (index);
 }
@@ -695,9 +825,46 @@ buffer_line_insert_byte(struct cebuf *buf, struct celine *line, u_int8_t byte)
 	memmove(&ptr[buf->loff + 1], &ptr[buf->loff], line->length - buf->loff);
 
 	ptr[buf->loff] = byte;
+
 	line->length++;
+	ce_buffer_line_columns(line);
 
 	ce_buffer_move_right();
+}
+
+static void
+buffer_line_erase_byte(struct cebuf *buf, struct celine *line)
+{
+	u_int8_t	*ptr;
+	size_t		index;
+
+	if (line->length == 0) {
+		ce_debug("line needs removing");
+
+		if (buf->lcnt == 1) {
+			ce_debug("last line, not removing");
+			return;
+		}
+
+		index = buffer_line_index(buf);
+		memmove(&buf->lines[index], &buf->lines[index + 1],
+		    (buf->lcnt - index) * sizeof(struct celine));
+
+		buf->lcnt--;
+
+		ce_buffer_move_up();
+		ce_buffer_jump_right();
+
+		return;
+	}
+
+	ptr = line->data;
+	memmove(&ptr[buf->loff - 1], &ptr[buf->loff], line->length - buf->loff);
+
+	line->length--;
+
+	ce_buffer_line_columns(line);
+	ce_buffer_move_left();
 }
 
 static void

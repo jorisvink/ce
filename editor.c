@@ -232,9 +232,20 @@ editor_cmd_input(struct cebuf *buf, char key)
 	switch (key) {
 	case '\n':
 		cmd = ce_buffer_as_string(buf);
-		if (!strcmp(cmd, ":q")) {
+		switch (cmd[1]) {
+		case 'q':
 			editor_cmd_quit();
 			return;
+		case 'w':
+			ce_buffer_restore();
+			if (ce_buffer_save_active() == -1) {
+				ce_buffer_activate(buf);
+				/* XXX error handling */
+				ce_debug("err: %s", ce_buffer_strerror());
+				break;
+			}
+			ce_buffer_activate(buf);
+			break;
 		}
 		editor_cmd_normal_mode();
 		break;
