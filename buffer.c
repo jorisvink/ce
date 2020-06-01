@@ -539,6 +539,8 @@ ce_buffer_move_left(void)
 void
 ce_buffer_jump_left(void)
 {
+	cursor_column = TERM_CURSOR_MIN;
+
 	active->loff = 0;
 	active->column = TERM_CURSOR_MIN;
 }
@@ -574,6 +576,7 @@ ce_buffer_jump_right(void)
 
 	active->column = buffer_line_data_to_columns(line->data,
 	    active->loff);
+	cursor_column = active->column;
 }
 
 void
@@ -953,7 +956,8 @@ buffer_update_cursor_column(struct cebuf *buf)
 		buf->loff = 0;
 	} else {
 		buffer_line_column_to_data(buf);
-		if (buf->loff < line->length - 1)
+		if (buf->column != TERM_CURSOR_MIN &&
+		    buf->loff < line->length - 1)
 			buf->loff++;
 	}
 }
