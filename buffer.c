@@ -23,6 +23,7 @@
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -294,25 +295,26 @@ ce_buffer_input(struct cebuf *buf, u_int8_t byte)
 void
 ce_buffer_insert_line(struct cebuf *buf)
 {
-	struct celine	*prev;
+	struct celine	*line;
 	u_int8_t	*data, *ptr;
 	size_t		index, lcnt, length;
 
 	index = buffer_line_index(buf);
-	prev = &buf->lines[index];
+	line = &buf->lines[index];
 
-	length = prev->length - buf->loff;
+	length = line->length - buf->loff;
 
-	data = prev->data;
+	data = line->data;
 	data += buf->loff;
 
 	if ((ptr = calloc(1, length)) == NULL)
 		fatal("%s: calloc(%zu): %s", __func__, length, errno_s);
 
 	memcpy(ptr, data, length);
-	prev->length = buf->loff;
+	line->length = buf->loff;
+	line->columns = buffer_line_data_to_columns(line->data, line->length);
 
-	ce_debug("current line now '%.*s'", (int)prev->length, (const char *)prev->data);
+	ce_debug("current line now '%.*s'", (int)line->length, (const char *)line->data);
 
 	ce_debug("inserted line data '%.*s'", (int)length, (const char *)ptr);
 
@@ -322,12 +324,15 @@ ce_buffer_insert_line(struct cebuf *buf)
 	    (lcnt - index) * sizeof(struct celine));
 
 	index++;
-	TAILQ_INIT(&buf->lines[index].ops);
+	line = &buf->lines[index];
 
-	buf->lines[index].data = ptr;
-	buf->lines[index].maxsz = length;
-	buf->lines[index].length = length;
-	buf->lines[index].flags = CE_LINE_ALLOCATED;
+	TAILQ_INIT(&line->ops);
+
+	line->data = ptr;
+	line->maxsz = length;
+	line->length = length;
+	line->flags = CE_LINE_ALLOCATED;
+	line->columns = buffer_line_data_to_columns(line->data, line->length);
 
 	cursor_column = TERM_CURSOR_MIN;
 	ce_buffer_move_down();
@@ -407,7 +412,7 @@ ce_buffer_page_up(void)
 	struct celine		*line;
 	u_int16_t		curline, lines, height;
 
-	if (active->top > ce_term_height() - 2)
+	if (active->top > ce_term_height() - 2U)
 		active->top -= ce_term_height() - 2;
 	else
 		active->top = 0;
@@ -736,6 +741,7 @@ buffer_populate_lines(struct cebuf *buf)
 		buffer_resize_lines(buf, buf->lcnt + 1);
 		TAILQ_INIT(&buf->lines[elm].ops);
 
+		buf->lines[elm].flags = 0;
 		buf->lines[elm].data = start;
 		buf->lines[elm].length = (&data[idx] - start) + 1;
 		buf->lines[elm].maxsz = buf->lines[elm].length;
@@ -755,6 +761,7 @@ buffer_populate_lines(struct cebuf *buf)
 
 		TAILQ_INIT(&buf->lines[buf->lcnt].ops);
 
+		buf->lines[0].flags = 0;
 		buf->lines[0].data = buf->data;
 		buf->lines[0].length = buf->length;
 		buf->lines[0].maxsz = buf->lines[0].length;
@@ -820,15 +827,11 @@ buffer_line_column_to_data(struct cebuf *buf)
 	buf->column = col;
 	buf->loff = idx;
 
-	if (buf->loff > line->length - 1) {
-		fatal("%s: loff %zu > length %zu", __func__,
-		    buf->loff, line->length - 1);
-	}
+	if (buf->loff > line->length - 1)
+		buf->loff = line->length - 1;
 
-	if (buf->column > line->columns) {
-		fatal("%s: colum %u > columns %u", __func__,
-		    buf->column, line->columns);
-	}
+	if (buf->column > line->columns)
+		buf->column = line->columns;
 }
 
 static struct celine *

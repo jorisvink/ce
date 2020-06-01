@@ -219,9 +219,7 @@ editor_draw_status(void)
 	    curbuf->column, curbuf->lcnt, modestr);
 
 	ce_term_writestr(TERM_SEQUENCE_CURSOR_RESTORE);
-
-	ce_term_writestr(TERM_SEQUENCE_BACKGROUND_BLACK);
-	ce_term_writestr(TERM_SEQUENCE_FOREGROUND_WHITE);
+	ce_term_writestr(TERM_SEQUENCE_RESET);
 }
 
 static void
