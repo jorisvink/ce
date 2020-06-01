@@ -240,7 +240,7 @@ ce_buffer_map(void)
 {
 	size_t		idx;
 	int		line;
-	u_int16_t	steps;
+	u_int16_t	lines;
 
 	if (active->data == NULL)
 		return;
@@ -253,8 +253,8 @@ ce_buffer_map(void)
 		ce_term_write(active->lines[idx].data,
 		    active->lines[idx].length);
 
-		steps = (active->lines[idx].columns / ce_term_width()) + 1;
-		line += steps;
+		lines = (active->lines[idx].columns / ce_term_width()) + 1;
+		line += lines;
 
 		if (line > ce_term_height() - 2)
 			break;
@@ -807,6 +807,9 @@ buffer_line_data_to_columns(const void *data, size_t length)
 	cols = TERM_CURSOR_MIN;
 
 	for (idx = 0; idx < length; idx++) {
+		if (idx == length - 1 && ptr[idx] == '\n')
+			break;
+
 		if (ptr[idx] == '\t') {
 			if ((cols % 8) == 0)
 				cols += 1;
