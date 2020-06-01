@@ -248,7 +248,7 @@ editor_cmd_input(struct cebuf *buf, char key)
 			break;
 		case 'd':
 			ce_buffer_restore();
-			ce_buffer_delete_line();
+			ce_buffer_delete_line(ce_buffer_active());
 			ce_buffer_activate(buf);
 			break;
 		}

@@ -32,6 +32,7 @@
 #define BUFFER_MAX_IOVEC		64
 
 static void		buffer_grow(struct cebuf *, size_t);
+static void		buffer_resize_lines(struct cebuf *, size_t);
 static void		buffer_seterr(const char *, ...)
 			    __attribute__((format (printf, 1, 2)));
 
@@ -281,6 +282,8 @@ ce_buffer_input(struct cebuf *buf, u_int8_t byte)
 			buffer_line_erase_byte(buf, line);
 		break;
 	case '\n':
+		buffer_line_insert_byte(buf, line, byte);
+		ce_buffer_insert_line(buf);
 		break;
 	default:
 		buffer_line_insert_byte(buf, line, byte);
@@ -289,33 +292,75 @@ ce_buffer_input(struct cebuf *buf, u_int8_t byte)
 }
 
 void
-ce_buffer_delete_line(void)
+ce_buffer_insert_line(struct cebuf *buf)
+{
+	struct celine	*prev;
+	u_int8_t	*data, *ptr;
+	size_t		index, lcnt, length;
+
+	index = buffer_line_index(buf);
+	prev = &buf->lines[index];
+
+	length = prev->length - buf->loff;
+
+	data = prev->data;
+	data += buf->loff;
+
+	if ((ptr = calloc(1, length)) == NULL)
+		fatal("%s: calloc(%zu): %s", __func__, length, errno_s);
+
+	memcpy(ptr, data, length);
+	prev->length = buf->loff;
+
+	ce_debug("current line now '%.*s'", (int)prev->length, (const char *)prev->data);
+
+	ce_debug("inserted line data '%.*s'", (int)length, (const char *)ptr);
+
+	lcnt = buf->lcnt;
+	buffer_resize_lines(buf, buf->lcnt + 1);
+	memmove(&buf->lines[index + 1], &buf->lines[index],
+	    (lcnt - index) * sizeof(struct celine));
+
+	index++;
+	TAILQ_INIT(&buf->lines[index].ops);
+
+	buf->lines[index].data = ptr;
+	buf->lines[index].maxsz = length;
+	buf->lines[index].length = length;
+	buf->lines[index].flags = CE_LINE_ALLOCATED;
+
+	cursor_column = TERM_CURSOR_MIN;
+	ce_buffer_move_down();
+}
+
+void
+ce_buffer_delete_line(struct cebuf *buf)
 {
 	size_t			index;
 	struct celine		*line;
 
-	index = buffer_line_index(active);
-	line = buffer_line_current(active);
+	index = buffer_line_index(buf);
+	line = buffer_line_current(buf);
 	ce_debug("removing line %zu", index);
 
 	if (line->flags & CE_LINE_ALLOCATED)
 		free(line->data);
 
-	ce_debug("moving %zu lines", active->lcnt - index);
+	ce_debug("moving %zu lines", buf->lcnt - index);
 
-	memmove(&active->lines[index], &active->lines[index + 1],
-	    (active->lcnt - index - 1) * sizeof(struct celine));
+	memmove(&buf->lines[index], &buf->lines[index + 1],
+	    (buf->lcnt - index - 1) * sizeof(struct celine));
 
-	active->lcnt--;
-	ce_debug("index = %zu, lcnt == %zu", index, active->lcnt);
+	buf->lcnt--;
+	ce_debug("index = %zu, lcnt == %zu", index, buf->lcnt);
 
-	if (index == active->lcnt) {
+	if (index == buf->lcnt) {
 		ce_buffer_move_up();
 	} else {
-		line = buffer_line_current(active);
-		buffer_line_allocate(active, line);
-		buffer_update_cursor_column(active);
-		ce_term_setpos(active->cursor_line, active->column);
+		line = buffer_line_current(buf);
+		buffer_line_allocate(buf, line);
+		buffer_update_cursor_column(buf);
+//		ce_term_setpos(buf->cursor_line, buf->column);
 	}
 }
 
@@ -580,7 +625,7 @@ ce_buffer_save_active(void)
 	maxsz = 32;
 	if ((iov = calloc(maxsz, sizeof(struct iovec))) == NULL) {
 		fatal("%s: calloc(%zu): %s", __func__,
-		    maxsz * sizeof(struct iovec), strerror(errno));
+		    maxsz * sizeof(struct iovec), errno_s);
 	}
 
 	off = 1;
@@ -615,8 +660,7 @@ ce_buffer_save_active(void)
 			iov = realloc(iov, maxsz * sizeof(struct iovec));
 			if (iov == NULL) {
 				fatal("%s: realloc(%zu): %s", __func__,
-				    maxsz * sizeof(struct iovec),
-				    strerror(errno));
+				    maxsz * sizeof(struct iovec), errno_s);
 			}
 		}
 	}
@@ -632,8 +676,7 @@ ce_buffer_save_active(void)
 			if (writev(fd, iov + off, cnt) == -1) {
 				if (errno == EINTR)
 					continue;
-				buffer_seterr("writev(%s): %s",
-				    path, strerror(errno));
+				buffer_seterr("writev(%s): %s", path, errno_s);
 				goto cleanup;
 			}
 
@@ -645,14 +688,14 @@ ce_buffer_save_active(void)
 	}
 
 	if (close(fd) == -1) {
-		buffer_seterr("close(%s): %s", path, strerror(errno));
+		buffer_seterr("close(%s): %s", path, errno_s);
 		goto cleanup;
 	}
 
 	fd = -1;
 
 	if (rename(path, active->path) == -1) {
-		buffer_seterr("rename(%s): %s", path, strerror(errno));
+		buffer_seterr("rename(%s): %s", path, errno_s);
 		goto cleanup;
 	}
 
@@ -686,22 +729,17 @@ buffer_populate_lines(struct cebuf *buf)
 		if (data[idx] != '\n')
 			continue;
 
-		elm = buf->lcnt + 1;
-		buf->lines = realloc(buf->lines, elm * sizeof(struct celine));
-		if (buf->lines == NULL) {
-			fatal("%s: realloc(%zu): %s", __func__,
-			    elm * sizeof(struct celine), errno_s);
-		}
+		elm = buf->lcnt;
+		buffer_resize_lines(buf, buf->lcnt + 1);
+		TAILQ_INIT(&buf->lines[elm].ops);
 
-		TAILQ_INIT(&buf->lines[buf->lcnt].ops);
+		buf->lines[elm].data = start;
+		buf->lines[elm].length = (&data[idx] - start) + 1;
+		buf->lines[elm].maxsz = buf->lines[elm].length;
 
-		buf->lines[buf->lcnt].data = start;
-		buf->lines[buf->lcnt].length = (&data[idx] - start) + 1;
-
-		ce_buffer_line_columns(&buf->lines[buf->lcnt]);
+		ce_buffer_line_columns(&buf->lines[elm]);
 
 		start = &data[idx + 1];
-		buf->lcnt++;
 	}
 
 	if (buf->lcnt == 0) {
@@ -716,6 +754,7 @@ buffer_populate_lines(struct cebuf *buf)
 
 		buf->lines[0].data = buf->data;
 		buf->lines[0].length = buf->length;
+		buf->lines[0].maxsz = buf->lines[0].length;
 
 		ce_buffer_line_columns(&buf->lines[0]);
 	}
@@ -823,7 +862,7 @@ buffer_line_allocate(struct cebuf *buf, struct celine *line)
 		line->maxsz = line->length + 32;
 		if ((ptr = calloc(1, line->maxsz)) == NULL) {
 			fatal("%s: calloc(%zu): %s", __func__, line->length,
-			    strerror(errno));
+			    errno_s);
 		}
 
 		memcpy(ptr, line->data, line->length);
@@ -845,7 +884,7 @@ buffer_line_insert_byte(struct cebuf *buf, struct celine *line, u_int8_t byte)
 		line->maxsz = line->length + 32;
 		if ((line->data = realloc(line->data, line->maxsz)) == NULL) {
 			fatal("%s: realloc(%zu): %s", __func__,
-			    line->maxsz, strerror(errno));
+			    line->maxsz, errno_s);
 		}
 	}
 
@@ -941,6 +980,18 @@ buffer_grow(struct cebuf *buf, size_t len)
 		buf->data = r;
 		buf->maxsz = nlen;
 	}
+}
+
+static void
+buffer_resize_lines(struct cebuf *buf, size_t elm)
+{
+	buf->lines = realloc(buf->lines, elm * sizeof(struct celine));
+	if (buf->lines == NULL) {
+		fatal("%s: realloc(%zu): %s", __func__,
+		    elm * sizeof(struct celine), errno_s);
+	}
+
+	buf->lcnt = elm;
 }
 
 static void
