@@ -68,6 +68,8 @@ ce_term_setup(void)
 	}
 
 	can_restore = 1;
+
+	ce_term_writestr(TERM_SEQUENCE_SCREEN_ALTERNATE_ON);
 	ce_term_writestr(TERM_SEQUENCE_RESET);
 	ce_term_writestr(TERM_SEQUENCE_CLEAR);
 }
@@ -145,6 +147,12 @@ void
 ce_term_write(const void *data, size_t len)
 {
 	ce_buffer_append(termbuf, data, len);
+}
+
+void
+ce_term_discard(void)
+{
+	ce_buffer_reset(termbuf);
 }
 
 void

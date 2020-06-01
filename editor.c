@@ -17,6 +17,7 @@
 #include <sys/types.h>
 
 #include <poll.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -35,13 +36,17 @@ struct keymap {
 	void		(*command)(void);
 };
 
+static void	editor_signal(int);
 static void	editor_event(void);
+static void	editor_resume(void);
+static void	editor_signal_setup(void);
 static void	editor_read(int, void *, size_t);
 
 static void	editor_draw_status(void);
 
 static void	editor_cmd_quit(void);
 static void	editor_cmd_reset(void);
+static void	editor_cmd_suspend(void);
 
 static void	editor_cmd_insert_mode(void);
 static void	editor_cmd_normal_mode(void);
@@ -60,6 +65,7 @@ static struct keymap normal_map[] = {
 	{ 0x02,		ce_buffer_page_up },
 	{ 'i',		editor_cmd_insert_mode },
 	{ ':',		editor_cmd_command_mode },
+	{ '\x1a',	editor_cmd_suspend },
 };
 
 static struct keymap insert_map[] = {
@@ -80,17 +86,19 @@ static struct {
 	{ EDITOR_MODE_COMMAND,	command_map,	KEY_MAP_LEN(command_map) },
 };
 
-static int		quit = 0;
-static const char	colon_char = ':';
-static int		mode = EDITOR_MODE_NORMAL;
-
-static struct cebuf	*cmdbuf = NULL;
+static int			quit = 0;
+static volatile sig_atomic_t	sig_recv = -1;
+static struct cebuf		*cmdbuf = NULL;
+static const char		colon_char = ':';
+static int			mode = EDITOR_MODE_NORMAL;
 
 void
 ce_editor_loop(void)
 {
 	struct pollfd		pfd;
 	int			ret, dirty;
+
+	editor_signal_setup();
 
 	memset(&pfd, 0, sizeof(pfd));
 
@@ -110,6 +118,20 @@ ce_editor_loop(void)
 	dirty = 1;
 
 	while (!quit) {
+		if (sig_recv != -1) {
+			switch (sig_recv) {
+			case SIGQUIT:
+			case SIGTERM:
+				quit = 1;
+				continue;
+			case SIGCONT:
+				dirty = 1;
+				editor_resume();
+				break;
+			}
+			sig_recv = -1;
+		}
+
 		if (dirty) {
 			if (ce_buffer_active() != cmdbuf)
 				ce_term_writestr(TERM_SEQUENCE_CLEAR_ONLY);
@@ -139,6 +161,39 @@ ce_editor_loop(void)
 			editor_event();
 		}
 	}
+
+	ce_term_discard();
+	ce_term_writestr(TERM_SEQUENCE_SCREEN_ALTERNATE_OFF);
+	ce_term_flush();
+}
+
+static void
+editor_signal(int sig)
+{
+	sig_recv = sig;
+}
+
+static void
+editor_signal_setup(void)
+{
+	struct sigaction	sa;
+
+	memset(&sa, 0, sizeof(sa));
+	sa.sa_handler = editor_signal;
+
+	if (sigfillset(&sa.sa_mask) == -1)
+		fatal("sigfillset: %s", errno_s);
+
+	if (sigaction(SIGCONT, &sa, NULL) == -1)
+		fatal("sigfillset: %s", errno_s);
+	if (sigaction(SIGQUIT, &sa, NULL) == -1)
+		fatal("sigfillset: %s", errno_s);
+	if (sigaction(SIGTERM, &sa, NULL) == -1)
+		fatal("sigfillset: %s", errno_s);
+
+	(void)signal(SIGINT, SIG_IGN);
+	(void)signal(SIGHUP, SIG_IGN);
+	(void)signal(SIGPIPE, SIG_IGN);
 }
 
 static void
@@ -276,6 +331,24 @@ static void
 editor_cmd_quit(void)
 {
 	quit = 1;
+}
+
+static void
+editor_resume(void)
+{
+	ce_term_discard();
+	ce_term_setup();
+	ce_term_flush();
+}
+
+static void
+editor_cmd_suspend(void)
+{
+	ce_term_discard();
+	ce_term_writestr(TERM_SEQUENCE_SCREEN_ALTERNATE_OFF);
+	ce_term_flush();
+
+	kill(0, SIGTSTP);
 }
 
 static void

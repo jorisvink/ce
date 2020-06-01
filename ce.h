@@ -42,6 +42,9 @@
 
 #define TERM_SEQUENCE_RESET		TERM_ESCAPE "49m"
 
+#define TERM_SEQUENCE_SCREEN_ALTERNATE_ON	TERM_ESCAPE "?1049h"
+#define TERM_SEQUENCE_SCREEN_ALTERNATE_OFF	TERM_ESCAPE "?1049l"
+
 #define TERM_SEQUENCE_BACKGROUND_BLACK	TERM_ESCAPE "40m"
 #define TERM_SEQUENCE_BACKGROUND_WHITE	TERM_ESCAPE "47m"
 
@@ -165,6 +168,7 @@ u_int16_t	ce_term_width(void);
 u_int16_t	ce_term_height(void);
 void		ce_term_setup(void);
 void		ce_term_flush(void);
+void		ce_term_discard(void);
 void		ce_term_restore(void);
 void		ce_term_writestr(const char *);
 void		ce_term_write(const void *, size_t);
