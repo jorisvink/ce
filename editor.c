@@ -87,6 +87,7 @@ static struct {
 };
 
 static int			quit = 0;
+static int			dirty = 1;
 static volatile sig_atomic_t	sig_recv = -1;
 static struct cebuf		*cmdbuf = NULL;
 static const char		colon_char = ':';
@@ -96,7 +97,7 @@ void
 ce_editor_loop(void)
 {
 	struct pollfd		pfd;
-	int			ret, dirty;
+	int			ret;
 
 	editor_signal_setup();
 
@@ -115,8 +116,6 @@ ce_editor_loop(void)
 	if ((cmdbuf->path = strdup("<cmd>")) == NULL)
 		fatal("%s: failed to set path for cmdbuf", __func__);
 
-	dirty = 1;
-
 	while (!quit) {
 		if (sig_recv != -1) {
 			switch (sig_recv) {
@@ -132,16 +131,18 @@ ce_editor_loop(void)
 			sig_recv = -1;
 		}
 
+		if (ce_buffer_active() == cmdbuf)
+			ce_buffer_map();
+
 		if (dirty) {
 			if (ce_buffer_active() != cmdbuf)
 				ce_term_writestr(TERM_SEQUENCE_CLEAR_ONLY);
-
-			editor_draw_status();
 			ce_buffer_map();
-			ce_term_flush();
-
 			dirty = 0;
 		}
+
+		editor_draw_status();
+		ce_term_flush();
 
 		ret = poll(&pfd, 1, 1000);
 		if (ret == -1) {
@@ -156,15 +157,19 @@ ce_editor_loop(void)
 		if (pfd.revents & (POLLHUP | POLLERR))
 			fatal("%s: poll error", __func__);
 
-		if (pfd.revents & POLLIN) {
-			dirty = 1;
+		if (pfd.revents & POLLIN)
 			editor_event();
-		}
 	}
 
 	ce_term_discard();
 	ce_term_writestr(TERM_SEQUENCE_SCREEN_ALTERNATE_OFF);
 	ce_term_flush();
+}
+
+void
+ce_editor_dirty(void)
+{
+	dirty = 1;
 }
 
 static void

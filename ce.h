@@ -177,6 +177,7 @@ void		ce_term_writef(const char *, ...)
 		    __attribute__((format (printf, 1, 2)));
 
 void		ce_editor_loop(void);
+void		ce_editor_dirty(void);
 void		ce_editor_cmdline_append(const char *, ...)
 		    __attribute__((format (printf, 1, 2)));
 

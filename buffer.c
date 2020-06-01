@@ -366,12 +366,16 @@ ce_buffer_delete_line(struct cebuf *buf)
 		buffer_line_allocate(buf, line);
 		buffer_update_cursor_column(buf);
 	}
+
+	/* XXX for now. */
+	ce_editor_dirty();
 }
 
 void
 ce_buffer_move_up(void)
 {
 	struct celine		*line;
+	int			scroll;
 	u_int16_t		lines, last;
 
 	if (active->cursor_line < TERM_CURSOR_MIN)
@@ -380,8 +384,11 @@ ce_buffer_move_up(void)
 	if (active->cursor_line == TERM_CURSOR_MIN && active->top == 0)
 		return;
 
+	scroll = 0;
+
 	if (active->cursor_line < TERM_SCROLL_OFFSET) {
 		if (active->top > 0) {
+			scroll = 1;
 			active->top--;
 			line = &active->lines[active->top];
 			lines = (line->columns / ce_term_width()) + 1;
@@ -402,6 +409,11 @@ ce_buffer_move_up(void)
 		active->cursor_line -= last;
 
 	buffer_update_cursor_column(active);
+
+	if (!scroll)
+		ce_term_setpos(active->cursor_line, active->column);
+	else
+		ce_editor_dirty();
 }
 
 void
@@ -433,7 +445,8 @@ ce_buffer_page_up(void)
 	active->cursor_line = curline;
 
 	buffer_update_cursor_column(active);
-	ce_term_setpos(active->cursor_line, active->column);
+
+	ce_editor_dirty();
 }
 
 void
@@ -478,8 +491,12 @@ ce_buffer_move_down(void)
 	}
 
 	active->cursor_line += last;
-
 	buffer_update_cursor_column(active);
+
+	if (!scroll)
+		ce_term_setpos(active->cursor_line, active->column);
+	else
+		ce_editor_dirty();
 }
 
 void
@@ -517,6 +534,8 @@ ce_buffer_page_down(void)
 	active->cursor_line = curline;
 
 	buffer_update_cursor_column(active);
+
+	ce_editor_dirty();
 }
 
 void
@@ -538,6 +557,8 @@ ce_buffer_move_left(void)
 	active->loff--;
 	active->column = buffer_line_data_to_columns(line->data, active->loff);
 	cursor_column = active->column;
+
+	ce_term_setpos(active->cursor_line, active->column);
 }
 
 void
@@ -547,6 +568,8 @@ ce_buffer_jump_left(void)
 
 	active->loff = 0;
 	active->column = TERM_CURSOR_MIN;
+
+	ce_term_setpos(active->cursor_line, active->column);
 }
 
 void
@@ -564,6 +587,8 @@ ce_buffer_move_right(void)
 
 	active->column = buffer_line_data_to_columns(line->data, active->loff);
 	cursor_column = active->column;
+
+	ce_term_setpos(active->cursor_line, active->column);
 }
 
 void
@@ -581,6 +606,8 @@ ce_buffer_jump_right(void)
 	active->column = buffer_line_data_to_columns(line->data,
 	    active->loff);
 	cursor_column = active->column;
+
+	ce_term_setpos(active->cursor_line, active->column);
 }
 
 void
@@ -902,6 +929,9 @@ buffer_line_insert_byte(struct cebuf *buf, struct celine *line, u_int8_t byte)
 	ce_buffer_line_columns(line);
 
 	ce_buffer_move_right();
+
+	/* XXX for now. */
+	ce_editor_dirty();
 }
 
 static void
@@ -937,6 +967,9 @@ buffer_line_erase_byte(struct cebuf *buf, struct celine *line)
 
 	ce_buffer_line_columns(line);
 	ce_buffer_move_left();
+
+	/* XXX for now. */
+	ce_editor_dirty();
 }
 
 static void
