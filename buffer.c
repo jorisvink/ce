@@ -365,7 +365,6 @@ ce_buffer_delete_line(struct cebuf *buf)
 		line = buffer_line_current(buf);
 		buffer_line_allocate(buf, line);
 		buffer_update_cursor_column(buf);
-//		ce_term_setpos(buf->cursor_line, buf->column);
 	}
 }
 
