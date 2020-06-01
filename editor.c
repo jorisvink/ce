@@ -53,6 +53,7 @@ static void	editor_cmd_normal_mode(void);
 
 static void	editor_cmd_insert_mode(void);
 static void	editor_cmd_insert_mode_append(void);
+static void	editor_cmd_insert_mode_prepend(void);
 
 static void	editor_cmd_input(struct cebuf *, char);
 
@@ -67,6 +68,7 @@ static struct keymap normal_map[] = {
 	{ 0x02,		ce_buffer_page_up },
 	{ 'i',		editor_cmd_insert_mode },
 	{ 'o',		editor_cmd_insert_mode_append },
+	{ 'O',		editor_cmd_insert_mode_prepend },
 	{ ':',		editor_cmd_command_mode },
 	{ '\x1a',	editor_cmd_suspend },
 };
@@ -370,6 +372,16 @@ editor_cmd_insert_mode_append(void)
 {
 	ce_buffer_jump_left();
 	ce_buffer_move_down();
+	ce_buffer_input(ce_buffer_active(), '\n');
+	ce_buffer_move_up();
+
+	mode = EDITOR_MODE_INSERT;
+}
+
+static void
+editor_cmd_insert_mode_prepend(void)
+{
+	ce_buffer_jump_left();
 	ce_buffer_input(ce_buffer_active(), '\n');
 	ce_buffer_move_up();
 
