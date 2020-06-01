@@ -16,6 +16,7 @@
 
 #include <sys/types.h>
 
+#include <ctype.h>
 #include <poll.h>
 #include <signal.h>
 #include <stdio.h>
@@ -40,6 +41,7 @@ static void	editor_signal(int);
 static void	editor_event(void);
 static void	editor_resume(void);
 static void	editor_signal_setup(void);
+static int	editor_allowed_command_key(char);
 static void	editor_read(int, void *, size_t);
 
 static void	editor_draw_status(void);
@@ -48,13 +50,14 @@ static void	editor_cmd_quit(void);
 static void	editor_cmd_reset(void);
 static void	editor_cmd_suspend(void);
 
+static void	editor_cmd_open_file(const char *);
+
 static void	editor_cmd_command_mode(void);
 static void	editor_cmd_normal_mode(void);
 
 static void	editor_cmd_insert_mode(void);
 static void	editor_cmd_insert_mode_append(void);
 static void	editor_cmd_insert_mode_prepend(void);
-
 static void	editor_cmd_input(struct cebuf *, char);
 
 static struct keymap normal_map[] = {
@@ -111,15 +114,12 @@ ce_editor_loop(void)
 	pfd.events = POLLIN;
 	pfd.fd = STDIN_FILENO;
 
-	if ((cmdbuf = ce_buffer_alloc(NULL)) == NULL)
-		fatal("%s: failed to allocate cmdbuf", __func__);
+	cmdbuf = ce_buffer_internal("<cmd>");
+	ce_buffer_line_alloc_empty(cmdbuf);
 
 	cmdbuf->cb = editor_cmd_input;
 	cmdbuf->line = ce_term_height();
 	cmdbuf->orig_line = ce_term_height();
-
-	if ((cmdbuf->path = strdup("<cmd>")) == NULL)
-		fatal("%s: failed to set path for cmdbuf", __func__);
 
 	while (!quit) {
 		if (sig_recv != -1) {
@@ -217,6 +217,7 @@ editor_event(void)
 		fatal("%s: mode %d invalid", __func__, mode);
 
 	editor_read(STDIN_FILENO, &key, sizeof(key));
+	ce_debug("key: 0x%02x", key);
 
 	for (idx = 0; idx < keymaps[mode].maplen; idx++) {
 		if (key == keymaps[mode].map[idx].key) {
@@ -280,7 +281,7 @@ editor_draw_status(void)
 	ce_term_setpos(ce_term_height() - 1, TERM_CURSOR_MIN);
 	ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
 	ce_term_writef("[%s] [ %zu,%zu-%u ] [%zu lines] %s",
-	    curbuf->path, curbuf->top + curbuf->line, curbuf->loff,
+	    curbuf->name, curbuf->top + curbuf->line, curbuf->loff,
 	    curbuf->column, curbuf->lcnt, modestr);
 
 	ce_term_writestr(TERM_SEQUENCE_CURSOR_RESTORE);
@@ -294,27 +295,28 @@ editor_cmd_input(struct cebuf *buf, char key)
 
 	switch (key) {
 	case '\n':
+		ce_buffer_restore();
 		cmd = ce_buffer_as_string(buf);
 		switch (cmd[1]) {
 		case 'q':
 			editor_cmd_quit();
-			return;
+			break;
 		case 'w':
-			ce_buffer_restore();
 			if (ce_buffer_save_active() == -1) {
-				ce_buffer_activate(buf);
 				/* XXX error handling */
 				ce_debug("err: %s", ce_buffer_strerror());
 				break;
 			}
-			ce_buffer_activate(buf);
 			break;
 		case 'd':
-			ce_buffer_restore();
 			ce_buffer_delete_line(ce_buffer_active());
-			ce_buffer_activate(buf);
+			break;
+		case 'e':
+			if (strlen(cmd) > 3)
+				editor_cmd_open_file(&cmd[3]);
 			break;
 		}
+		ce_buffer_activate(buf);
 		editor_cmd_normal_mode();
 		break;
 	case '\b':
@@ -328,8 +330,10 @@ editor_cmd_input(struct cebuf *buf, char key)
 	case '\t':
 		break;
 	default:
-		ce_buffer_append(buf, &key, sizeof(key));
-		buf->column++;
+		if (editor_allowed_command_key(key)) {
+			ce_buffer_append(buf, &key, sizeof(key));
+			buf->column++;
+		}
 		break;
 	}
 
@@ -421,4 +425,32 @@ editor_cmd_reset(void)
 	ce_buffer_reset(cmdbuf);
 	ce_term_setpos(ce_term_height(), TERM_CURSOR_MIN);
 	ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
+}
+
+static int
+editor_allowed_command_key(char key)
+{
+	if (isalnum((unsigned char)key))
+		return (1);
+
+	switch (key) {
+	case ' ':
+	case '.':
+	case '/':
+		return (1);
+	}
+
+	return (0);
+}
+
+static void
+editor_cmd_open_file(const char *path)
+{
+	if (ce_buffer_file(path) == NULL) {
+		/* XXX error handling */
+		ce_debug("cannot open '%s': %s", path, ce_buffer_strerror());
+		return;
+	}
+
+	ce_editor_dirty();
 }

@@ -32,6 +32,8 @@
 /* Conservative. */
 #define BUFFER_MAX_IOVEC		64
 
+static struct cebuf	*buffer_alloc(void);
+
 static void		buffer_grow(struct cebuf *, size_t);
 static void		buffer_resize_lines(struct cebuf *, size_t);
 static void		buffer_seterr(const char *, ...)
@@ -61,11 +63,11 @@ ce_buffer_init(int argc, char **argv)
 
 	TAILQ_INIT(&buffers);
 
-	scratch = ce_buffer_alloc(NULL);
+	scratch = ce_buffer_internal("scratch");
 	active = scratch;
 
 	for (i = 0; i < argc; i++) {
-		if (ce_buffer_alloc(argv[i]) == NULL)
+		if (ce_buffer_file(argv[i]) == NULL)
 			fatal("%s", errstr);
 	}
 
@@ -89,7 +91,26 @@ ce_buffer_strerror(void)
 }
 
 struct cebuf *
-ce_buffer_alloc(const char *path)
+ce_buffer_internal(const char *name)
+{
+	struct cebuf	*buf;
+
+	buf = buffer_alloc();
+
+	if ((buf->name = strdup(name)) == NULL)
+		fatal("%s: strdup: %s", __func__, errno_s);
+
+	if ((buf->data = calloc(1, 1024)) == NULL)
+		fatal("%s: calloc(%zu): %s", __func__, buf->maxsz, errno_s);
+
+	buf->maxsz = 1024;
+	buffer_populate_lines(buf);
+
+	return (buf);
+}
+
+struct cebuf *
+ce_buffer_file(const char *path)
 {
 	int			fd;
 	struct stat		st;
@@ -99,32 +120,12 @@ ce_buffer_alloc(const char *path)
 	fd = -1;
 	ret = NULL;
 
-	if ((buf = calloc(1, sizeof(*buf))) == NULL)
-		fatal("%s: calloc(%zu): %s", __func__, sizeof(*buf), errno_s);
-
-	buf->prev = active;
-
-	buf->top = 0;
-	buf->orig_line = TERM_CURSOR_MIN;
-	buf->orig_column = TERM_CURSOR_MIN;
-
-	buf->line = buf->orig_line;
-	buf->column = buf->orig_column;
-	buf->cursor_line = buf->orig_line;
-
-	TAILQ_INSERT_HEAD(&buffers, buf, list);
-
-	if (path == NULL) {
-		if ((buf->data = calloc(1, 1024)) == NULL) {
-			fatal("%s: calloc(%zu): %s",
-			    __func__, buf->maxsz, errno_s);
-		}
-		buf->maxsz = 1024;
-		buffer_populate_lines(buf);
-		return (buf);
-	}
+	buf = buffer_alloc();
 
 	if ((buf->path = strdup(path)) == NULL)
+		fatal("%s: strdup: %s", __func__, errno_s);
+
+	if ((buf->name = strdup(path)) == NULL)
 		fatal("%s: strdup: %s", __func__, errno_s);
 
 	if ((fd = open(path, O_RDONLY)) == -1) {
@@ -193,10 +194,17 @@ ce_buffer_active(void)
 void
 ce_buffer_free(struct cebuf *buf)
 {
+	if (buf == scratch)
+		fatal("%s: refusing to free scratch buffer", __func__);
+
 	TAILQ_REMOVE(&buffers, buf, list);
+
+	if (active == buf)
+		active = buf->prev;
 
 	free(buf->data);
 	free(buf->path);
+	free(buf->name);
 	free(buf);
 }
 
@@ -273,6 +281,9 @@ ce_buffer_input(struct cebuf *buf, u_int8_t byte)
 		return;
 	}
 
+	if (buf->lcnt == 0)
+		ce_buffer_line_alloc_empty(buf);
+
 	line = buffer_line_current(buf);
 	buffer_line_allocate(buf, line);
 
@@ -343,6 +354,9 @@ ce_buffer_delete_line(struct cebuf *buf)
 {
 	size_t			index;
 	struct celine		*line;
+
+	if (buf->lcnt == 0)
+		return;
 
 	index = buffer_line_index(buf);
 	line = buffer_line_current(buf);
@@ -422,6 +436,9 @@ ce_buffer_page_up(void)
 	size_t			index;
 	struct celine		*line;
 	u_int16_t		curline, lines, height;
+
+	if (active->lcnt < ce_term_height() - 2)
+		return;
 
 	if (active->top > ce_term_height() - 2U)
 		active->top -= ce_term_height() - 2;
@@ -522,6 +539,9 @@ ce_buffer_page_down(void)
 	struct celine		*line;
 	size_t			next, index;
 	u_int16_t		lines, curline, height;
+
+	if (active->lcnt < ce_term_height() - 2)
+		return;
 
 	next = active->top + (ce_term_height() - 2);
 
@@ -645,6 +665,26 @@ ce_buffer_line_columns(struct celine *line)
 	line->columns = buffer_line_data_to_columns(line->data, line->length);
 }
 
+void
+ce_buffer_line_alloc_empty(struct cebuf *buf)
+{
+	buf->lcnt = 1;
+
+	if ((buf->lines = calloc(1, sizeof(struct celine))) == NULL) {
+		fatal("%s: calloc(%zu): %s", __func__,
+			    sizeof(struct celine), errno_s);
+	}
+
+	TAILQ_INIT(&buf->lines[buf->lcnt].ops);
+
+	buf->lines[0].flags = 0;
+	buf->lines[0].data = buf->data;
+	buf->lines[0].length = buf->length;
+	buf->lines[0].maxsz = buf->lines[0].length;
+
+	ce_buffer_line_columns(&buf->lines[0]);
+}
+
 int
 ce_buffer_save_active(void)
 {
@@ -762,6 +802,29 @@ cleanup:
 	return (ret);
 }
 
+static struct cebuf *
+buffer_alloc(void)
+{
+	struct cebuf		*buf;
+
+	if ((buf = calloc(1, sizeof(*buf))) == NULL)
+		fatal("%s: calloc(%zu): %s", __func__, sizeof(*buf), errno_s);
+
+	buf->prev = active;
+
+	buf->top = 0;
+	buf->orig_line = TERM_CURSOR_MIN;
+	buf->orig_column = TERM_CURSOR_MIN;
+
+	buf->line = buf->orig_line;
+	buf->column = buf->orig_column;
+	buf->cursor_line = buf->orig_line;
+
+	TAILQ_INSERT_HEAD(&buffers, buf, list);
+
+	return (buf);
+}
+
 static void
 buffer_populate_lines(struct cebuf *buf)
 {
@@ -792,24 +855,6 @@ buffer_populate_lines(struct cebuf *buf)
 		ce_buffer_line_columns(&buf->lines[elm]);
 
 		start = &data[idx + 1];
-	}
-
-	if (buf->lcnt == 0) {
-		buf->lcnt = 1;
-
-		if ((buf->lines = calloc(1, sizeof(struct celine))) == NULL) {
-			fatal("%s: calloc(%zu): %s", __func__,
-			    sizeof(struct celine), errno_s);
-		}
-
-		TAILQ_INIT(&buf->lines[buf->lcnt].ops);
-
-		buf->lines[0].flags = 0;
-		buf->lines[0].data = buf->data;
-		buf->lines[0].length = buf->length;
-		buf->lines[0].maxsz = buf->lines[0].length;
-
-		ce_buffer_line_columns(&buf->lines[0]);
 	}
 }
 

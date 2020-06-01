@@ -106,6 +106,9 @@ struct cebuf {
 	/* If backed by a file, the path. */
 	char			*path;
 
+	/* Name of the buffer. */
+	char			*name;
+
 	/* Current cursor line. */
 	u_int16_t		cursor_line;
 
@@ -147,6 +150,7 @@ void		ce_buffer_delete_line(struct cebuf *);
 void		ce_buffer_insert_line(struct cebuf *);
 void		ce_buffer_line_columns(struct celine *);
 void		ce_buffer_input(struct cebuf *, u_int8_t);
+void		ce_buffer_line_alloc_empty(struct cebuf *);
 void		ce_buffer_append(struct cebuf *, const void *, size_t);
 
 void		ce_buffer_page_up(void);
@@ -162,7 +166,8 @@ const char	*ce_buffer_strerror(void);
 const char	*ce_buffer_as_string(struct cebuf *);
 
 struct cebuf	*ce_buffer_active(void);
-struct cebuf	*ce_buffer_alloc(const char *);
+struct cebuf	*ce_buffer_file(const char *);
+struct cebuf	*ce_buffer_internal(const char *);
 
 u_int16_t	ce_term_width(void);
 u_int16_t	ce_term_height(void);
