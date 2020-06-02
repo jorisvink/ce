@@ -337,7 +337,6 @@ ce_buffer_list(struct cebuf *output)
 		idx++;
 	}
 
-	ce_debug("line is %zu", idx);
 	buffer_populate_lines(output);
 }
 
