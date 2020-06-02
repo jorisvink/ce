@@ -80,8 +80,15 @@ ce_buffer_cleanup(void)
 {
 	struct cebuf	*buf;
 
+	TAILQ_REMOVE(&buffers, scratch, list);
+
 	while ((buf = TAILQ_FIRST(&buffers)) != NULL)
 		ce_buffer_free(buf);
+
+	free(scratch->data);
+	free(scratch->path);
+	free(scratch->name);
+	free(scratch);
 }
 
 const char *
@@ -194,8 +201,10 @@ ce_buffer_active(void)
 void
 ce_buffer_free(struct cebuf *buf)
 {
-	if (buf == scratch)
-		fatal("%s: refusing to free scratch buffer", __func__);
+	if (buf == scratch) {
+		ce_debug("not freeing scratch buffer");
+		return;
+	}
 
 	TAILQ_REMOVE(&buffers, buf, list);
 
@@ -437,7 +446,7 @@ ce_buffer_page_up(void)
 	struct celine		*line;
 	u_int16_t		curline, lines, height;
 
-	if (active->lcnt < ce_term_height() - 2)
+	if (active->lcnt < ce_term_height() - 2U)
 		return;
 
 	if (active->top > ce_term_height() - 2U)
@@ -540,7 +549,7 @@ ce_buffer_page_down(void)
 	size_t			next, index;
 	u_int16_t		lines, curline, height;
 
-	if (active->lcnt < ce_term_height() - 2)
+	if (active->lcnt < ce_term_height() - 2U)
 		return;
 
 	next = active->top + (ce_term_height() - 2);

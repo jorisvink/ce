@@ -315,6 +315,14 @@ editor_cmd_input(struct cebuf *buf, char key)
 			if (strlen(cmd) > 3)
 				editor_cmd_open_file(&cmd[3]);
 			break;
+		case 'b':
+			switch (cmd[2]) {
+			case 'c':
+				ce_buffer_free(ce_buffer_active());
+				ce_editor_dirty();
+				break;
+			}
+			break;
 		}
 		ce_buffer_activate(buf);
 		editor_cmd_normal_mode();
