@@ -26,6 +26,19 @@
 
 #define TERM_SCROLL_OFFSET		10
 
+#define TERM_COLOR_BLACK		0
+#define TERM_COLOR_RED			1
+#define TERM_COLOR_GREEN		2
+#define TERM_COLOR_YELLOW		3
+#define TERM_COLOR_BLUE			4
+#define TERM_COLOR_MAGENTA		5
+#define TERM_COLOR_CYAN			6
+#define TERM_COLOR_WHITE		7
+
+#define TERM_COLOR_BRIGHT		40
+#define TERM_COLOR_FG			30
+#define TERM_COLOR_BG			40
+
 #define TERM_CURSOR_MIN			1
 #define TERM_ESCAPE			"\033["
 
@@ -38,18 +51,14 @@
 #define TERM_SEQUENCE_CURSOR_SAVE	TERM_ESCAPE "s"
 #define TERM_SEQUENCE_CURSOR_RESTORE	TERM_ESCAPE "u"
 #define TERM_SEQUENCE_LINE_ERASE	TERM_ESCAPE "K"
+
+#define TERM_SEQUENCE_FMT_SET_COLOR	TERM_ESCAPE "%dm"
 #define TERM_SEQUENCE_FMT_SET_CURSOR	TERM_ESCAPE "%d;%dH"
 
 #define TERM_SEQUENCE_RESET		TERM_ESCAPE "49m"
 
-#define TERM_SEQUENCE_SCREEN_ALTERNATE_ON	TERM_ESCAPE "?1049h"
-#define TERM_SEQUENCE_SCREEN_ALTERNATE_OFF	TERM_ESCAPE "?1049l"
-
-#define TERM_SEQUENCE_BACKGROUND_BLACK	TERM_ESCAPE "40m"
-#define TERM_SEQUENCE_BACKGROUND_WHITE	TERM_ESCAPE "47m"
-
-#define TERM_SEQUENCE_FOREGROUND_BLACK	TERM_ESCAPE "30m"
-#define TERM_SEQUENCE_FOREGROUND_WHITE	TERM_ESCAPE "37m"
+#define TERM_SEQUENCE_ALTERNATE_ON	TERM_ESCAPE "?1049h"
+#define TERM_SEQUENCE_ALTERNATE_OFF	TERM_ESCAPE "?1049l"
 
 /*
  * An operation that happened on a line.
@@ -157,8 +166,9 @@ void		ce_buffer_line_columns(struct celine *);
 void		ce_buffer_free_internal(struct cebuf *);
 void		ce_buffer_input(struct cebuf *, u_int8_t);
 void		ce_buffer_line_alloc_empty(struct cebuf *);
-void		ce_buffer_appendf(struct cebuf *, const char *, ...);
 void		ce_buffer_append(struct cebuf *, const void *, size_t);
+void		ce_buffer_appendf(struct cebuf *, const char *, ...)
+		    __attribute__((format (printf, 2, 3)));
 
 void		ce_buffer_page_up(void);
 void		ce_buffer_move_up(void);
@@ -178,7 +188,10 @@ struct cebuf	*ce_buffer_internal(const char *);
 
 u_int16_t	ce_term_width(void);
 u_int16_t	ce_term_height(void);
+
+void		ce_term_color(int);
 void		ce_term_setup(void);
+void		ce_term_reset(void);
 void		ce_term_flush(void);
 void		ce_term_discard(void);
 void		ce_term_restore(void);
@@ -192,6 +205,9 @@ void		ce_editor_loop(void);
 void		ce_editor_dirty(void);
 void		ce_editor_cmdline_append(const char *, ...)
 		    __attribute__((format (printf, 1, 2)));
+
+void		ce_syntax_init(void);
+void		ce_syntax_write(struct cebuf *, struct celine *);
 
 void		ce_debug(const char *, ...)
 		    __attribute__((format (printf, 1, 2)));

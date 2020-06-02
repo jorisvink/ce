@@ -109,7 +109,6 @@ ce_buffer_internal(const char *name)
 		fatal("%s: calloc(%zu): %s", __func__, buf->maxsz, errno_s);
 
 	buf->maxsz = 1024;
-	buffer_populate_lines(buf);
 
 	return (buf);
 }
@@ -312,8 +311,13 @@ ce_buffer_map(void)
 
 	for (idx = active->top; idx < active->lcnt; idx++) {
 		ce_term_setpos(line, TERM_CURSOR_MIN);
-		ce_term_write(active->lines[idx].data,
-		    active->lines[idx].length);
+
+		if (active->internal) {
+			ce_term_write(active->lines[idx].data,
+			    active->lines[idx].length);
+		} else {
+			ce_syntax_write(active, &active->lines[idx]);
+		}
 
 		lines = (active->lines[idx].columns / ce_term_width()) + 1;
 		line += lines;
@@ -517,7 +521,7 @@ ce_buffer_page_up(void)
 		return;
 
 	if (active->top > ce_term_height() - 2U)
-		active->top -= ce_term_height() - 2;
+		active->top -= (ce_term_height() - 2) - 4;
 	else
 		active->top = 0;
 
@@ -627,7 +631,7 @@ ce_buffer_page_down(void)
 		active->line = TERM_CURSOR_MIN;
 		active->cursor_line = TERM_CURSOR_MIN;
 	} else {
-		active->top += ce_term_height() - 2;
+		active->top += (ce_term_height() - 2) - 2;
 	}
 
 	curline = 1;

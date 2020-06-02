@@ -52,6 +52,7 @@ main(int argc, char *argv[])
 
 	ce_debug("%d args, argv[0] = %s", argc, argv[0]);
 
+	ce_syntax_init();
 	ce_buffer_init(argc, argv);
 
 	ce_term_setup();

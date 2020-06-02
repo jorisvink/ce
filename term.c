@@ -69,7 +69,7 @@ ce_term_setup(void)
 
 	can_restore = 1;
 
-	ce_term_writestr(TERM_SEQUENCE_SCREEN_ALTERNATE_ON);
+	ce_term_writestr(TERM_SEQUENCE_ALTERNATE_ON);
 	ce_term_writestr(TERM_SEQUENCE_RESET);
 	ce_term_writestr(TERM_SEQUENCE_CLEAR);
 }
@@ -81,7 +81,7 @@ ce_term_restore(void)
 		return;
 
 	ce_term_discard();
-	ce_term_writestr(TERM_SEQUENCE_SCREEN_ALTERNATE_OFF);
+	ce_term_writestr(TERM_SEQUENCE_ALTERNATE_OFF);
 	ce_term_flush();
 
 	(void)tcsetattr(STDIN_FILENO, TCSANOW, &old);
@@ -121,6 +121,18 @@ ce_term_setpos(u_int16_t line, u_int16_t col)
 		col = ce_term_width();
 
 	ce_term_writef(TERM_SEQUENCE_FMT_SET_CURSOR, line + adj, col);
+}
+
+void
+ce_term_color(int color)
+{
+	ce_term_writef(TERM_SEQUENCE_FMT_SET_COLOR, color);
+}
+
+void
+ce_term_reset(void)
+{
+	ce_term_writestr(TERM_SEQUENCE_RESET);
 }
 
 void

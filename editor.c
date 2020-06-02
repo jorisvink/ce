@@ -90,8 +90,8 @@ static struct keymap command_map[] = {
 };
 
 static struct keymap buflist_map[] = {
-        { 'k',		ce_buffer_move_up },
-        { 'j',		ce_buffer_move_down },
+	{ 'k',		ce_buffer_move_up },
+	{ 'j',		ce_buffer_move_down },
 	{ '\x1b',	editor_cmd_normal_mode },
 };
 
@@ -187,12 +187,6 @@ void
 ce_editor_dirty(void)
 {
 	dirty = 1;
-}
-
-void
-ce_editor_syntax_highlight(const void *data, size_t len, u_int8_t **out,
-    size_t *outlen, size_t *maxsz)
-{
 }
 
 static void
@@ -293,8 +287,8 @@ editor_draw_status(void)
 
 	ce_term_writestr(TERM_SEQUENCE_CURSOR_SAVE);
 
-	ce_term_color(TERM_COLOR_WHITE | TERM_COLOR_BG);
-	ce_term_color(TERM_COLOR_BLACK | TERM_COLOR_FG);
+	ce_term_color(TERM_COLOR_WHITE + TERM_COLOR_BG);
+	ce_term_color(TERM_COLOR_BLACK + TERM_COLOR_FG);
 
 	ce_term_setpos(ce_term_height() - 1, TERM_CURSOR_MIN);
 	ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
@@ -303,7 +297,7 @@ editor_draw_status(void)
 	    curbuf->column, curbuf->lcnt, modestr);
 
 	ce_term_writestr(TERM_SEQUENCE_CURSOR_RESTORE);
-	ce_term_writestr(TERM_SEQUENCE_RESET);
+	ce_term_reset();
 }
 
 static void
@@ -412,6 +406,7 @@ editor_cmd_buffer_list(void)
 {
 	ce_buffer_list(buflist);
 	ce_buffer_activate(buflist);
+	ce_buffer_jump_left();
 
 	mode = EDITOR_MODE_BUFLIST;
 }
