@@ -125,6 +125,13 @@ ce_buffer_file(const char *path)
 	fd = -1;
 	ret = NULL;
 
+	TAILQ_FOREACH(buf, &buffers, list) {
+		if (!strcmp(buf->path, path)) {
+			active = buf;
+			return (buf);
+		}
+	}
+
 	buf = buffer_alloc(0);
 
 	if ((buf->path = strdup(path)) == NULL)
