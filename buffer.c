@@ -304,8 +304,6 @@ ce_buffer_map(void)
 	if (active->data == NULL)
 		return;
 
-	ce_term_writestr(TERM_SEQUENCE_CLEAR_ONLY);
-
 	line = active->orig_line;
 	ce_term_setpos(active->orig_line, active->orig_column);
 
@@ -568,14 +566,6 @@ ce_buffer_move_down(void)
 	if (index == active->lcnt - 1)
 		return;
 
-	if (curlines > ce_term_height() - 2) {
-		active->top = index + 1;
-		active->line = TERM_CURSOR_MIN;
-		active->cursor_line = TERM_CURSOR_MIN;
-		ce_editor_dirty();
-		return;
-	}
-
 	if (active->cursor_line == ce_term_height() - 2)
 		scroll = 1;
 
@@ -610,15 +600,7 @@ ce_buffer_move_down(void)
 		active->line -= last;
 		active->cursor_line -= last - 1;
 	} else {
-		if ((active->cursor_line + curlines) > ce_term_height() - 2) {
-			index = buffer_line_index(active);
-			active->top = index + 1;
-			active->line = TERM_CURSOR_MIN;
-			active->cursor_line = active->line;
-			scroll = 1;
-		} else {
-			active->cursor_line += curlines;
-		}
+		active->cursor_line += curlines;
 	}
 
 	buffer_update_cursor_column(active);
