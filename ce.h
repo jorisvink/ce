@@ -53,7 +53,7 @@
 #define TERM_SEQUENCE_LINE_ERASE	TERM_ESCAPE "K"
 
 #define TERM_SEQUENCE_FMT_SET_COLOR	TERM_ESCAPE "%dm"
-#define TERM_SEQUENCE_FMT_SET_CURSOR	TERM_ESCAPE "%d;%dH"
+#define TERM_SEQUENCE_FMT_SET_CURSOR	TERM_ESCAPE "%zu;%zuH"
 
 #define TERM_SEQUENCE_RESET		TERM_ESCAPE "49m"
 
@@ -94,7 +94,7 @@ struct celine {
 	size_t			length;
 
 	/* Length of the line in columns. */
-	u_int16_t		columns;
+	size_t			columns;
 
 	/* List of operations on this line. */
 	TAILQ_HEAD(, ceop)	ops;
@@ -122,15 +122,15 @@ struct cebuf {
 	char			*name;
 
 	/* Current cursor line. */
-	u_int16_t		cursor_line;
+	size_t			cursor_line;
 
 	/* Current line / column offsets. */
-	u_int16_t		line;
-	u_int16_t		column;
+	size_t			line;
+	size_t			column;
 
 	/* Origin line and column. */
-	u_int16_t		orig_line;
-	u_int16_t		orig_column;
+	size_t			orig_line;
+	size_t			orig_column;
 
 	/* The "top" of where to begin to render the lines. */
 	size_t			top;
@@ -186,8 +186,8 @@ struct cebuf	*ce_buffer_active(void);
 struct cebuf	*ce_buffer_file(const char *);
 struct cebuf	*ce_buffer_internal(const char *);
 
-u_int16_t	ce_term_width(void);
-u_int16_t	ce_term_height(void);
+size_t		ce_term_width(void);
+size_t		ce_term_height(void);
 
 void		ce_term_color(int);
 void		ce_term_setup(void);
@@ -195,9 +195,9 @@ void		ce_term_reset(void);
 void		ce_term_flush(void);
 void		ce_term_discard(void);
 void		ce_term_restore(void);
+void		ce_term_setpos(size_t, size_t);
 void		ce_term_writestr(const char *);
 void		ce_term_write(const void *, size_t);
-void		ce_term_setpos(u_int16_t, u_int16_t);
 void		ce_term_writef(const char *, ...)
 		    __attribute__((format (printf, 1, 2)));
 

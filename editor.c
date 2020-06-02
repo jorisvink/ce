@@ -292,7 +292,7 @@ editor_draw_status(void)
 
 	ce_term_setpos(ce_term_height() - 1, TERM_CURSOR_MIN);
 	ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
-	ce_term_writef("[%s] [ %zu,%zu-%u ] [%zu lines] %s",
+	ce_term_writef("[%s] [ %zu,%zu-%zu ] [%zu lines] %s",
 	    curbuf->name, curbuf->top + curbuf->line, curbuf->loff,
 	    curbuf->column, curbuf->lcnt, modestr);
 

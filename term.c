@@ -89,30 +89,30 @@ ce_term_restore(void)
 	can_restore = 0;
 }
 
-u_int16_t
+size_t
 ce_term_height(void)
 {
 	return (winsz.ws_row);
 }
 
-u_int16_t
+size_t
 ce_term_width(void)
 {
 	return (winsz.ws_col);
 }
 
 void
-ce_term_setpos(u_int16_t line, u_int16_t col)
+ce_term_setpos(size_t line, size_t col)
 {
 	u_int16_t	adj;
 
 	if (col < TERM_CURSOR_MIN) {
-		fatal("%s: invalid column %u (%u)",
+		fatal("%s: invalid column %zu (%zu)",
 		    __func__, col, ce_term_width());
 	}
 
 	if (line < TERM_CURSOR_MIN || line > ce_term_height()) {
-		fatal("%s: invalid line %u (%u)",
+		fatal("%s: invalid line %zu (%zu)",
 		    __func__, line, ce_term_height());
 	}
 
