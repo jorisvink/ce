@@ -332,7 +332,8 @@ ce_buffer_list(struct cebuf *output)
 			output->line = idx;
 			output->cursor_line = idx;
 		}
-		ce_buffer_appendf(output, "[%s]\n", buf->name);
+		ce_buffer_appendf(output, "[%s] (%zu lines)\n",
+		    buf->name, buf->lcnt);
 		idx++;
 	}
 
