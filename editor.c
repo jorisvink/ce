@@ -165,7 +165,7 @@ ce_editor_loop(void)
 		editor_draw_status();
 		ce_term_flush();
 
-		ret = poll(&pfd, 1, 1000);
+		ret = poll(&pfd, 1, -1);
 		if (ret == -1) {
 			if (errno == EINTR)
 				continue;
@@ -187,6 +187,12 @@ void
 ce_editor_dirty(void)
 {
 	dirty = 1;
+}
+
+void
+ce_editor_syntax_highlight(const void *data, size_t len, u_int8_t **out,
+    size_t *outlen, size_t *maxsz)
+{
 }
 
 static void
@@ -287,8 +293,8 @@ editor_draw_status(void)
 
 	ce_term_writestr(TERM_SEQUENCE_CURSOR_SAVE);
 
-	ce_term_writestr(TERM_SEQUENCE_BACKGROUND_WHITE);
-	ce_term_writestr(TERM_SEQUENCE_FOREGROUND_BLACK);
+	ce_term_color(TERM_COLOR_WHITE | TERM_COLOR_BG);
+	ce_term_color(TERM_COLOR_BLACK | TERM_COLOR_FG);
 
 	ce_term_setpos(ce_term_height() - 1, TERM_CURSOR_MIN);
 	ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
@@ -369,11 +375,7 @@ editor_buflist_input(struct cebuf *buf, char key)
 	switch (key) {
 	case '\n':
 		index = buf->top + (buf->line - 1);
-		if (index > 0)
-			ce_buffer_activate_index(index);
-		else
-			ce_buffer_restore();
-
+		ce_buffer_activate_index(index);
 		mode = EDITOR_MODE_NORMAL;
 		break;
 	default:
@@ -399,7 +401,7 @@ static void
 editor_cmd_suspend(void)
 {
 	ce_term_discard();
-	ce_term_writestr(TERM_SEQUENCE_SCREEN_ALTERNATE_OFF);
+	ce_term_writestr(TERM_SEQUENCE_ALTERNATE_OFF);
 	ce_term_flush();
 
 	kill(0, SIGTSTP);
@@ -460,10 +462,11 @@ editor_cmd_command_mode(void)
 static void
 editor_cmd_normal_mode(void)
 {
-	if (mode == EDITOR_MODE_COMMAND) {
+	if (mode == EDITOR_MODE_COMMAND || mode == EDITOR_MODE_BUFLIST)
 		ce_buffer_restore();
+
+	if (mode == EDITOR_MODE_COMMAND)
 		editor_cmd_reset();
-	}
 
 	mode = EDITOR_MODE_NORMAL;
 }
