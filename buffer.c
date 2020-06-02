@@ -32,7 +32,7 @@
 /* Conservative. */
 #define BUFFER_MAX_IOVEC		64
 
-static struct cebuf	*buffer_alloc(void);
+static struct cebuf	*buffer_alloc(int);
 
 static void		buffer_grow(struct cebuf *, size_t);
 static void		buffer_resize_lines(struct cebuf *, size_t);
@@ -51,6 +51,7 @@ static void		buffer_line_insert_byte(struct cebuf *,
 			    struct celine *, u_int8_t);
 
 static struct cebuflist		buffers;
+static struct cebuflist		internals;
 static char			*errstr = NULL;
 static struct cebuf		*active = NULL;
 static struct cebuf		*scratch = NULL;
@@ -62,6 +63,7 @@ ce_buffer_init(int argc, char **argv)
 	int		i;
 
 	TAILQ_INIT(&buffers);
+	TAILQ_INIT(&internals);
 
 	scratch = ce_buffer_internal("scratch");
 	active = scratch;
@@ -80,15 +82,11 @@ ce_buffer_cleanup(void)
 {
 	struct cebuf	*buf;
 
-	TAILQ_REMOVE(&buffers, scratch, list);
-
 	while ((buf = TAILQ_FIRST(&buffers)) != NULL)
 		ce_buffer_free(buf);
 
-	free(scratch->data);
-	free(scratch->path);
-	free(scratch->name);
-	free(scratch);
+	while ((buf = TAILQ_FIRST(&internals)) != NULL)
+		ce_buffer_free_internal(buf);
 }
 
 const char *
@@ -102,7 +100,7 @@ ce_buffer_internal(const char *name)
 {
 	struct cebuf	*buf;
 
-	buf = buffer_alloc();
+	buf = buffer_alloc(1);
 
 	if ((buf->name = strdup(name)) == NULL)
 		fatal("%s: strdup: %s", __func__, errno_s);
@@ -127,7 +125,7 @@ ce_buffer_file(const char *path)
 	fd = -1;
 	ret = NULL;
 
-	buf = buffer_alloc();
+	buf = buffer_alloc(0);
 
 	if ((buf->path = strdup(path)) == NULL)
 		fatal("%s: strdup: %s", __func__, errno_s);
@@ -201,12 +199,29 @@ ce_buffer_active(void)
 void
 ce_buffer_free(struct cebuf *buf)
 {
-	if (buf == scratch) {
-		ce_debug("not freeing scratch buffer");
+	if (buf->internal)
 		return;
-	}
 
 	TAILQ_REMOVE(&buffers, buf, list);
+
+	if (active == buf)
+		active = buf->prev;
+
+	free(buf->data);
+	free(buf->path);
+	free(buf->name);
+	free(buf);
+}
+
+void
+ce_buffer_free_internal(struct cebuf *buf)
+{
+	if (buf->internal == 0) {
+		fatal("%s: called on non internal buffer '%s'",
+		    __func__, buf->name);
+	}
+
+	TAILQ_REMOVE(&internals, buf, list);
 
 	if (active == buf)
 		active = buf->prev;
@@ -233,6 +248,8 @@ ce_buffer_restore(void)
 		return;
 
 	active = active->prev;
+
+	ce_editor_dirty();
 }
 
 void
@@ -240,6 +257,27 @@ ce_buffer_activate(struct cebuf *buf)
 {
 	buf->prev = active;
 	active = buf;
+
+	ce_editor_dirty();
+}
+
+void
+ce_buffer_activate_index(size_t index)
+{
+	size_t			idx;
+	struct cebuf		*buf;
+
+	idx = 0;
+
+	TAILQ_FOREACH_REVERSE(buf, &buffers, cebuflist, list) {
+		if (idx++ == index) {
+			active = buf;
+			ce_editor_dirty();
+			return;
+		}
+	}
+
+	fatal("%s: unknown buffer index %zu", __func__, index);
 }
 
 const char *
@@ -278,6 +316,28 @@ ce_buffer_map(void)
 	}
 
 	ce_term_setpos(active->cursor_line, active->column);
+}
+
+void
+ce_buffer_list(struct cebuf *output)
+{
+	size_t		idx;
+	struct cebuf	*buf;
+
+	idx = 1;
+	ce_buffer_reset(output);
+
+	TAILQ_FOREACH_REVERSE(buf, &buffers, cebuflist, list) {
+		if (buf == active) {
+			output->line = idx;
+			output->cursor_line = idx;
+		}
+		ce_buffer_appendf(output, "[%s]\n", buf->name);
+		idx++;
+	}
+
+	ce_debug("line is %zu", idx);
+	buffer_populate_lines(output);
 }
 
 void
@@ -669,6 +729,25 @@ ce_buffer_append(struct cebuf *buf, const void *data, size_t len)
 }
 
 void
+ce_buffer_appendf(struct cebuf *buf, const char *fmt, ...)
+{
+	int		len;
+	va_list		args;
+	char		str[2048];
+
+	va_start(args, fmt);
+	len = vsnprintf(str, sizeof(str), fmt, args);
+	va_end(args);
+
+	if (len == -1 || (size_t)len >= sizeof(str)) {
+		fatal("%s: failed to format buffer (%d, %zu)",
+		    __func__, len, sizeof(str));
+	}
+
+	ce_buffer_append(buf, str, len);
+}
+
+void
 ce_buffer_line_columns(struct celine *line)
 {
 	line->columns = buffer_line_data_to_columns(line->data, line->length);
@@ -812,16 +891,18 @@ cleanup:
 }
 
 static struct cebuf *
-buffer_alloc(void)
+buffer_alloc(int internal)
 {
 	struct cebuf		*buf;
 
 	if ((buf = calloc(1, sizeof(*buf))) == NULL)
 		fatal("%s: calloc(%zu): %s", __func__, sizeof(*buf), errno_s);
 
-	buf->prev = active;
+	if (internal == 0)
+		buf->prev = active;
 
 	buf->top = 0;
+	buf->internal = internal;
 	buf->orig_line = TERM_CURSOR_MIN;
 	buf->orig_column = TERM_CURSOR_MIN;
 
@@ -829,7 +910,10 @@ buffer_alloc(void)
 	buf->column = buf->orig_column;
 	buf->cursor_line = buf->orig_line;
 
-	TAILQ_INSERT_HEAD(&buffers, buf, list);
+	if (internal == 0)
+		TAILQ_INSERT_HEAD(&buffers, buf, list);
+	else
+		TAILQ_INSERT_HEAD(&internals, buf, list);
 
 	return (buf);
 }

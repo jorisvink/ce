@@ -28,7 +28,8 @@
 #define EDITOR_MODE_NORMAL	0
 #define EDITOR_MODE_INSERT	1
 #define EDITOR_MODE_COMMAND	2
-#define EDITOR_MODE_MAX		3
+#define EDITOR_MODE_BUFLIST	3
+#define EDITOR_MODE_MAX		4
 
 #define KEY_MAP_LEN(x)		((sizeof(x) / sizeof(x[0])))
 
@@ -49,6 +50,7 @@ static void	editor_draw_status(void);
 static void	editor_cmd_quit(void);
 static void	editor_cmd_reset(void);
 static void	editor_cmd_suspend(void);
+static void	editor_cmd_buffer_list(void);
 
 static void	editor_cmd_open_file(const char *);
 
@@ -58,7 +60,9 @@ static void	editor_cmd_normal_mode(void);
 static void	editor_cmd_insert_mode(void);
 static void	editor_cmd_insert_mode_append(void);
 static void	editor_cmd_insert_mode_prepend(void);
+
 static void	editor_cmd_input(struct cebuf *, char);
+static void	editor_buflist_input(struct cebuf *, char);
 
 static struct keymap normal_map[] = {
 	{ 'k',		ce_buffer_move_up },
@@ -73,6 +77,7 @@ static struct keymap normal_map[] = {
 	{ 'o',		editor_cmd_insert_mode_append },
 	{ 'O',		editor_cmd_insert_mode_prepend },
 	{ ':',		editor_cmd_command_mode },
+	{ 0x12,		editor_cmd_buffer_list },
 	{ '\x1a',	editor_cmd_suspend },
 };
 
@@ -84,6 +89,12 @@ static struct keymap command_map[] = {
 	{ '\x1b',	editor_cmd_normal_mode },
 };
 
+static struct keymap buflist_map[] = {
+        { 'k',		ce_buffer_move_up },
+        { 'j',		ce_buffer_move_down },
+	{ '\x1b',	editor_cmd_normal_mode },
+};
+
 static struct {
 	int			mode;
 	const struct keymap	*map;
@@ -92,12 +103,14 @@ static struct {
 	{ EDITOR_MODE_NORMAL,	normal_map,	KEY_MAP_LEN(normal_map) },
 	{ EDITOR_MODE_INSERT,	insert_map,	KEY_MAP_LEN(insert_map) },
 	{ EDITOR_MODE_COMMAND,	command_map,	KEY_MAP_LEN(command_map) },
+	{ EDITOR_MODE_BUFLIST,	buflist_map,	KEY_MAP_LEN(buflist_map) },
 };
 
 static int			quit = 0;
 static int			dirty = 1;
 static volatile sig_atomic_t	sig_recv = -1;
 static struct cebuf		*cmdbuf = NULL;
+static struct cebuf		*buflist = NULL;
 static const char		colon_char = ':';
 static int			mode = EDITOR_MODE_NORMAL;
 
@@ -120,6 +133,9 @@ ce_editor_loop(void)
 	cmdbuf->cb = editor_cmd_input;
 	cmdbuf->line = ce_term_height();
 	cmdbuf->orig_line = ce_term_height();
+
+	buflist = ce_buffer_internal("<buffers>");
+	buflist->cb = editor_buflist_input;
 
 	while (!quit) {
 		if (sig_recv != -1) {
@@ -217,7 +233,6 @@ editor_event(void)
 		fatal("%s: mode %d invalid", __func__, mode);
 
 	editor_read(STDIN_FILENO, &key, sizeof(key));
-	ce_debug("key: 0x%02x", key);
 
 	for (idx = 0; idx < keymaps[mode].maplen; idx++) {
 		if (key == keymaps[mode].map[idx].key) {
@@ -264,6 +279,7 @@ editor_draw_status(void)
 	switch (mode) {
 	case EDITOR_MODE_NORMAL:
 	case EDITOR_MODE_COMMAND:
+	case EDITOR_MODE_BUFLIST:
 		modestr = "";
 		break;
 	case EDITOR_MODE_INSERT:
@@ -350,6 +366,22 @@ editor_cmd_input(struct cebuf *buf, char key)
 }
 
 static void
+editor_buflist_input(struct cebuf *buf, char key)
+{
+	size_t		index;
+
+	switch (key) {
+	case '\n':
+		index = buf->top + (buf->line - 1);
+		ce_buffer_activate_index(index);
+		mode = EDITOR_MODE_NORMAL;
+		break;
+	default:
+		break;
+	}
+}
+
+static void
 editor_cmd_quit(void)
 {
 	quit = 1;
@@ -371,6 +403,15 @@ editor_cmd_suspend(void)
 	ce_term_flush();
 
 	kill(0, SIGTSTP);
+}
+
+static void
+editor_cmd_buffer_list(void)
+{
+	ce_buffer_list(buflist);
+	ce_buffer_activate(buflist);
+
+	mode = EDITOR_MODE_BUFLIST;
 }
 
 static void

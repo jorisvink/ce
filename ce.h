@@ -95,6 +95,9 @@ struct celine {
  * A buffer from either a file or internal.
  */
 struct cebuf {
+	/* Internal buffer? */
+	int			internal;
+
 	/* The data inside the buffer, its max size and current length. */
 	void			*data;
 	size_t			maxsz;
@@ -144,13 +147,17 @@ void		ce_buffer_restore(void);
 int		ce_buffer_save_active(void);
 void		ce_buffer_init(int, char **);
 void		ce_buffer_free(struct cebuf *);
+void		ce_buffer_list(struct cebuf *);
 void		ce_buffer_reset(struct cebuf *);
+void		ce_buffer_activate_index(size_t);
 void		ce_buffer_activate(struct cebuf *);
 void		ce_buffer_delete_line(struct cebuf *);
 void		ce_buffer_insert_line(struct cebuf *);
 void		ce_buffer_line_columns(struct celine *);
+void		ce_buffer_free_internal(struct cebuf *);
 void		ce_buffer_input(struct cebuf *, u_int8_t);
 void		ce_buffer_line_alloc_empty(struct cebuf *);
+void		ce_buffer_appendf(struct cebuf *, const char *, ...);
 void		ce_buffer_append(struct cebuf *, const void *, size_t);
 
 void		ce_buffer_page_up(void);
