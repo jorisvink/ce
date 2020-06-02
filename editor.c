@@ -369,7 +369,11 @@ editor_buflist_input(struct cebuf *buf, char key)
 	switch (key) {
 	case '\n':
 		index = buf->top + (buf->line - 1);
-		ce_buffer_activate_index(index);
+		if (index > 0)
+			ce_buffer_activate_index(index);
+		else
+			ce_buffer_restore();
+
 		mode = EDITOR_MODE_NORMAL;
 		break;
 	default:
