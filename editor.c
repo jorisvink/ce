@@ -181,10 +181,6 @@ ce_editor_loop(void)
 		if (pfd.revents & POLLIN)
 			editor_event();
 	}
-
-	ce_term_discard();
-	ce_term_writestr(TERM_SEQUENCE_SCREEN_ALTERNATE_OFF);
-	ce_term_flush();
 }
 
 void

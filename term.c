@@ -24,7 +24,7 @@
 
 #include "ce.h"
 
-#define TERM_MIN_ROWS		25
+#define TERM_MIN_ROWS		24
 #define TERM_MIN_COLS		50
 
 static struct termios	cur;
@@ -77,8 +77,14 @@ ce_term_setup(void)
 void
 ce_term_restore(void)
 {
-	if (can_restore)
-		(void)tcsetattr(STDIN_FILENO, TCSANOW, &old);
+	if (can_restore == 0)
+		return;
+
+	ce_term_discard();
+	ce_term_writestr(TERM_SEQUENCE_SCREEN_ALTERNATE_OFF);
+	ce_term_flush();
+
+	(void)tcsetattr(STDIN_FILENO, TCSANOW, &old);
 
 	can_restore = 0;
 }
