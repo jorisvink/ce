@@ -114,6 +114,8 @@ ce_buffer_internal(const char *name)
 
 	buf->maxsz = 1024;
 
+	ce_buffer_line_alloc_empty(buf);
+
 	return (buf);
 }
 
@@ -810,9 +812,11 @@ ce_buffer_line_alloc_empty(struct cebuf *buf)
 	TAILQ_INIT(&buf->lines[buf->lcnt].ops);
 
 	buf->lines[0].flags = 0;
+	buf->lines[0].length = 1;
 	buf->lines[0].data = buf->data;
-	buf->lines[0].length = buf->length;
 	buf->lines[0].maxsz = buf->lines[0].length;
+
+	ce_buffer_append(buf, "\n", 1);
 
 	ce_buffer_line_columns(&buf->lines[0]);
 }
