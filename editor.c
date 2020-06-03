@@ -25,25 +25,27 @@
 
 #include "ce.h"
 
-#define EDITOR_MODE_NORMAL	0
-#define EDITOR_MODE_INSERT	1
-#define EDITOR_MODE_COMMAND	2
-#define EDITOR_MODE_BUFLIST	3
-#define EDITOR_MODE_MAX		4
+#define EDITOR_KEY_ESC		0x1b
+
+#define EDITOR_KEY_UP		0xfa
+#define EDITOR_KEY_DOWN		0xfb
+#define EDITOR_KEY_LEFT		0xfc
+#define EDITOR_KEY_RIGHT	0xfd
 
 #define KEY_MAP_LEN(x)		((sizeof(x) / sizeof(x[0])))
 
 struct keymap {
-	char		key;
+	u_int8_t	key;
 	void		(*command)(void);
 };
 
 static void	editor_signal(int);
-static void	editor_event(void);
 static void	editor_resume(void);
 static void	editor_signal_setup(void);
+static void	editor_process_input(void);
+static u_int8_t	editor_process_escape(void);
 static int	editor_allowed_command_key(char);
-static void	editor_read(int, void *, size_t);
+static ssize_t	editor_read(int, void *, size_t, int);
 
 static void	editor_draw_status(void);
 
@@ -65,34 +67,45 @@ static void	editor_cmd_input(struct cebuf *, char);
 static void	editor_buflist_input(struct cebuf *, char);
 
 static struct keymap normal_map[] = {
-	{ 'k',		ce_buffer_move_up },
-	{ 'j',		ce_buffer_move_down },
-	{ 'l',		ce_buffer_move_right },
-	{ '$',		ce_buffer_jump_right },
-	{ 'h',		ce_buffer_move_left },
-	{ '0',		ce_buffer_jump_left },
-	{ 0x06,		ce_buffer_page_down },
-	{ 0x02,		ce_buffer_page_up },
-	{ 'i',		editor_cmd_insert_mode },
-	{ 'o',		editor_cmd_insert_mode_append },
-	{ 'O',		editor_cmd_insert_mode_prepend },
-	{ ':',		editor_cmd_command_mode },
-	{ 0x12,		editor_cmd_buffer_list },
-	{ '\x1a',	editor_cmd_suspend },
+	{ 'k',			ce_buffer_move_up },
+	{ 'j',			ce_buffer_move_down },
+	{ 'l',			ce_buffer_move_right },
+	{ 'h',			ce_buffer_move_left },
+
+	{ '$',			ce_buffer_jump_right },
+	{ '0',			ce_buffer_jump_left },
+
+	{ 0x06,			ce_buffer_page_down },
+	{ 0x02,			ce_buffer_page_up },
+
+	{ 'x',			ce_buffer_delete_byte },
+
+	{ 'i',			editor_cmd_insert_mode },
+	{ 'o',			editor_cmd_insert_mode_append },
+	{ 'O',			editor_cmd_insert_mode_prepend },
+	{ ':',			editor_cmd_command_mode },
+	{ 0x12,			editor_cmd_buffer_list },
+
+	{ 0x1a,			editor_cmd_suspend },
 };
 
 static struct keymap insert_map[] = {
-	{ '\x1b',	editor_cmd_normal_mode },
+	{ EDITOR_KEY_UP,	ce_buffer_move_up },
+	{ EDITOR_KEY_DOWN,	ce_buffer_move_down },
+	{ EDITOR_KEY_RIGHT,	ce_buffer_move_right },
+	{ EDITOR_KEY_LEFT,	ce_buffer_move_left },
+
+	{ EDITOR_KEY_ESC,		editor_cmd_normal_mode },
 };
 
 static struct keymap command_map[] = {
-	{ '\x1b',	editor_cmd_normal_mode },
+	{ EDITOR_KEY_ESC,		editor_cmd_normal_mode },
 };
 
 static struct keymap buflist_map[] = {
-	{ 'k',		ce_buffer_move_up },
-	{ 'j',		ce_buffer_move_down },
-	{ '\x1b',	editor_cmd_normal_mode },
+	{ 'k',			ce_buffer_move_up },
+	{ 'j',			ce_buffer_move_down },
+	{ EDITOR_KEY_ESC,	editor_cmd_normal_mode },
 };
 
 static struct {
@@ -100,10 +113,10 @@ static struct {
 	const struct keymap	*map;
 	size_t			maplen;
 } keymaps[] = {
-	{ EDITOR_MODE_NORMAL,	normal_map,	KEY_MAP_LEN(normal_map) },
-	{ EDITOR_MODE_INSERT,	insert_map,	KEY_MAP_LEN(insert_map) },
-	{ EDITOR_MODE_COMMAND,	command_map,	KEY_MAP_LEN(command_map) },
-	{ EDITOR_MODE_BUFLIST,	buflist_map,	KEY_MAP_LEN(buflist_map) },
+	{ CE_EDITOR_MODE_NORMAL, normal_map, KEY_MAP_LEN(normal_map) },
+	{ CE_EDITOR_MODE_INSERT, insert_map, KEY_MAP_LEN(insert_map) },
+	{ CE_EDITOR_MODE_COMMAND, command_map, KEY_MAP_LEN(command_map) },
+	{ CE_EDITOR_MODE_BUFLIST, buflist_map, KEY_MAP_LEN(buflist_map) },
 };
 
 static int			quit = 0;
@@ -112,20 +125,12 @@ static volatile sig_atomic_t	sig_recv = -1;
 static struct cebuf		*cmdbuf = NULL;
 static struct cebuf		*buflist = NULL;
 static const char		colon_char = ':';
-static int			mode = EDITOR_MODE_NORMAL;
+static int			mode = CE_EDITOR_MODE_NORMAL;
 
 void
 ce_editor_loop(void)
 {
-	struct pollfd		pfd;
-	int			ret;
-
 	editor_signal_setup();
-
-	memset(&pfd, 0, sizeof(pfd));
-
-	pfd.events = POLLIN;
-	pfd.fd = STDIN_FILENO;
 
 	cmdbuf = ce_buffer_internal("<cmd>");
 	ce_buffer_line_alloc_empty(cmdbuf);
@@ -165,21 +170,7 @@ ce_editor_loop(void)
 		editor_draw_status();
 		ce_term_flush();
 
-		ret = poll(&pfd, 1, -1);
-		if (ret == -1) {
-			if (errno == EINTR)
-				continue;
-			fatal("%s: poll: %s", __func__, errno_s);
-		}
-
-		if (ret == 0)
-			continue;
-
-		if (pfd.revents & (POLLHUP | POLLERR))
-			fatal("%s: poll error", __func__);
-
-		if (pfd.revents & POLLIN)
-			editor_event();
+		editor_process_input();
 	}
 }
 
@@ -187,6 +178,12 @@ void
 ce_editor_dirty(void)
 {
 	dirty = 1;
+}
+
+int
+ce_editor_mode(void)
+{
+	return (mode);
 }
 
 static void
@@ -219,16 +216,20 @@ editor_signal_setup(void)
 }
 
 static void
-editor_event(void)
+editor_process_input(void)
 {
-	u_int8_t		key;
 	size_t			idx;
+	u_int8_t		key;
 	struct cebuf		*curbuf = ce_buffer_active();
 
-	if (mode >= EDITOR_MODE_MAX)
+	if (mode >= CE_EDITOR_MODE_MAX)
 		fatal("%s: mode %d invalid", __func__, mode);
 
-	editor_read(STDIN_FILENO, &key, sizeof(key));
+	if (editor_read(STDIN_FILENO, &key, sizeof(key), -1) == 0)
+		return;
+
+	if (key == EDITOR_KEY_ESC)
+		key = editor_process_escape();
 
 	for (idx = 0; idx < keymaps[mode].maplen; idx++) {
 		if (key == keymaps[mode].map[idx].key) {
@@ -237,21 +238,71 @@ editor_event(void)
 		}
 	}
 
-	if (mode == EDITOR_MODE_NORMAL)
+	if (mode == CE_EDITOR_MODE_NORMAL)
 		return;
 
 	ce_buffer_input(curbuf, key);
 }
 
-static void
-editor_read(int fd, void *data, size_t len)
+static u_int8_t
+editor_process_escape(void)
 {
-	ssize_t		sz;
-	size_t		off;
-	u_int8_t	*ptr;
+	u_int8_t	key, ret;
+
+	ret = EDITOR_KEY_ESC;
+
+	if (editor_read(STDIN_FILENO, &key, sizeof(key), 50) == 0)
+		goto cleanup;
+
+	if (key != 0x5b)
+		goto cleanup;
+
+	if (editor_read(STDIN_FILENO, &key, sizeof(key), 50) == 0)
+		goto cleanup;
+
+	switch (key) {
+	case 0x41:
+		ret = EDITOR_KEY_UP;
+		break;
+	case 0x42:
+		ret = EDITOR_KEY_DOWN;
+		break;
+	case 0x43:
+		ret = EDITOR_KEY_RIGHT;
+		break;
+	case 0x44:
+		ret = EDITOR_KEY_LEFT;
+		break;
+	}
+
+cleanup:
+	return (ret);
+}
+
+static ssize_t
+editor_read(int fd, void *data, size_t len, int ms)
+{
+	size_t			off;
+	int			nfd;
+	struct pollfd		pfd;
+	u_int8_t		*ptr;
+	ssize_t			sz, total;
 
 	off = 0;
+	total = 0;
 	ptr = data;
+
+	pfd.events = POLLIN;
+	pfd.fd = STDIN_FILENO;
+
+	if ((nfd = poll(&pfd, 1, ms)) == -1)
+		fatal("%s: poll %s", __func__, errno_s);
+
+	if (nfd == 0)
+		return (0);
+
+	if (pfd.revents & (POLLHUP | POLLERR))
+		fatal("%s: poll error", __func__);
 
 	while (len > 0) {
 		sz = read(fd, ptr + off, len - off);
@@ -263,7 +314,10 @@ editor_read(int fd, void *data, size_t len)
 
 		off += sz;
 		len -= sz;
+		total += sz;
 	}
+
+	return (total);
 }
 
 static void
@@ -273,12 +327,12 @@ editor_draw_status(void)
 	struct cebuf		*curbuf = ce_buffer_active();
 
 	switch (mode) {
-	case EDITOR_MODE_NORMAL:
-	case EDITOR_MODE_COMMAND:
-	case EDITOR_MODE_BUFLIST:
+	case CE_EDITOR_MODE_NORMAL:
+	case CE_EDITOR_MODE_COMMAND:
+	case CE_EDITOR_MODE_BUFLIST:
 		modestr = "";
 		break;
-	case EDITOR_MODE_INSERT:
+	case CE_EDITOR_MODE_INSERT:
 		modestr = "- INSERT -";
 		break;
 	default:
@@ -370,7 +424,7 @@ editor_buflist_input(struct cebuf *buf, char key)
 	case '\n':
 		index = buf->top + (buf->line - 1);
 		ce_buffer_activate_index(index);
-		mode = EDITOR_MODE_NORMAL;
+		mode = CE_EDITOR_MODE_NORMAL;
 		break;
 	default:
 		break;
@@ -408,13 +462,13 @@ editor_cmd_buffer_list(void)
 	ce_buffer_activate(buflist);
 	ce_buffer_jump_left();
 
-	mode = EDITOR_MODE_BUFLIST;
+	mode = CE_EDITOR_MODE_BUFLIST;
 }
 
 static void
 editor_cmd_insert_mode(void)
 {
-	mode = EDITOR_MODE_INSERT;
+	mode = CE_EDITOR_MODE_INSERT;
 }
 
 static void
@@ -425,7 +479,7 @@ editor_cmd_insert_mode_append(void)
 	ce_buffer_input(ce_buffer_active(), '\n');
 	ce_buffer_move_up();
 
-	mode = EDITOR_MODE_INSERT;
+	mode = CE_EDITOR_MODE_INSERT;
 }
 
 static void
@@ -435,7 +489,7 @@ editor_cmd_insert_mode_prepend(void)
 	ce_buffer_input(ce_buffer_active(), '\n');
 	ce_buffer_move_up();
 
-	mode = EDITOR_MODE_INSERT;
+	mode = CE_EDITOR_MODE_INSERT;
 }
 
 static void
@@ -451,19 +505,28 @@ editor_cmd_command_mode(void)
 
 	ce_buffer_activate(cmdbuf);
 
-	mode = EDITOR_MODE_COMMAND;
+	mode = CE_EDITOR_MODE_COMMAND;
 }
 
 static void
 editor_cmd_normal_mode(void)
 {
-	if (mode == EDITOR_MODE_COMMAND || mode == EDITOR_MODE_BUFLIST)
+	struct cebuf	*buf = ce_buffer_active();
+
+	if (mode == CE_EDITOR_MODE_INSERT) {
+		mode = CE_EDITOR_MODE_NORMAL;
+		ce_buffer_constrain_cursor_column(buf);
+		ce_term_setpos(buf->cursor_line, buf->column);
+		return;
+	}
+
+	if (mode == CE_EDITOR_MODE_COMMAND || mode == CE_EDITOR_MODE_BUFLIST)
 		ce_buffer_restore();
 
-	if (mode == EDITOR_MODE_COMMAND)
+	if (mode == CE_EDITOR_MODE_COMMAND)
 		editor_cmd_reset();
 
-	mode = EDITOR_MODE_NORMAL;
+	mode = CE_EDITOR_MODE_NORMAL;
 }
 
 static void

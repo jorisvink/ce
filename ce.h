@@ -24,6 +24,12 @@
 
 #define errno_s				strerror(errno)
 
+#define CE_EDITOR_MODE_NORMAL		0
+#define CE_EDITOR_MODE_INSERT		1
+#define CE_EDITOR_MODE_COMMAND		2
+#define CE_EDITOR_MODE_BUFLIST		3
+#define CE_EDITOR_MODE_MAX		4
+
 #define TERM_SCROLL_OFFSET		10
 
 #define TERM_COLOR_BLACK		0
@@ -55,7 +61,7 @@
 #define TERM_SEQUENCE_FMT_SET_COLOR	TERM_ESCAPE "%dm"
 #define TERM_SEQUENCE_FMT_SET_CURSOR	TERM_ESCAPE "%zu;%zuH"
 
-#define TERM_SEQUENCE_RESET		TERM_ESCAPE "49m"
+#define TERM_SEQUENCE_RESET		TERM_ESCAPE "m"
 
 #define TERM_SEQUENCE_ALTERNATE_ON	TERM_ESCAPE "?1049h"
 #define TERM_SEQUENCE_ALTERNATE_OFF	TERM_ESCAPE "?1049l"
@@ -166,6 +172,7 @@ void		ce_buffer_line_columns(struct celine *);
 void		ce_buffer_free_internal(struct cebuf *);
 void		ce_buffer_input(struct cebuf *, u_int8_t);
 void		ce_buffer_line_alloc_empty(struct cebuf *);
+void		ce_buffer_constrain_cursor_column(struct cebuf *);
 void		ce_buffer_append(struct cebuf *, const void *, size_t);
 void		ce_buffer_appendf(struct cebuf *, const char *, ...)
 		    __attribute__((format (printf, 2, 3)));
@@ -178,6 +185,7 @@ void		ce_buffer_move_left(void);
 void		ce_buffer_jump_left(void);
 void		ce_buffer_move_right(void);
 void		ce_buffer_jump_right(void);
+void		ce_buffer_delete_byte(void);
 
 const char	*ce_buffer_strerror(void);
 const char	*ce_buffer_as_string(struct cebuf *);
@@ -202,6 +210,7 @@ void		ce_term_writef(const char *, ...)
 		    __attribute__((format (printf, 1, 2)));
 
 void		ce_editor_loop(void);
+int		ce_editor_mode(void);
 void		ce_editor_dirty(void);
 void		ce_editor_cmdline_append(const char *, ...)
 		    __attribute__((format (printf, 1, 2)));
