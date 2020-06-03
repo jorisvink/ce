@@ -31,5 +31,35 @@ ce_syntax_init(void)
 void
 ce_syntax_write(struct cebuf *buf, struct celine *line, size_t towrite)
 {
-	ce_term_write(line->data, towrite);
+	const u_int8_t		*p;
+	size_t			off, col, spaces, i;
+
+	off = 0;
+	col = 1;
+	p = line->data;
+
+	while (off != line->length) {
+		if (p[off] == '\t') {
+			ce_term_color(TERM_COLOR_BLUE + TERM_COLOR_FG);
+
+			ce_term_write(">", 1);
+
+			if ((col % 8) == 0)
+				spaces = 1;
+			else
+				spaces = 8 - (col % 8) + 1;
+
+			col += spaces;
+
+			for (i = 1; i < spaces; i++)
+				ce_term_write(".", 1);
+
+			ce_term_reset();
+		} else {
+			ce_term_write(&p[off], 1);
+			col++;
+		}
+
+		off++;
+	}
 }
