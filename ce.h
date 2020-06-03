@@ -109,9 +109,13 @@ struct celine {
 /*
  * A buffer from either a file or internal.
  */
+#define CE_BUFFER_DIRTY		0x0001
 struct cebuf {
 	/* Internal buffer? */
 	int			internal;
+
+	/* Buffer flags. */
+	u_int32_t		flags;
 
 	/* The data inside the buffer, its max size and current length. */
 	void			*data;

@@ -323,6 +323,7 @@ editor_read(int fd, void *data, size_t len, int ms)
 static void
 editor_draw_status(void)
 {
+	const char		*isdirty = "";
 	const char		*modestr = NULL;
 	struct cebuf		*curbuf = ce_buffer_active();
 
@@ -339,6 +340,10 @@ editor_draw_status(void)
 		fatal("%s: unknown mode %d", __func__, mode);
 	}
 
+	if (curbuf->flags & CE_BUFFER_DIRTY)
+		isdirty = "*";
+
+
 	ce_term_writestr(TERM_SEQUENCE_CURSOR_SAVE);
 
 	ce_term_color(TERM_COLOR_WHITE + TERM_COLOR_BG);
@@ -346,8 +351,8 @@ editor_draw_status(void)
 
 	ce_term_setpos(ce_term_height() - 1, TERM_CURSOR_MIN);
 	ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
-	ce_term_writef("[%s] [ %zu,%zu-%zu ] [%zu lines] %s",
-	    curbuf->name, curbuf->top + curbuf->line, curbuf->loff,
+	ce_term_writef("[%s%s] [ %zu,%zu-%zu ] [%zu lines] %s",
+	    curbuf->name, isdirty, curbuf->top + curbuf->line, curbuf->loff,
 	    curbuf->column, curbuf->lcnt, modestr);
 
 	ce_term_writestr(TERM_SEQUENCE_CURSOR_RESTORE);
@@ -561,6 +566,5 @@ editor_cmd_open_file(const char *path)
 		ce_debug("cannot open '%s': %s", path, ce_buffer_strerror());
 		return;
 	}
-
 	ce_editor_dirty();
 }

@@ -350,8 +350,9 @@ ce_buffer_list(struct cebuf *output)
 			output->line = idx;
 			output->cursor_line = idx;
 		}
-		ce_buffer_appendf(output, "[%s] (%zu lines)\n",
-		    buf->name, buf->lcnt);
+		ce_buffer_appendf(output, "[%s%s] (%zu lines)\n",
+		    buf->name, (buf->flags & CE_BUFFER_DIRTY) ? "*" : "",
+		    buf->lcnt);
 		idx++;
 	}
 
@@ -430,6 +431,8 @@ ce_buffer_insert_line(struct cebuf *buf)
 
 	cursor_column = TERM_CURSOR_MIN;
 	ce_buffer_move_down();
+
+	buf->flags |= CE_BUFFER_DIRTY;
 }
 
 void
@@ -460,6 +463,8 @@ ce_buffer_delete_line(struct cebuf *buf)
 		buffer_update_cursor(buf);
 	}
 
+	buf->flags |= CE_BUFFER_DIRTY;
+
 	/* XXX for now. */
 	ce_editor_dirty();
 }
@@ -480,6 +485,7 @@ ce_buffer_delete_byte(void)
 	if (line->length == 1 && ptr[0] == '\n')
 		return;
 
+	active->flags |= CE_BUFFER_DIRTY;
 	buffer_line_erase_byte(active, line, 1);
 
 	if (line->length > 0) {
@@ -851,6 +857,9 @@ ce_buffer_save_active(void)
 	iov = NULL;
 	path[0] = '\0';
 
+	if (!(active->flags & CE_BUFFER_DIRTY))
+		return (0);
+
 	if (active->path == NULL) {
 		buffer_seterr("buffer has no active path");
 		goto cleanup;
@@ -955,6 +964,7 @@ ce_buffer_save_active(void)
 	}
 
 	ret = 0;
+	active->flags &= ~CE_BUFFER_DIRTY;
 
 cleanup:
 	free(iov);
@@ -1174,6 +1184,7 @@ buffer_line_insert_byte(struct cebuf *buf, struct celine *line, u_int8_t byte)
 	ce_buffer_move_right();
 
 	/* XXX for now. */
+	buf->flags |= CE_BUFFER_DIRTY;
 	ce_editor_dirty();
 }
 
@@ -1219,6 +1230,7 @@ buffer_line_erase_byte(struct cebuf *buf, struct celine *line, int inplace)
 		ce_buffer_move_left();
 
 	/* XXX for now. */
+	buf->flags |= CE_BUFFER_DIRTY;
 	ce_editor_dirty();
 }
 
