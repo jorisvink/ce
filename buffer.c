@@ -490,11 +490,11 @@ ce_buffer_delete_byte(void)
 		max = line->length - 1;
 		if (ptr[max] == '\n' && max != 0)
 			max--;
-	}
 
-	if (active->loff > max) {
-		active->loff = max;
-		buffer_update_cursor_column(active);
+		if (active->loff > max) {
+			active->loff = max;
+			buffer_update_cursor_column(active);
+		}
 	}
 }
 
