@@ -29,7 +29,7 @@ ce_syntax_init(void)
 }
 
 void
-ce_syntax_write(struct cebuf *buf, struct celine *line)
+ce_syntax_write(struct cebuf *buf, struct celine *line, size_t towrite)
 {
-	ce_term_write(line->data, line->length);
+	ce_term_write(line->data, towrite);
 }

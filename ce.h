@@ -207,7 +207,7 @@ void		ce_editor_cmdline_append(const char *, ...)
 		    __attribute__((format (printf, 1, 2)));
 
 void		ce_syntax_init(void);
-void		ce_syntax_write(struct cebuf *, struct celine *);
+void		ce_syntax_write(struct cebuf *, struct celine *, size_t);
 
 void		ce_debug(const char *, ...)
 		    __attribute__((format (printf, 1, 2)));
