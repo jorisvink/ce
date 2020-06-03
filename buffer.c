@@ -19,6 +19,7 @@
 #include <sys/uio.h>
 
 #include <errno.h>
+#include <libgen.h>
 #include <fcntl.h>
 #include <limits.h>
 #include <stdio.h>
@@ -139,8 +140,8 @@ ce_buffer_file(const char *path)
 
 	buf = buffer_alloc(0);
 
-	if ((buf->path = strdup(path)) == NULL)
-		fatal("%s: strdup: %s", __func__, errno_s);
+	if ((buf->path = realpath(path, NULL)) == NULL)
+		fatal("%s: realpath: %s", __func__, errno_s);
 
 	if ((buf->name = strdup(path)) == NULL)
 		fatal("%s: strdup: %s", __func__, errno_s);
@@ -411,10 +412,6 @@ ce_buffer_insert_line(struct cebuf *buf)
 	line->length = buf->loff;
 	line->columns = buffer_line_data_to_columns(line->data, line->length);
 
-	ce_debug("current line now '%.*s'", (int)line->length, (const char *)line->data);
-
-	ce_debug("inserted line data '%.*s'", (int)length, (const char *)ptr);
-
 	lcnt = buf->lcnt;
 	buffer_resize_lines(buf, buf->lcnt + 1);
 	memmove(&buf->lines[index + 1], &buf->lines[index],
@@ -446,18 +443,14 @@ ce_buffer_delete_line(struct cebuf *buf)
 
 	index = buffer_line_index(buf);
 	line = buffer_line_current(buf);
-	ce_debug("removing line %zu", index);
 
 	if (line->flags & CE_LINE_ALLOCATED)
 		free(line->data);
-
-	ce_debug("moving %zu lines", buf->lcnt - index);
 
 	memmove(&buf->lines[index], &buf->lines[index + 1],
 	    (buf->lcnt - index - 1) * sizeof(struct celine));
 
 	buf->lcnt--;
-	ce_debug("index = %zu, lcnt == %zu", index, buf->lcnt);
 
 	if (index == buf->lcnt) {
 		ce_buffer_move_up();
@@ -477,6 +470,9 @@ ce_buffer_delete_byte(void)
 	size_t			max;
 	const u_int8_t		*ptr;
 	struct celine		*line;
+
+	if (active->lcnt == 0)
+		return;
 
 	line = buffer_line_current(active);
 	ptr = line->data;
@@ -845,6 +841,7 @@ int
 ce_buffer_save_active(void)
 {
 	struct iovec		*iov;
+	const char		*file, *dir;
 	int			fd, len, ret;
 	char			path[PATH_MAX];
 	size_t			elms, off, cnt, line, maxsz, next;
@@ -852,16 +849,27 @@ ce_buffer_save_active(void)
 	fd = -1;
 	ret = -1;
 	iov = NULL;
+	path[0] = '\0';
 
 	if (active->path == NULL) {
 		buffer_seterr("buffer has no active path");
-		return (-1);
+		goto cleanup;
 	}
 
-	len = snprintf(path, sizeof(path), ".%s.ces", active->path);
+	if ((file = basename(active->path)) == NULL) {
+		buffer_seterr("basename failed: %s", errno_s);
+		goto cleanup;
+	}
+
+	if ((dir = dirname(active->path)) == NULL) {
+		buffer_seterr("dirname failed: %s", errno_s);
+		goto cleanup;
+	}
+
+	len = snprintf(path, sizeof(path), "%s/.#%s.tmp", dir, file);
 	if (len == -1 || (size_t)len >= sizeof(path)) {
 		buffer_seterr("failed to create path for saving file");
-		return (-1);
+		goto cleanup;
 	}
 
 	if ((fd = open(path, O_CREAT | O_TRUNC | O_WRONLY, 0600)) == -1) {
@@ -950,7 +958,9 @@ ce_buffer_save_active(void)
 
 cleanup:
 	free(iov);
-	(void)unlink(path);
+
+	if (path[0] != '\0')
+		(void)unlink(path);
 
 	if (fd != -1)
 		(void)close(fd);
@@ -1137,8 +1147,6 @@ buffer_line_allocate(struct cebuf *buf, struct celine *line)
 		/* We don't leak data as it points to inside buf->data. */
 		line->data = ptr;
 		line->flags |= CE_LINE_ALLOCATED;
-
-		ce_debug("line %zu has been allocated", buffer_line_index(buf));
 	}
 }
 

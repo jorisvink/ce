@@ -42,8 +42,6 @@ ce_syntax_write(struct cebuf *buf, struct celine *line, size_t towrite)
 		if (p[off] == '\t') {
 			ce_term_color(TERM_COLOR_BLUE + TERM_COLOR_FG);
 
-			ce_term_write(">", 1);
-
 			if ((col % 8) == 0)
 				spaces = 1;
 			else
@@ -51,6 +49,7 @@ ce_syntax_write(struct cebuf *buf, struct celine *line, size_t towrite)
 
 			col += spaces;
 
+			ce_term_write(">", 1);
 			for (i = 1; i < spaces; i++)
 				ce_term_write(".", 1);
 
