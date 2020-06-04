@@ -153,6 +153,11 @@ ce_editor_loop(void)
 				dirty = 1;
 				editor_resume();
 				break;
+			case SIGWINCH:
+				dirty = 1;
+				ce_term_restore();
+				ce_term_setup();
+				break;
 			}
 			sig_recv = -1;
 		}
@@ -204,11 +209,13 @@ editor_signal_setup(void)
 		fatal("sigfillset: %s", errno_s);
 
 	if (sigaction(SIGCONT, &sa, NULL) == -1)
-		fatal("sigfillset: %s", errno_s);
+		fatal("sigaction: %s", errno_s);
 	if (sigaction(SIGQUIT, &sa, NULL) == -1)
-		fatal("sigfillset: %s", errno_s);
+		fatal("sigaction: %s", errno_s);
 	if (sigaction(SIGTERM, &sa, NULL) == -1)
-		fatal("sigfillset: %s", errno_s);
+		fatal("sigaction: %s", errno_s);
+	if (sigaction(SIGWINCH, &sa, NULL) == -1)
+		fatal("sigaction: %s", errno_s);
 
 	(void)signal(SIGINT, SIG_IGN);
 	(void)signal(SIGHUP, SIG_IGN);
@@ -295,8 +302,11 @@ editor_read(int fd, void *data, size_t len, int ms)
 	pfd.events = POLLIN;
 	pfd.fd = STDIN_FILENO;
 
-	if ((nfd = poll(&pfd, 1, ms)) == -1)
+	if ((nfd = poll(&pfd, 1, ms)) == -1) {
+		if (errno == EINTR)
+			return (0);
 		fatal("%s: poll %s", __func__, errno_s);
+	}
 
 	if (nfd == 0)
 		return (0);
