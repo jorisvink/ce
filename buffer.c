@@ -849,12 +849,13 @@ ce_buffer_save_active(void)
 	struct iovec		*iov;
 	const char		*file, *dir;
 	int			fd, len, ret;
-	char			path[PATH_MAX];
+	char			path[PATH_MAX], *copy;
 	size_t			elms, off, cnt, line, maxsz, next;
 
 	fd = -1;
 	ret = -1;
 	iov = NULL;
+	copy = NULL;
 	path[0] = '\0';
 
 	if (!(active->flags & CE_BUFFER_DIRTY))
@@ -865,12 +866,15 @@ ce_buffer_save_active(void)
 		goto cleanup;
 	}
 
-	if ((file = basename(active->path)) == NULL) {
+	if ((copy = strdup(active->path)) == NULL)
+		fatal("%s: strdup failed %s", __func__, errno_s);
+
+	if ((file = basename(copy)) == NULL) {
 		buffer_seterr("basename failed: %s", errno_s);
 		goto cleanup;
 	}
 
-	if ((dir = dirname(active->path)) == NULL) {
+	if ((dir = dirname(copy)) == NULL) {
 		buffer_seterr("dirname failed: %s", errno_s);
 		goto cleanup;
 	}
@@ -968,6 +972,7 @@ ce_buffer_save_active(void)
 
 cleanup:
 	free(iov);
+	free(copy);
 
 	if (path[0] != '\0')
 		(void)unlink(path);
