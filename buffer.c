@@ -1047,10 +1047,20 @@ buffer_populate_lines(struct cebuf *buf)
 static size_t
 buffer_line_count(struct celine *line)
 {
-	if (line->columns == ce_term_width())
+	size_t			col;
+	const u_int8_t		*ptr;
+
+	ptr = line->data;
+
+	if (line->length > 0 && ptr[line->length - 1] == '\n')
+		col = line->columns - 1;
+	else
+		col = line->columns;
+
+	if (col == ce_term_width())
 		return (1);
 
-	return ((line->columns / ce_term_width()) + 1);
+	return ((col / ce_term_width()) + 1);
 }
 
 static u_int16_t
