@@ -33,12 +33,19 @@
 /* Conservative. */
 #define BUFFER_MAX_IOVEC		64
 
+#define BUFFER_SEARCH_FORWARD		1
+#define BUFFER_SEARCH_REVERSE		2
+
 static struct cebuf	*buffer_alloc(int);
 
 static void		buffer_grow(struct cebuf *, size_t);
 static void		buffer_resize_lines(struct cebuf *, size_t);
 static void		buffer_seterr(const char *, ...)
 			    __attribute__((format (printf, 1, 2)));
+
+static void		*buffer_find(struct celine *, const void *, size_t);
+static void		*buffer_search(struct cebuf *, int, const void *,
+			    size_t, size_t, size_t, size_t *);
 
 static size_t		buffer_line_index(struct cebuf *);
 static size_t		buffer_line_count(struct celine *);
@@ -334,6 +341,86 @@ ce_buffer_map(void)
 	}
 
 	ce_term_setpos(active->cursor_line, active->column);
+}
+
+int
+ce_buffer_search(struct cebuf *buf, const char *needle, int which)
+{
+	const u_int8_t		*p;
+	int			dir;
+	struct celine		*line;
+	size_t			start[2], end[2], index, len, half;
+
+	p = NULL;
+	len = strlen(needle);
+	dir = BUFFER_SEARCH_FORWARD;
+
+	index = buffer_line_index(buf);
+
+	switch (which) {
+	case CE_BUFFER_SEARCH_NEXT:
+		/* search 1, from next line until end. */
+		start[0] = index + 1;
+		end[0] = buf->lcnt;
+
+		/* search 2, from start until next line. */
+		start[1] = 1;
+		end[1] = index + 1;
+		dir = BUFFER_SEARCH_FORWARD;
+		break;
+	case CE_BUFFER_SEARCH_NORMAL:
+		/* search 1, from current line until end. */
+		start[0] = index;
+		end[0] = buf->lcnt;
+
+		/* search 2, from start until current line, */
+		start[1] = 1;
+		end[1] = index;
+		dir = BUFFER_SEARCH_FORWARD;
+		break;
+	case CE_BUFFER_SEARCH_PREVIOUS:
+		/* search 1, from previous line until start. */
+		start[0] = index - 1;
+		end[0] = 0;
+
+		/* search 2, from end until current line. */
+		start[1] = buf->lcnt;
+		end[1] = index;
+		dir = BUFFER_SEARCH_REVERSE;
+		break;
+	default:
+		fatal("%s: unknown which %d", __func__, which);
+	}
+
+	p = buffer_search(buf, dir, needle, len, start[0], end[0], &index);
+	if (p == NULL) {
+		p = buffer_search(buf, dir, needle, len,
+		    start[1], end[1], &index);
+	}
+
+	if (p == NULL)
+		return (0);
+
+	line = &buf->lines[index];
+	half = (ce_term_height() - 2) / 2;
+
+	if (index <= half) {
+		buf->top = 0;
+		buf->line = index + 1;
+	} else {
+		buf->top = index - half;
+		buf->line = half + 1;
+	}
+
+	buf->loff = p - (const u_int8_t *)line->data;
+	buffer_update_cursor_line(buf);
+
+	buf->column = buffer_line_data_to_columns(line->data, buf->loff);
+	cursor_column = buf->column;
+
+	ce_term_setpos(buf->cursor_line, buf->column);
+
+	return (1);
 }
 
 void
@@ -1252,7 +1339,6 @@ buffer_line_erase_byte(struct cebuf *buf, struct celine *line, int inplace)
 static void
 buffer_update_cursor(struct cebuf *buf)
 {
-
 	buffer_update_cursor_line(buf);
 	buffer_update_cursor_column(buf);
 }
@@ -1340,4 +1426,61 @@ buffer_seterr(const char *fmt, ...)
 	va_start(args, fmt);
 	vasprintf(&errstr, fmt, args);
 	va_end(args);
+}
+
+static void *
+buffer_search(struct cebuf *buf, int dir, const void *needle, size_t len,
+    size_t start, size_t end, size_t *index)
+{
+	void			*p;
+	size_t			idx;
+	struct celine		*line;
+
+	p = NULL;
+
+	if (dir == BUFFER_SEARCH_FORWARD) {
+		for (idx = start; idx < end; idx++) {
+			line = &buf->lines[idx];
+			if ((p = buffer_find(line, needle, len)) != NULL)
+				break;
+		}
+	} else {
+		for (idx = start; idx > end; idx--) {
+			line = &buf->lines[idx];
+			if ((p = buffer_find(line, needle, len)) != NULL)
+				break;
+		}
+	}
+
+	ce_debug("%zu vs %zu", idx, end);
+	if (idx == end)
+		return (NULL);
+
+	*index = idx;
+
+	return (p);
+}
+
+static void *
+buffer_find(struct celine *line, const void *needle, size_t len)
+{
+	const u_int8_t		*n;
+	size_t			pos;
+	u_int8_t		*src;
+
+	n = needle;
+	src = line->data;
+
+	for (pos = 0; pos < line->length; pos++) {
+		if (src[pos] != n[0])
+			continue;
+
+		if ((line->length - pos) < len)
+			return (NULL);
+
+		if (!memcmp(&src[pos], needle, len))
+			return (src + pos);
+	}
+
+	return (NULL);
 }

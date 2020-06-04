@@ -24,11 +24,16 @@
 
 #define errno_s				strerror(errno)
 
+#define CE_BUFFER_SEARCH_NORMAL		0
+#define CE_BUFFER_SEARCH_PREVIOUS	1
+#define CE_BUFFER_SEARCH_NEXT		2
+
 #define CE_EDITOR_MODE_NORMAL		0
 #define CE_EDITOR_MODE_INSERT		1
 #define CE_EDITOR_MODE_COMMAND		2
 #define CE_EDITOR_MODE_BUFLIST		3
-#define CE_EDITOR_MODE_MAX		4
+#define CE_EDITOR_MODE_SEARCH		4
+#define CE_EDITOR_MODE_MAX		5
 
 #define TERM_SCROLL_OFFSET		10
 
@@ -177,6 +182,7 @@ void		ce_buffer_free_internal(struct cebuf *);
 void		ce_buffer_input(struct cebuf *, u_int8_t);
 void		ce_buffer_line_alloc_empty(struct cebuf *);
 void		ce_buffer_constrain_cursor_column(struct cebuf *);
+int		ce_buffer_search(struct cebuf *, const char *, int);
 void		ce_buffer_append(struct cebuf *, const void *, size_t);
 void		ce_buffer_appendf(struct cebuf *, const char *, ...)
 		    __attribute__((format (printf, 2, 3)));
