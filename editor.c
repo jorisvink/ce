@@ -258,7 +258,7 @@ editor_process_escape(void)
 
 	ret = EDITOR_KEY_ESC;
 
-	if (editor_read(STDIN_FILENO, &key, sizeof(key), 50) == 0)
+	if (editor_read(STDIN_FILENO, &key, sizeof(key), 5) == 0)
 		goto cleanup;
 
 	if (key != 0x5b)
