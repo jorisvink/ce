@@ -219,11 +219,16 @@ void		ce_term_write(const void *, size_t);
 void		ce_term_writef(const char *, ...)
 		    __attribute__((format (printf, 1, 2)));
 
+void		ce_editor_init(void);
 void		ce_editor_loop(void);
 int		ce_editor_mode(void);
 void		ce_editor_dirty(void);
+void		ce_editor_message(const char *, ...);
 void		ce_editor_cmdline_append(const char *, ...)
 		    __attribute__((format (printf, 1, 2)));
+
+struct cebuf	*ce_editor_cmdbuf(void);
+void		ce_editor_cmdbuf_reset(void);
 
 void		ce_syntax_init(void);
 void		ce_syntax_write(struct cebuf *, struct celine *, size_t);

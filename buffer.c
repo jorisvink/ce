@@ -47,8 +47,8 @@ static void		*buffer_find(struct celine *, const void *, size_t);
 static void		*buffer_search(struct cebuf *, int, const void *,
 			    size_t, size_t, size_t, size_t *);
 
+static size_t		buffer_line_span(struct celine *);
 static size_t		buffer_line_index(struct cebuf *);
-static size_t		buffer_line_count(struct celine *);
 static struct celine	*buffer_line_current(struct cebuf *);
 static void		buffer_update_cursor(struct cebuf *);
 static void		buffer_populate_lines(struct cebuf *);
@@ -82,7 +82,7 @@ ce_buffer_init(int argc, char **argv)
 
 	for (i = 0; i < argc; i++) {
 		if (ce_buffer_file(argv[i]) == NULL)
-			fatal("%s", errstr);
+			ce_editor_message("%s", ce_buffer_strerror());
 	}
 
 	if ((active = TAILQ_FIRST(&buffers)) == NULL)
@@ -139,7 +139,7 @@ ce_buffer_file(const char *path)
 	ret = NULL;
 
 	TAILQ_FOREACH(buf, &buffers, list) {
-		if (!strcmp(buf->path, path)) {
+		if (!strcmp(buf->name, path)) {
 			active = buf;
 			return (buf);
 		}
@@ -147,11 +147,21 @@ ce_buffer_file(const char *path)
 
 	buf = buffer_alloc(0);
 
-	if ((buf->path = realpath(path, NULL)) == NULL)
-		fatal("%s: realpath: %s", __func__, errno_s);
-
 	if ((buf->name = strdup(path)) == NULL)
 		fatal("%s: strdup: %s", __func__, errno_s);
+
+	if ((buf->path = realpath(path, NULL)) == NULL) {
+		if (errno != ENOENT) {
+			buffer_seterr("%s: %s", path, errno_s);
+			goto cleanup;
+		}
+
+		if ((buf->path = strdup(path)) == NULL)
+			fatal("%s: strdup: %s", __func__, errno_s);
+
+		buf->flags |= CE_BUFFER_DIRTY;
+		goto finalize;
+	}
 
 	if ((fd = open(path, O_RDONLY)) == -1) {
 		buffer_seterr("cannot open %s: %s", path, errno_s);
@@ -193,6 +203,7 @@ ce_buffer_file(const char *path)
 		break;
 	}
 
+finalize:
 	buffer_populate_lines(buf);
 
 	ret = buf;
@@ -297,7 +308,7 @@ ce_buffer_activate_index(size_t index)
 		}
 	}
 
-	fatal("%s: unknown buffer index %zu", __func__, index);
+	ce_editor_dirty();
 }
 
 const char *
@@ -334,7 +345,7 @@ ce_buffer_map(void)
 			ce_syntax_write(active, &active->lines[idx], towrite);
 		}
 
-		line += buffer_line_count(&active->lines[idx]);
+		line += buffer_line_span(&active->lines[idx]);
 
 		if (line > ce_term_height() - 2)
 			break;
@@ -642,7 +653,7 @@ ce_buffer_page_up(void)
 			break;
 
 		line = &active->lines[index];
-		lines = buffer_line_count(line);
+		lines = buffer_line_span(line);
 
 		curline += lines;
 	}
@@ -661,6 +672,9 @@ ce_buffer_move_down(void)
 	int		scroll;
 	size_t		index, next, upper, current, lower, lines, diff;
 
+	if (active->lcnt == 0)
+		return;
+
 	if (active->cursor_line > ce_term_height() - 2) {
 		fatal("%s: line (%zu) > %zu",
 		    __func__, active->cursor_line, ce_term_height() - 2);
@@ -678,7 +692,7 @@ ce_buffer_move_down(void)
 	if (index == active->lcnt - 1)
 		return;
 
-	current = buffer_line_count(line);
+	current = buffer_line_span(line);
 
 	if (current > ce_term_height() - 2)
 		scroll = 1;
@@ -692,7 +706,7 @@ ce_buffer_move_down(void)
 	if (scroll) {
 		if (index < active->lcnt - 1) {
 			line = &active->lines[active->top++];
-			upper = buffer_line_count(line);
+			upper = buffer_line_span(line);
 		}
 	} else {
 		next = active->line + 1;
@@ -707,12 +721,12 @@ ce_buffer_move_down(void)
 		while (lines < ce_term_height() - 2 &&
 		    index < active->lcnt - 1) {
 			line = &active->lines[index++];
-			lines += buffer_line_count(line);
+			lines += buffer_line_span(line);
 		}
 
 		if (index < active->lcnt - 1) {
 			line = &active->lines[index - 1];
-			lower = buffer_line_count(line);
+			lower = buffer_line_span(line);
 		}
 
 		if (upper < lower)
@@ -764,7 +778,7 @@ ce_buffer_page_down(void)
 			break;
 
 		line = &active->lines[index];
-		lines = buffer_line_count(line);
+		lines = buffer_line_span(line);
 
 		curline += lines;
 	}
@@ -895,17 +909,18 @@ ce_buffer_line_alloc_empty(struct cebuf *buf)
 
 	if ((buf->lines = calloc(1, sizeof(struct celine))) == NULL) {
 		fatal("%s: calloc(%zu): %s", __func__,
-			    sizeof(struct celine), errno_s);
+		    sizeof(struct celine), errno_s);
 	}
 
 	TAILQ_INIT(&buf->lines[buf->lcnt].ops);
 
 	buf->lines[0].flags = 0;
 	buf->lines[0].length = 1;
-	buf->lines[0].data = buf->data;
 	buf->lines[0].maxsz = buf->lines[0].length;
 
 	ce_buffer_append(buf, "\n", 1);
+
+	buf->lines[0].data = buf->data;
 
 	ce_buffer_line_columns(&buf->lines[0]);
 }
@@ -1132,7 +1147,7 @@ buffer_populate_lines(struct cebuf *buf)
 }
 
 static size_t
-buffer_line_count(struct celine *line)
+buffer_line_span(struct celine *line)
 {
 	size_t			col;
 	const u_int8_t		*ptr;
@@ -1352,7 +1367,7 @@ buffer_update_cursor_line(struct cebuf *buf)
 	buf->cursor_line = TERM_CURSOR_MIN;
 
 	for (index = buf->top; index < current; index++)
-		buf->cursor_line += buffer_line_count(&buf->lines[index]);
+		buf->cursor_line += buffer_line_span(&buf->lines[index]);
 }
 
 static void

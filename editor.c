@@ -21,12 +21,15 @@
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "ce.h"
 
-#define EDITOR_KEY_ESC		0x1b
+/* Show messages for 5 seconds. */
+#define EDITOR_MESSAGE_DELAY	5
 
+#define EDITOR_KEY_ESC		0x1b
 #define EDITOR_KEY_UP		0xfa
 #define EDITOR_KEY_DOWN		0xfb
 #define EDITOR_KEY_LEFT		0xfc
@@ -129,6 +132,11 @@ static struct {
 	{ CE_EDITOR_MODE_SEARCH, command_map, KEY_MAP_LEN(command_map) },
 };
 
+static struct {
+	char			*message;
+	time_t			when;
+} msg;
+
 static int			quit = 0;
 static int			dirty = 1;
 static volatile sig_atomic_t	sig_recv = -1;
@@ -138,9 +146,18 @@ static struct cebuf		*buflist = NULL;
 static int			mode = CE_EDITOR_MODE_NORMAL;
 
 void
+ce_editor_init(void)
+{
+	msg.message = NULL;
+	msg.when = 0;
+
+	editor_signal_setup();
+}
+
+void
 ce_editor_loop(void)
 {
-	editor_signal_setup();
+	struct timespec		ts;
 
 	cmdbuf = ce_buffer_internal("<cmd>");
 	ce_buffer_line_alloc_empty(cmdbuf);
@@ -153,6 +170,8 @@ ce_editor_loop(void)
 	buflist->cb = editor_buflist_input;
 
 	while (!quit) {
+		(void)clock_gettime(CLOCK_MONOTONIC, &ts);
+
 		if (sig_recv != -1) {
 			switch (sig_recv) {
 			case SIGQUIT:
@@ -183,12 +202,28 @@ ce_editor_loop(void)
 		}
 
 		editor_draw_status();
+
+		if (msg.message) {
+			if ((ts.tv_sec - msg.when) >= EDITOR_MESSAGE_DELAY) {
+				free(msg.message);
+				msg.message = NULL;
+			}
+
+			ce_term_writestr(TERM_SEQUENCE_CURSOR_SAVE);
+			ce_term_setpos(ce_term_height(), TERM_CURSOR_MIN);
+			ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
+			if (msg.message)
+				ce_term_writestr(msg.message);
+			ce_term_writestr(TERM_SEQUENCE_CURSOR_RESTORE);
+		}
+
 		ce_term_flush();
 
 		editor_process_input();
 	}
 
 	free(search);
+	free(msg.message);
 }
 
 void
@@ -201,6 +236,24 @@ int
 ce_editor_mode(void)
 {
 	return (mode);
+}
+
+void
+ce_editor_message(const char *fmt, ...)
+{
+	struct timespec		ts;
+	va_list			args;
+
+	free(msg.message);
+
+	va_start(args, fmt);
+	if (vasprintf(&msg.message, fmt, args) == -1)
+		fatal("%s: vasprintf: %s", __func__, errno_s);
+	va_end(args);
+
+	(void)clock_gettime(CLOCK_MONOTONIC, &ts);
+
+	msg.when = ts.tv_sec;
 }
 
 static void
@@ -387,7 +440,8 @@ editor_draw_status(void)
 static void
 editor_cmdbuf_input(struct cebuf *buf, char key)
 {
-	const char	*cmd;
+	const char		*cmd;
+	struct cebuf		*active;
 
 	switch (key) {
 	case '\n':
@@ -399,9 +453,12 @@ editor_cmdbuf_input(struct cebuf *buf, char key)
 			break;
 		case 'w':
 			if (ce_buffer_save_active() == -1) {
-				/* XXX error handling */
-				ce_debug("err: %s", ce_buffer_strerror());
-				break;
+				ce_editor_message("failed to save: %s",
+				    ce_buffer_strerror());
+			} else {
+				active = ce_buffer_active();
+				ce_editor_message("wrote %zu lines to %s",
+				    active->lcnt, active->path);
 			}
 			break;
 		case 'd':
@@ -588,6 +645,9 @@ editor_cmd_insert_mode_prepend(void)
 static void
 editor_cmd_command_mode(void)
 {
+	free(msg.message);
+	msg.message = NULL;
+
 	editor_cmd_reset();
 	ce_buffer_append(cmdbuf, ":", 1);
 
@@ -604,6 +664,9 @@ editor_cmd_command_mode(void)
 static void
 editor_cmd_search_mode(void)
 {
+	free(msg.message);
+	msg.message = NULL;
+
 	editor_cmd_reset();
 	ce_buffer_append(cmdbuf, "/", 1);
 
@@ -624,8 +687,10 @@ editor_cmd_normal_mode(void)
 
 	if (mode == CE_EDITOR_MODE_INSERT) {
 		mode = CE_EDITOR_MODE_NORMAL;
-		ce_buffer_constrain_cursor_column(buf);
-		ce_term_setpos(buf->cursor_line, buf->column);
+		if (buf->lcnt > 0) {
+			ce_buffer_constrain_cursor_column(buf);
+			ce_term_setpos(buf->cursor_line, buf->column);
+		}
 		return;
 	}
 
@@ -668,9 +733,9 @@ static void
 editor_cmd_open_file(const char *path)
 {
 	if (ce_buffer_file(path) == NULL) {
-		/* XXX error handling */
-		ce_debug("cannot open '%s': %s", path, ce_buffer_strerror());
+		ce_editor_message("%s", ce_buffer_strerror());
 		return;
 	}
+
 	ce_editor_dirty();
 }
