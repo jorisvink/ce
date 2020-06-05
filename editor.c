@@ -107,11 +107,13 @@ static struct keymap insert_map[] = {
 	{ EDITOR_KEY_RIGHT,	ce_buffer_move_right },
 	{ EDITOR_KEY_LEFT,	ce_buffer_move_left },
 
-	{ EDITOR_KEY_ESC,		editor_cmd_normal_mode },
+	{ EDITOR_KEY_ESC,	editor_cmd_normal_mode },
+
 };
 
 static struct keymap command_map[] = {
-	{ EDITOR_KEY_ESC,		editor_cmd_normal_mode },
+	{ EDITOR_KEY_ESC,	editor_cmd_normal_mode },
+
 };
 
 static struct keymap buflist_map[] = {
