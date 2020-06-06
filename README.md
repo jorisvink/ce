@@ -5,7 +5,7 @@ ce is my minimalistic editor I use on a day-to-day basis.
 
 License
 -------
-Coma is licensed under the ISC license.
+Coma Editor is licensed under the ISC license.
 
 Building
 --------
