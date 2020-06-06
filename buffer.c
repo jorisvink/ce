@@ -16,6 +16,7 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/mman.h>
 #include <sys/uio.h>
 
 #include <errno.h>
@@ -132,7 +133,6 @@ ce_buffer_file(const char *path)
 {
 	int			fd;
 	struct stat		st;
-	ssize_t			bytes;
 	struct cebuf		*buf, *ret;
 
 	fd = -1;
@@ -181,27 +181,9 @@ ce_buffer_file(const char *path)
 	buf->maxsz = (size_t)st.st_size;
 	buf->length = buf->maxsz;
 
-	if ((buf->data = calloc(1, buf->maxsz)) == NULL)
-		fatal("%s: calloc(%zu): %s", __func__, buf->maxsz, errno_s);
-
-	for (;;) {
-		bytes = read(fd, buf->data, buf->maxsz);
-		if (bytes == -1) {
-			if (errno == EINTR)
-				continue;
-			buffer_seterr("failed to read from %s: %s",
-			    path, errno_s);
-			goto cleanup;
-		}
-
-		if ((size_t)bytes != buf->maxsz) {
-			buffer_seterr("read error on %s (%zd/%zu)",
-			    path, bytes, buf->maxsz);
-			goto cleanup;
-		}
-
-		break;
-	}
+	buf->data = mmap(NULL, buf->maxsz, PROT_READ, MAP_PRIVATE, fd, 0);
+	if (buf->data == MAP_FAILED)
+		fatal("%s: mmap(%zu): %s", __func__, buf->maxsz, errno_s);
 
 finalize:
 	buffer_populate_lines(buf);
@@ -238,7 +220,9 @@ ce_buffer_free(struct cebuf *buf)
 	if (active == buf)
 		active = buf->prev;
 
-	free(buf->data);
+	if (munmap(buf->data, buf->length) == -1)
+		ce_editor_message("munmap: %s", errno_s);
+
 	free(buf->path);
 	free(buf->name);
 	free(buf);
