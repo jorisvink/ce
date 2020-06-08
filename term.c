@@ -62,9 +62,11 @@ ce_term_setup(void)
 	if (tcsetattr(STDIN_FILENO, TCSANOW, &cur) == -1)
 		fatal("%s: tcsetattr: %s", __func__, errno_s);
 
-	if ((termbuf = calloc(1, sizeof(*termbuf))) == NULL) {
-		fatal("%s: calloc(%zu): %s", __func__,
-		    sizeof(*termbuf), errno_s);
+	if (termbuf == NULL) {
+		if ((termbuf = calloc(1, sizeof(*termbuf))) == NULL) {
+			fatal("%s: calloc(%zu): %s", __func__,
+			    sizeof(*termbuf), errno_s);
+		}
 	}
 
 	can_restore = 1;
