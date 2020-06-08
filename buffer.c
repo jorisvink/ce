@@ -220,6 +220,8 @@ ce_buffer_active(void)
 void
 ce_buffer_free(struct cebuf *buf)
 {
+	struct cebuf		*bp;
+
 	if (buf->internal)
 		return;
 
@@ -227,6 +229,13 @@ ce_buffer_free(struct cebuf *buf)
 
 	if (active == buf)
 		active = buf->prev;
+
+	TAILQ_FOREACH(bp, &buffers, list) {
+		if (bp->prev == buf) {
+			ce_debug("adjusted %s", bp->name);
+			bp->prev = active;
+		}
+	}
 
 	if (buf->flags & CE_BUFFER_MMAP) {
 		if (munmap(buf->data, buf->length) == -1)
@@ -996,13 +1005,13 @@ ce_buffer_save_active(void)
 	copy = NULL;
 	path[0] = '\0';
 
-	if (!(active->flags & CE_BUFFER_DIRTY))
-		return (0);
-
 	if (active->path == NULL) {
 		buffer_seterr("buffer has no active path");
 		goto cleanup;
 	}
+
+	if (!(active->flags & CE_BUFFER_DIRTY))
+		return (0);
 
 	if ((copy = strdup(active->path)) == NULL)
 		fatal("%s: strdup failed %s", __func__, errno_s);
