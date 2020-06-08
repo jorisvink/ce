@@ -601,6 +601,8 @@ ce_buffer_delete_byte(void)
 		return;
 
 	active->flags |= CE_BUFFER_DIRTY;
+
+	buffer_line_allocate(active, line);
 	buffer_line_erase_byte(active, line, 1);
 
 	if (line->length > 0) {
@@ -815,13 +817,13 @@ ce_buffer_move_left(void)
 	if (active->column < TERM_CURSOR_MIN)
 		fatal("%s: col (%zu) < min", __func__, active->column);
 
-	line = buffer_line_current(active);
-
 	if (active->column == TERM_CURSOR_MIN)
 		return;
 
 	if (active->loff == 0)
 		return;
+
+	line = buffer_line_current(active);
 
 	active->loff--;
 	active->column = buffer_line_data_to_columns(line->data, active->loff);
@@ -846,6 +848,9 @@ ce_buffer_move_right(void)
 {
 	struct celine	*line;
 
+	if (active->lcnt == 0)
+		return;
+
 	line = buffer_line_current(active);
 
 	if (active->loff == line->length)
@@ -866,6 +871,9 @@ void
 ce_buffer_jump_right(void)
 {
 	struct celine	*line;
+
+	if (active->lcnt == 0)
+		return;
 
 	line = buffer_line_current(active);
 
