@@ -35,6 +35,8 @@
 #define EDITOR_KEY_LEFT		0xfc
 #define EDITOR_KEY_RIGHT	0xfd
 
+#define EDITOR_COMMAND_DELETE	1
+
 #define KEY_MAP_LEN(x)		((sizeof(x) / sizeof(x[0])))
 
 struct keymap {
@@ -68,6 +70,8 @@ static void	editor_cmd_normal_mode(void);
 static void	editor_cmd_insert_mode(void);
 static void	editor_cmd_insert_mode_append(void);
 static void	editor_cmd_insert_mode_prepend(void);
+
+static void	editor_normal_mode_command(char key);
 
 static void	editor_cmdbuf_input(struct cebuf *, char);
 static void	editor_cmdbuf_search(struct cebuf *, char);
@@ -141,6 +145,7 @@ static struct {
 static int			quit = 0;
 static int			dirty = 1;
 static volatile sig_atomic_t	sig_recv = -1;
+static int			normalcmd = -1;
 static struct cebuf		*cmdbuf = NULL;
 static char			*search = NULL;
 static struct cebuf		*buflist = NULL;
@@ -169,6 +174,8 @@ ce_editor_loop(void)
 
 	buflist = ce_buffer_internal("<buffers>");
 	buflist->cb = editor_buflist_input;
+
+	ce_buffer_reset(cmdbuf);
 
 	while (!quit) {
 		(void)clock_gettime(CLOCK_MONOTONIC, &ts);
@@ -304,6 +311,11 @@ editor_process_input(void)
 	if (key == EDITOR_KEY_ESC)
 		key = editor_process_escape();
 
+	if (mode == CE_EDITOR_MODE_NORMAL_CMD) {
+		editor_normal_mode_command(key);
+		return;
+	}
+
 	for (idx = 0; idx < keymaps[mode].maplen; idx++) {
 		if (key == keymaps[mode].map[idx].key) {
 			keymaps[mode].map[idx].command();
@@ -311,8 +323,10 @@ editor_process_input(void)
 		}
 	}
 
-	if (mode == CE_EDITOR_MODE_NORMAL)
+	if (mode == CE_EDITOR_MODE_NORMAL) {
+		editor_normal_mode_command(key);
 		return;
+	}
 
 	ce_buffer_input(curbuf, key);
 }
@@ -407,6 +421,7 @@ editor_draw_status(void)
 	case CE_EDITOR_MODE_NORMAL:
 	case CE_EDITOR_MODE_COMMAND:
 	case CE_EDITOR_MODE_BUFLIST:
+	case CE_EDITOR_MODE_NORMAL_CMD:
 		modestr = "";
 		break;
 	case CE_EDITOR_MODE_SEARCH:
@@ -422,7 +437,6 @@ editor_draw_status(void)
 	if (curbuf->flags & CE_BUFFER_DIRTY)
 		isdirty = "*";
 
-
 	ce_term_writestr(TERM_SEQUENCE_CURSOR_SAVE);
 
 	ce_term_color(TERM_COLOR_WHITE + TERM_COLOR_BG);
@@ -434,8 +448,14 @@ editor_draw_status(void)
 	    curbuf->name, isdirty, curbuf->top + curbuf->line, curbuf->loff,
 	    curbuf->column, curbuf->lcnt, modestr);
 
-	ce_term_writestr(TERM_SEQUENCE_CURSOR_RESTORE);
 	ce_term_reset();
+	ce_term_setpos(ce_term_height(), ce_term_width() * 0.75f);
+	ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
+
+	if (mode == CE_EDITOR_MODE_NORMAL_CMD)
+		ce_term_write(cmdbuf->data, cmdbuf->length);
+
+	ce_term_writestr(TERM_SEQUENCE_CURSOR_RESTORE);
 }
 
 static void
@@ -461,9 +481,6 @@ editor_cmdbuf_input(struct cebuf *buf, char key)
 				ce_editor_message("wrote %zu lines to %s",
 				    active->lcnt, active->path);
 			}
-			break;
-		case 'd':
-			ce_buffer_delete_line(ce_buffer_active());
 			break;
 		case 'e':
 			if (strlen(cmd) > 3)
@@ -559,6 +576,56 @@ editor_buflist_input(struct cebuf *buf, char key)
 		break;
 	default:
 		break;
+	}
+}
+
+static void
+editor_normal_mode_command(char key)
+{
+	const char	*str;
+	int		reset;
+	long		i, num;
+
+	mode = CE_EDITOR_MODE_NORMAL_CMD;
+
+	if (key >= '0' && key <= '9') {
+		ce_buffer_append(cmdbuf, &key, sizeof(key));
+		return;
+	}
+
+	reset = 0;
+
+	if (normalcmd == -1) {
+		switch (key) {
+		case 'd':
+			normalcmd = EDITOR_COMMAND_DELETE;
+			ce_buffer_append(cmdbuf, &key, sizeof(key));
+			break;
+		case EDITOR_KEY_ESC:
+			reset = 1;
+			break;
+		}
+	} else {
+		reset = 1;
+		str = ce_buffer_as_string(cmdbuf);
+
+		errno = 0;
+		num = strtol(str, NULL, 10);
+		if (errno != 0)
+			num = 1;
+
+		switch (normalcmd) {
+		case EDITOR_COMMAND_DELETE:
+			for (i = 0; i < num; i++)
+				ce_buffer_delete_line(ce_buffer_active());
+			break;
+		}
+	}
+
+	if (reset) {
+		normalcmd = -1;
+		ce_buffer_reset(cmdbuf);
+		mode = CE_EDITOR_MODE_NORMAL;
 	}
 }
 
