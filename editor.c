@@ -36,6 +36,7 @@
 #define EDITOR_KEY_RIGHT	0xfd
 
 #define EDITOR_COMMAND_DELETE	1
+#define EDITOR_COMMAND_YANK	2
 
 #define KEY_MAP_LEN(x)		((sizeof(x) / sizeof(x[0])))
 
@@ -67,6 +68,9 @@ static void	editor_cmd_open_file(const char *);
 static void	editor_cmd_command_mode(void);
 static void	editor_cmd_search_mode(void);
 static void	editor_cmd_normal_mode(void);
+
+static void	editor_cmd_yank_lines(struct cebuf *, long);
+static void	editor_cmd_delete_lines(struct cebuf *, long);
 
 static void	editor_cmd_insert_mode(void);
 static void	editor_cmd_insert_mode_append(void);
@@ -599,9 +603,10 @@ editor_buflist_input(struct cebuf *buf, char key)
 static void
 editor_normal_mode_command(char key)
 {
-	const char	*str;
-	int		reset;
-	long		i, num;
+	long			num;
+	const char		*str;
+	struct cebuf		*buf;
+	int			reset;
 
 	if (key >= '0' && key <= '9') {
 		mode = CE_EDITOR_MODE_NORMAL_CMD;
@@ -610,14 +615,17 @@ editor_normal_mode_command(char key)
 	}
 
 	reset = 0;
+	buf = ce_buffer_active();
 
 	if (normalcmd == -1) {
 		ce_buffer_append(cmdbuf, &key, sizeof(key));
 
 		switch (key) {
 		case 'd':
-			mode = CE_EDITOR_MODE_NORMAL_CMD;
 			normalcmd = EDITOR_COMMAND_DELETE;
+			break;
+		case 'y':
+			normalcmd = EDITOR_COMMAND_YANK;
 			break;
 		case EDITOR_KEY_ESC:
 			reset = 1;
@@ -634,18 +642,54 @@ editor_normal_mode_command(char key)
 
 		switch (normalcmd) {
 		case EDITOR_COMMAND_DELETE:
-			ce_editor_pbuffer_reset();
-			for (i = 0; i < num; i++)
-				ce_buffer_delete_line(ce_buffer_active());
+			editor_cmd_delete_lines(buf, num);
+			break;
+		case EDITOR_COMMAND_YANK:
+			editor_cmd_yank_lines(buf, num);
 			break;
 		}
 	}
+
+	if (normalcmd != -1)
+		mode = CE_EDITOR_MODE_NORMAL_CMD;
 
 	if (reset) {
 		normalcmd = -1;
 		ce_buffer_reset(cmdbuf);
 		mode = CE_EDITOR_MODE_NORMAL;
 	}
+}
+
+static void
+editor_cmd_delete_lines(struct cebuf *buf, long num)
+{
+	long		i;
+
+	ce_editor_pbuffer_reset();
+
+	for (i = 0; i < num; i++)
+		ce_buffer_delete_line(buf);
+}
+
+static void
+editor_cmd_yank_lines(struct cebuf *buf, long num)
+{
+	struct celine	*line;
+	size_t		index, idx, end;
+
+	ce_editor_pbuffer_reset();
+	index = ce_buffer_line_index(buf);
+
+	end = index + num;
+	if (end > buf->lcnt)
+		end = buf->lcnt - 1;
+
+	for (idx = index; idx < end; idx++) {
+		line = &buf->lines[idx];
+		ce_editor_pbuffer_append(line->data, line->length);
+	}
+
+	ce_editor_message("yanked %zu line(s)", end - index);
 }
 
 static void

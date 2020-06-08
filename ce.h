@@ -177,6 +177,7 @@ void		ce_buffer_list(struct cebuf *);
 void		ce_buffer_reset(struct cebuf *);
 void		ce_buffer_activate_index(size_t);
 void		ce_buffer_activate(struct cebuf *);
+size_t		ce_buffer_line_index(struct cebuf *);
 void		ce_buffer_delete_line(struct cebuf *);
 void		ce_buffer_insert_line(struct cebuf *);
 void		ce_buffer_line_columns(struct celine *);
@@ -205,6 +206,7 @@ const char	*ce_buffer_as_string(struct cebuf *);
 struct cebuf	*ce_buffer_active(void);
 struct cebuf	*ce_buffer_file(const char *);
 struct cebuf	*ce_buffer_internal(const char *);
+struct celine	*ce_buffer_line_current(struct cebuf *);
 
 size_t		ce_term_width(void);
 size_t		ce_term_height(void);

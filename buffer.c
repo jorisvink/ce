@@ -49,8 +49,6 @@ static void		*buffer_search(struct cebuf *, int, const void *,
 			    size_t, size_t, size_t, size_t *);
 
 static size_t		buffer_line_span(struct celine *);
-static size_t		buffer_line_index(struct cebuf *);
-static struct celine	*buffer_line_current(struct cebuf *);
 static void		buffer_update_cursor(struct cebuf *);
 static void		buffer_populate_lines(struct cebuf *);
 static void		buffer_line_column_to_data(struct cebuf *);
@@ -377,7 +375,7 @@ ce_buffer_search(struct cebuf *buf, const char *needle, int which)
 	len = strlen(needle);
 	dir = BUFFER_SEARCH_FORWARD;
 
-	index = buffer_line_index(buf);
+	index = ce_buffer_line_index(buf);
 
 	switch (which) {
 	case CE_BUFFER_SEARCH_NEXT:
@@ -490,7 +488,7 @@ ce_buffer_input(struct cebuf *buf, u_int8_t byte)
 	if (buf->lcnt == 0)
 		ce_buffer_line_alloc_empty(buf);
 
-	line = buffer_line_current(buf);
+	line = ce_buffer_line_current(buf);
 	buffer_line_allocate(buf, line);
 
 	switch (byte) {
@@ -516,7 +514,7 @@ ce_buffer_insert_line(struct cebuf *buf)
 	u_int8_t	*data, *ptr;
 	size_t		index, lcnt, length;
 
-	index = buffer_line_index(buf);
+	index = ce_buffer_line_index(buf);
 	line = &buf->lines[index];
 
 	length = line->length - buf->loff;
@@ -562,8 +560,8 @@ ce_buffer_delete_line(struct cebuf *buf)
 	if (buf->lcnt == 0)
 		return;
 
-	index = buffer_line_index(buf);
-	line = buffer_line_current(buf);
+	index = ce_buffer_line_index(buf);
+	line = ce_buffer_line_current(buf);
 
 	ce_editor_pbuffer_append(line->data, line->length);
 
@@ -578,7 +576,7 @@ ce_buffer_delete_line(struct cebuf *buf)
 	if (index == buf->lcnt) {
 		ce_buffer_move_up();
 	} else {
-		line = buffer_line_current(buf);
+		line = ce_buffer_line_current(buf);
 		buffer_line_allocate(buf, line);
 		buffer_update_cursor(buf);
 	}
@@ -605,7 +603,7 @@ ce_buffer_delete_byte(void)
 	if (active->lcnt == 0)
 		return;
 
-	line = buffer_line_current(active);
+	line = ce_buffer_line_current(active);
 	ptr = line->data;
 
 	if (line->length == 1 && ptr[0] == '\n')
@@ -716,8 +714,8 @@ ce_buffer_move_down(void)
 	upper = 0;
 	scroll = 0;
 
-	line = buffer_line_current(active);
-	index = buffer_line_index(active);
+	line = ce_buffer_line_current(active);
+	index = ce_buffer_line_index(active);
 
 	if (index == active->lcnt - 1)
 		return;
@@ -772,7 +770,7 @@ ce_buffer_move_down(void)
 
 	buffer_update_cursor(active);
 
-	line = buffer_line_current(active);
+	line = ce_buffer_line_current(active);
 
 	if (!scroll)
 		ce_term_setpos(active->cursor_line, active->column);
@@ -834,7 +832,7 @@ ce_buffer_move_left(void)
 	if (active->loff == 0)
 		return;
 
-	line = buffer_line_current(active);
+	line = ce_buffer_line_current(active);
 
 	active->loff--;
 	active->column = buffer_line_data_to_columns(line->data, active->loff);
@@ -862,7 +860,7 @@ ce_buffer_move_right(void)
 	if (active->lcnt == 0)
 		return;
 
-	line = buffer_line_current(active);
+	line = ce_buffer_line_current(active);
 
 	if (active->loff == line->length)
 		return;
@@ -886,7 +884,7 @@ ce_buffer_jump_right(void)
 	if (active->lcnt == 0)
 		return;
 
-	line = buffer_line_current(active);
+	line = ce_buffer_line_current(active);
 
 	if (line->length > 1)
 		active->loff = line->length - 1;
@@ -981,7 +979,7 @@ ce_buffer_constrain_cursor_column(struct cebuf *buf)
 	if (ce_editor_mode() == CE_EDITOR_MODE_INSERT)
 		return;
 
-	line = buffer_line_current(buf);
+	line = ce_buffer_line_current(buf);
 	ptr = line->data;
 
 	if (buf->loff == line->length - 1 && ptr[buf->loff] == '\n') {
@@ -1132,6 +1130,31 @@ cleanup:
 	return (ret);
 }
 
+struct celine *
+ce_buffer_line_current(struct cebuf *buf)
+{
+	size_t		index;
+
+	index = ce_buffer_line_index(buf);
+
+	return (&buf->lines[index]);
+}
+
+size_t
+ce_buffer_line_index(struct cebuf *buf)
+{
+	size_t		index;
+
+	if (buf->line == 0)
+		fatal("%s: line == 0", __func__);
+
+	index = buf->top + (buf->line - 1);
+	if (index >= buf->lcnt)
+		fatal("%s: index %zu > lcnt %zu", __func__, index, buf->lcnt);
+
+	return (index);
+}
+
 static struct cebuf *
 buffer_alloc(int internal)
 {
@@ -1247,7 +1270,7 @@ buffer_line_column_to_data(struct cebuf *buf)
 	const u_int8_t		*ptr;
 	struct celine		*line;
 
-	line = buffer_line_current(buf);
+	line = ce_buffer_line_current(buf);
 
 	ptr = line->data;
 	col = TERM_CURSOR_MIN;
@@ -1277,31 +1300,6 @@ buffer_line_column_to_data(struct cebuf *buf)
 
 	if (buf->column > line->columns)
 		buf->column = line->columns;
-}
-
-static struct celine *
-buffer_line_current(struct cebuf *buf)
-{
-	size_t		index;
-
-	index = buffer_line_index(buf);
-
-	return (&buf->lines[index]);
-}
-
-static size_t
-buffer_line_index(struct cebuf *buf)
-{
-	size_t		index;
-
-	if (buf->line == 0)
-		fatal("%s: line == 0", __func__);
-
-	index = buf->top + (buf->line - 1);
-	if (index >= buf->lcnt)
-		fatal("%s: index %zu > lcnt %zu", __func__, index, buf->lcnt);
-
-	return (index);
 }
 
 static void
@@ -1365,7 +1363,7 @@ buffer_line_erase_byte(struct cebuf *buf, struct celine *line, int inplace)
 		if (buf->lcnt == 1)
 			return;
 
-		index = buffer_line_index(buf);
+		index = ce_buffer_line_index(buf);
 		memmove(&buf->lines[index], &buf->lines[index + 1],
 		    (buf->lcnt - index) * sizeof(struct celine));
 
@@ -1410,7 +1408,7 @@ buffer_update_cursor_line(struct cebuf *buf)
 {
 	size_t		index, current;
 
-	current = buffer_line_index(buf);
+	current = ce_buffer_line_index(buf);
 	buf->cursor_line = TERM_CURSOR_MIN;
 
 	for (index = buf->top; index < current; index++)
@@ -1422,7 +1420,7 @@ buffer_update_cursor_column(struct cebuf *buf)
 {
 	struct celine		*line;
 
-	line = buffer_line_current(buf);
+	line = ce_buffer_line_current(buf);
 
 	buf->column = cursor_column;
 
