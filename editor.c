@@ -625,10 +625,17 @@ editor_cmd_insert_mode(void)
 static void
 editor_cmd_insert_mode_append(void)
 {
-	ce_buffer_jump_left();
+	size_t			idx;
+	struct cebuf		*buf = ce_buffer_active();
+
+	idx = buf->top + (buf->line - 1);
+	if (idx == buf->lcnt - 1) {
+		ce_buffer_jump_right();
+		buf->loff++;
+		ce_buffer_input(buf, '\n');
+	}
+
 	ce_buffer_move_down();
-	ce_buffer_input(ce_buffer_active(), '\n');
-	ce_buffer_move_up();
 
 	mode = CE_EDITOR_MODE_INSERT;
 }

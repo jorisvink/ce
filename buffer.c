@@ -189,6 +189,8 @@ ce_buffer_file(const char *path)
 			fatal("%s: mmap(%zu): %s",
 			    __func__, buf->maxsz, errno_s);
 		}
+
+		buf->flags |= CE_BUFFER_MMAP;
 	}
 
 finalize:
@@ -226,8 +228,12 @@ ce_buffer_free(struct cebuf *buf)
 	if (active == buf)
 		active = buf->prev;
 
-	if (munmap(buf->data, buf->length) == -1)
-		ce_editor_message("munmap: %s", errno_s);
+	if (buf->flags & CE_BUFFER_MMAP) {
+		if (munmap(buf->data, buf->length) == -1)
+			ce_editor_message("munmap: %s", errno_s);
+	} else {
+		free(buf->data);
+	}
 
 	free(buf->path);
 	free(buf->name);
@@ -564,6 +570,12 @@ ce_buffer_delete_line(struct cebuf *buf)
 		line = buffer_line_current(buf);
 		buffer_line_allocate(buf, line);
 		buffer_update_cursor(buf);
+	}
+
+	if (buf->lcnt == 0) {
+		cursor_column = TERM_CURSOR_MIN;
+		buf->column = TERM_CURSOR_MIN;
+		buf->loff = 0;
 	}
 
 	buf->flags |= CE_BUFFER_DIRTY;
@@ -910,6 +922,17 @@ ce_buffer_line_columns(struct celine *line)
 void
 ce_buffer_line_alloc_empty(struct cebuf *buf)
 {
+	if (buf->flags & CE_BUFFER_MMAP) {
+		if (munmap(buf->data, buf->maxsz) == -1)
+			buffer_seterr("%s: munmap: %s", buf->name, errno_s);
+
+		buf->maxsz = 0;
+		buf->length = 0;
+		buf->data = NULL;
+
+		buf->flags &= ~CE_BUFFER_MMAP;
+	}
+
 	buf->lcnt = 1;
 
 	if ((buf->lines = calloc(1, sizeof(struct celine))) == NULL) {
@@ -1472,7 +1495,6 @@ buffer_search(struct cebuf *buf, int dir, const void *needle, size_t len,
 		}
 	}
 
-	ce_debug("%zu vs %zu", idx, end);
 	if (idx == end)
 		return (NULL);
 

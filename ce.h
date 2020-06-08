@@ -115,6 +115,7 @@ struct celine {
  * A buffer from either a file or internal.
  */
 #define CE_BUFFER_DIRTY		0x0001
+#define CE_BUFFER_MMAP		0x0002
 struct cebuf {
 	/* Internal buffer? */
 	int			internal;
