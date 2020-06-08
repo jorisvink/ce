@@ -482,10 +482,12 @@ editor_cmdbuf_input(struct cebuf *buf, char key)
 		editor_cmd_normal_mode();
 		break;
 	case '\b':
-		if (buf->length > 1) {
-			buf->length--;
-			buf->column--;
+		if (buf->length <= 1) {
+			editor_cmd_normal_mode();
+			break;
 		}
+		buf->length--;
+		buf->column--;
 		ce_term_setpos(buf->orig_line, TERM_CURSOR_MIN);
 		ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
 		break;
@@ -523,10 +525,12 @@ editor_cmdbuf_search(struct cebuf *buf, char key)
 		editor_cmd_normal_mode();
 		break;
 	case '\b':
-		if (buf->length > 1) {
-			buf->length--;
-			buf->column--;
+		if (buf->length <= 1) {
+			editor_cmd_normal_mode();
+			break;
 		}
+		buf->length--;
+		buf->column--;
 		ce_term_setpos(buf->orig_line, TERM_CURSOR_MIN);
 		ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
 		break;
