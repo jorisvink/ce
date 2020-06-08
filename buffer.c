@@ -282,7 +282,13 @@ ce_buffer_activate_index(size_t index)
 	size_t			idx;
 	struct cebuf		*buf;
 
-	idx = 0;
+	if (index == 0) {
+		active = scratch;
+		ce_editor_dirty();
+		return;
+	}
+
+	idx = 1;
 
 	TAILQ_FOREACH_REVERSE(buf, &buffers, cebuflist, list) {
 		if (idx++ == index) {
@@ -426,6 +432,15 @@ ce_buffer_list(struct cebuf *output)
 
 	idx = 1;
 	ce_buffer_reset(output);
+
+	/* Add scratch as the first buffer. */
+	ce_buffer_appendf(output, "[scratch] (%zu lines)\n", scratch->lcnt);
+	if (scratch == active) {
+		output->line = idx;
+		output->cursor_line = idx;
+	}
+
+	idx++;
 
 	TAILQ_FOREACH_REVERSE(buf, &buffers, cebuflist, list) {
 		if (buf == active) {
