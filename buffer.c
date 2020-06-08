@@ -181,9 +181,15 @@ ce_buffer_file(const char *path)
 	buf->maxsz = (size_t)st.st_size;
 	buf->length = buf->maxsz;
 
-	buf->data = mmap(NULL, buf->maxsz, PROT_READ, MAP_PRIVATE, fd, 0);
-	if (buf->data == MAP_FAILED)
-		fatal("%s: mmap(%zu): %s", __func__, buf->maxsz, errno_s);
+	if (buf->maxsz > 0) {
+		buf->data = mmap(NULL, buf->maxsz,
+		    PROT_READ, MAP_PRIVATE, fd, 0);
+
+		if (buf->data == MAP_FAILED) {
+			fatal("%s: mmap(%zu): %s",
+			    __func__, buf->maxsz, errno_s);
+		}
+	}
 
 finalize:
 	buffer_populate_lines(buf);
