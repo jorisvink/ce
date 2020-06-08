@@ -565,6 +565,8 @@ ce_buffer_delete_line(struct cebuf *buf)
 	index = buffer_line_index(buf);
 	line = buffer_line_current(buf);
 
+	ce_editor_pbuffer_append(line->data, line->length);
+
 	if (line->flags & CE_LINE_ALLOCATED)
 		free(line->data);
 

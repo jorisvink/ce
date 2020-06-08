@@ -57,6 +57,7 @@ static void	editor_draw_status(void);
 static void	editor_cmd_quit(void);
 static void	editor_cmd_reset(void);
 static void	editor_cmd_suspend(void);
+static void	editor_cmd_paste(void);
 static void	editor_cmd_search_next(void);
 static void	editor_cmd_search_prev(void);
 static void	editor_cmd_buffer_list(void);
@@ -91,6 +92,7 @@ static struct keymap normal_map[] = {
 
 	{ 'x',			ce_buffer_delete_byte },
 
+	{ 'p',			editor_cmd_paste },
 	{ 'n',			editor_cmd_search_next },
 	{ 'N',			editor_cmd_search_prev },
 
@@ -146,9 +148,10 @@ static int			quit = 0;
 static int			dirty = 1;
 static volatile sig_atomic_t	sig_recv = -1;
 static int			normalcmd = -1;
-static struct cebuf		*cmdbuf = NULL;
 static char			*search = NULL;
+static struct cebuf		*cmdbuf = NULL;
 static struct cebuf		*buflist = NULL;
+static struct cebuf		*pbuffer = NULL;
 static int			mode = CE_EDITOR_MODE_NORMAL;
 
 void
@@ -165,8 +168,11 @@ ce_editor_loop(void)
 {
 	struct timespec		ts;
 
+	pbuffer = ce_buffer_internal("<pb>");
+	ce_buffer_reset(pbuffer);
+
 	cmdbuf = ce_buffer_internal("<cmd>");
-	ce_buffer_line_alloc_empty(cmdbuf);
+	ce_buffer_reset(cmdbuf);
 
 	cmdbuf->cb = editor_cmdbuf_input;
 	cmdbuf->line = ce_term_height();
@@ -174,8 +180,6 @@ ce_editor_loop(void)
 
 	buflist = ce_buffer_internal("<buffers>");
 	buflist->cb = editor_buflist_input;
-
-	ce_buffer_reset(cmdbuf);
 
 	while (!quit) {
 		(void)clock_gettime(CLOCK_MONOTONIC, &ts);
@@ -262,6 +266,19 @@ ce_editor_message(const char *fmt, ...)
 	(void)clock_gettime(CLOCK_MONOTONIC, &ts);
 
 	msg.when = ts.tv_sec;
+}
+
+void
+ce_editor_pbuffer_reset(void)
+{
+	ce_buffer_reset(pbuffer);
+}
+
+void
+ce_editor_pbuffer_append(const void *data, size_t len)
+{
+	ce_debug("paste buffer got %zu bytes", len);
+	ce_buffer_append(pbuffer, data, len);
 }
 
 static void
@@ -586,9 +603,8 @@ editor_normal_mode_command(char key)
 	int		reset;
 	long		i, num;
 
-	mode = CE_EDITOR_MODE_NORMAL_CMD;
-
 	if (key >= '0' && key <= '9') {
+		mode = CE_EDITOR_MODE_NORMAL_CMD;
 		ce_buffer_append(cmdbuf, &key, sizeof(key));
 		return;
 	}
@@ -600,6 +616,7 @@ editor_normal_mode_command(char key)
 
 		switch (key) {
 		case 'd':
+			mode = CE_EDITOR_MODE_NORMAL_CMD;
 			normalcmd = EDITOR_COMMAND_DELETE;
 			break;
 		case EDITOR_KEY_ESC:
@@ -617,6 +634,7 @@ editor_normal_mode_command(char key)
 
 		switch (normalcmd) {
 		case EDITOR_COMMAND_DELETE:
+			ce_editor_pbuffer_reset();
 			for (i = 0; i < num; i++)
 				ce_buffer_delete_line(ce_buffer_active());
 			break;
@@ -686,6 +704,33 @@ editor_cmd_search_prev(void)
 
 	if (ce_buffer_search(buf, search, CE_BUFFER_SEARCH_PREVIOUS))
 		ce_editor_dirty();
+}
+
+static void
+editor_cmd_paste(void)
+{
+	size_t			idx;
+	const u_int8_t		*ptr;
+	struct cebuf		*buf;
+
+	if (pbuffer->length == 0)
+		return;
+
+	buf = ce_buffer_active();
+	ptr = pbuffer->data;
+
+	mode = CE_EDITOR_MODE_INSERT;
+
+	ce_buffer_jump_left();
+	ce_buffer_move_down();
+	ce_buffer_input(buf, '\n');
+	ce_buffer_move_up();
+
+	for (idx = 0; idx < pbuffer->length - 1; idx++)
+		ce_buffer_input(buf, ptr[idx]);
+
+	ce_buffer_jump_left();
+	mode = CE_EDITOR_MODE_NORMAL;
 }
 
 static void
