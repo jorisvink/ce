@@ -596,10 +596,11 @@ editor_normal_mode_command(char key)
 	reset = 0;
 
 	if (normalcmd == -1) {
+		ce_buffer_append(cmdbuf, &key, sizeof(key));
+
 		switch (key) {
 		case 'd':
 			normalcmd = EDITOR_COMMAND_DELETE;
-			ce_buffer_append(cmdbuf, &key, sizeof(key));
 			break;
 		case EDITOR_KEY_ESC:
 			reset = 1;
