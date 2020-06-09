@@ -24,7 +24,7 @@ $ make
 $ sudo make install
 ```
 
-Linux (requires libbsd):
+Linux:
 ```
 $ env CFLAGS=-D_GNU_SOURCE make
 $ sudo make install
