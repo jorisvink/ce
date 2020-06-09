@@ -193,6 +193,7 @@ ce_buffer_file(const char *path)
 
 	buf->maxsz = (size_t)st.st_size;
 	buf->length = buf->maxsz;
+	buf->mode = st.st_mode;
 
 	if (buf->maxsz > 0) {
 		buf->data = mmap(NULL, buf->maxsz,
@@ -1125,6 +1126,11 @@ ce_buffer_save_active(int force)
 
 		elms -= cnt;
 		off += cnt;
+	}
+
+	if (fchmod(fd, active->mode) == -1) {
+		buffer_seterr("fchmod(%s): %s", path, errno_s);
+		goto cleanup;
 	}
 
 	if (close(fd) == -1) {

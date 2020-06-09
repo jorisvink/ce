@@ -136,6 +136,9 @@ struct cebuf {
 	/* If backed by a file, the path. */
 	char			*path;
 
+	/* File mode. */
+	mode_t			mode;
+
 	/* Name of the buffer. */
 	char			*name;
 
