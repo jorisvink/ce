@@ -72,6 +72,10 @@ ctrl-r       = show list of buffers
 
 ctrl-z       = suspend ce
 
+<num>dd      = delete number of lines
+
+<num>yy      = yank number of lines
+
 **insert mode key bindings**
 
 arrow keys   = navigate around
@@ -91,8 +95,6 @@ enter        = select buffer
 q            = quit ce
 
 w            = write active buffer
-
-d            = delete line under cursor
 
 e            = open specified file
 
