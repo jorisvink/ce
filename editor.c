@@ -637,7 +637,7 @@ editor_normal_mode_command(char key)
 
 		errno = 0;
 		num = strtol(str, NULL, 10);
-		if (errno != 0)
+		if (errno != 0 || num == 0)
 			num = 1;
 
 		switch (normalcmd) {
@@ -885,6 +885,8 @@ editor_allowed_command_key(char key)
 	case ' ':
 	case '.':
 	case '/':
+	case '-':
+	case '_':
 		return (1);
 	}
 
