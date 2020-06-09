@@ -400,7 +400,12 @@ ce_buffer_search(struct cebuf *buf, const char *needle, int which)
 		break;
 	case CE_BUFFER_SEARCH_PREVIOUS:
 		/* search 1, from previous line until start. */
-		start[0] = index - 1;
+		if (index > 0) {
+			start[0] = index - 1;
+		} else {
+			start[0] = 0;
+		}
+
 		end[0] = 0;
 
 		/* search 2, from end until current line. */
