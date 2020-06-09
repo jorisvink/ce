@@ -435,6 +435,7 @@ static void
 editor_draw_status(void)
 {
 	const char		*isdirty = "";
+	const char		*filemode = "";
 	const char		*modestr = NULL;
 	struct cebuf		*curbuf = ce_buffer_active();
 
@@ -458,6 +459,11 @@ editor_draw_status(void)
 	if (curbuf->flags & CE_BUFFER_DIRTY)
 		isdirty = "*";
 
+	if (curbuf->flags & CE_BUFFER_RO)
+		filemode = "r-";
+	else
+		filemode = "rw";
+
 	ce_term_writestr(TERM_SEQUENCE_CURSOR_SAVE);
 
 	ce_term_color(TERM_COLOR_WHITE + TERM_COLOR_BG);
@@ -465,9 +471,9 @@ editor_draw_status(void)
 
 	ce_term_setpos(ce_term_height() - 1, TERM_CURSOR_MIN);
 	ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
-	ce_term_writef("[%s%s] [ %zu,%zu-%zu ] [%zu lines] %s",
-	    curbuf->name, isdirty, curbuf->top + curbuf->line, curbuf->loff,
-	    curbuf->column, curbuf->lcnt, modestr);
+	ce_term_writef("[%s%s] [%s] [ %zu,%zu-%zu ] [%zu lines] %s",
+	    curbuf->name, isdirty, filemode, curbuf->top + curbuf->line,
+	    curbuf->loff, curbuf->column, curbuf->lcnt, modestr);
 
 	ce_term_reset();
 	ce_term_setpos(ce_term_height(), ce_term_width() * 0.75f);
@@ -483,7 +489,7 @@ static void
 editor_cmdbuf_input(struct cebuf *buf, char key)
 {
 	const char		*cmd;
-	struct cebuf		*active;
+	int			force;
 
 	switch (key) {
 	case '\n':
@@ -494,13 +500,10 @@ editor_cmdbuf_input(struct cebuf *buf, char key)
 			editor_cmd_quit();
 			break;
 		case 'w':
-			if (ce_buffer_save_active() == -1) {
+			force = cmd[2] == '!';
+			if (ce_buffer_save_active(force) == -1) {
 				ce_editor_message("failed to save: %s",
 				    ce_buffer_strerror());
-			} else {
-				active = ce_buffer_active();
-				ce_editor_message("wrote %zu lines to %s",
-				    active->lcnt, active->path);
 			}
 			break;
 		case 'e':
@@ -890,6 +893,7 @@ editor_allowed_command_key(char key)
 	case '/':
 	case '-':
 	case '_':
+	case '!':
 		return (1);
 	}
 

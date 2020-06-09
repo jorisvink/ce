@@ -161,18 +161,33 @@ ce_buffer_file(const char *path)
 		goto finalize;
 	}
 
+	if (access(buf->path, R_OK) == -1) {
+		if (errno == ENOENT) {
+			buf->flags |= CE_BUFFER_DIRTY;
+			goto finalize;
+		}
+
+		buffer_seterr("%s: no read access: %s", path, errno_s);
+		goto cleanup;
+	}
+
+	if (access(buf->path, W_OK) == -1) {
+		buf->flags |= CE_BUFFER_RO;
+		ce_editor_message("%s: opening read-only", path);
+	}
+
 	if ((fd = open(path, O_RDONLY)) == -1) {
-		buffer_seterr("cannot open %s: %s", path, errno_s);
+		buffer_seterr("%s: open: %s", path, errno_s);
 		goto cleanup;
 	}
 
 	if (fstat(fd, &st) == -1) {
-		buffer_seterr("cannot fstat %s: %s", path, errno_s);
+		buffer_seterr("%s: fstat: %s", path, errno_s);
 		goto cleanup;
 	}
 
 	if ((uintmax_t)st.st_size > SIZE_MAX) {
-		buffer_seterr("cannot open %s: too large", path);
+		buffer_seterr("%s: too large", path);
 		goto cleanup;
 	}
 
@@ -996,7 +1011,7 @@ ce_buffer_constrain_cursor_column(struct cebuf *buf)
 }
 
 int
-ce_buffer_save_active(void)
+ce_buffer_save_active(int force)
 {
 	struct iovec		*iov;
 	const char		*file, *dir;
@@ -1015,7 +1030,12 @@ ce_buffer_save_active(void)
 		goto cleanup;
 	}
 
-	if (!(active->flags & CE_BUFFER_DIRTY))
+	if ((active->flags & CE_BUFFER_RO) && force == 0) {
+		buffer_seterr("buffer is read-only");
+		goto cleanup;
+	}
+
+	if (!(active->flags & CE_BUFFER_DIRTY) && force == 0)
 		return (0);
 
 	if ((copy = strdup(active->path)) == NULL)
@@ -1121,6 +1141,7 @@ ce_buffer_save_active(void)
 
 	ret = 0;
 	active->flags &= ~CE_BUFFER_DIRTY;
+	ce_editor_message("wrote %zu lines to %s", active->lcnt, active->path);
 
 cleanup:
 	free(iov);

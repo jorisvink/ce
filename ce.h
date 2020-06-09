@@ -117,6 +117,7 @@ struct celine {
  */
 #define CE_BUFFER_DIRTY		0x0001
 #define CE_BUFFER_MMAP		0x0002
+#define CE_BUFFER_RO		0x0004
 struct cebuf {
 	/* Internal buffer? */
 	int			internal;
@@ -170,7 +171,7 @@ TAILQ_HEAD(cebuflist, cebuf);
 void		ce_buffer_map(void);
 void		ce_buffer_cleanup(void);
 void		ce_buffer_restore(void);
-int		ce_buffer_save_active(void);
+int		ce_buffer_save_active(int);
 void		ce_buffer_init(int, char **);
 void		ce_buffer_free(struct cebuf *);
 void		ce_buffer_list(struct cebuf *);
