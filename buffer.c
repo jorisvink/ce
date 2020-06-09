@@ -957,7 +957,7 @@ ce_buffer_line_alloc_empty(struct cebuf *buf)
 		    sizeof(struct celine), errno_s);
 	}
 
-	TAILQ_INIT(&buf->lines[buf->lcnt].ops);
+	TAILQ_INIT(&buf->lines[0].ops);
 
 	buf->lines[0].flags = 0;
 	buf->lines[0].length = 1;
