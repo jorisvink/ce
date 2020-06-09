@@ -173,7 +173,7 @@ ce_buffer_file(const char *path)
 
 	if (access(buf->path, W_OK) == -1) {
 		buf->flags |= CE_BUFFER_RO;
-		ce_editor_message("%s: opening read-only", path);
+		ce_editor_message("%s opened in read-only mode", path);
 	}
 
 	if ((fd = open(path, O_RDONLY)) == -1) {
