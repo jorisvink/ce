@@ -14,8 +14,6 @@ CFLAGS+=-Wmissing-declarations -Wshadow -Wpointer-arith -Wcast-qual
 CFLAGS+=-Wsign-compare -std=c99 -pedantic -ggdb
 CFLAGS+=-DPREFIX='"$(PREFIX)"' -fstack-protector-all
 
-CFLAGS+=-D_GNU_SOURCE
-
 OBJS=	$(SRC:%.c=$(OBJDIR)/%.o)
 
 all: $(BIN)
