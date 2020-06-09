@@ -635,6 +635,9 @@ editor_normal_mode_command(char key)
 		reset = 1;
 		str = ce_buffer_as_string(cmdbuf);
 
+		if (!isdigit((unsigned char)str[0]))
+			str++;
+
 		errno = 0;
 		num = strtol(str, NULL, 10);
 		if (errno != 0 || num == 0)
