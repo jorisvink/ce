@@ -89,6 +89,10 @@ ce_term_restore(void)
 	(void)tcsetattr(STDIN_FILENO, TCSANOW, &old);
 
 	can_restore = 0;
+
+	free(termbuf->data);
+	free(termbuf);
+	termbuf = NULL;
 }
 
 size_t
