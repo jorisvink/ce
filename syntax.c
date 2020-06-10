@@ -135,7 +135,7 @@ ce_syntax_write(struct cebuf *buf, struct celine *line, size_t towrite)
 		syntax_state.color_prev = -1;
 	}
 
-	while (syntax_state.off != line->length) {
+	while (syntax_state.off != towrite) {
 		switch (p[syntax_state.off]) {
 		case '\t':
 			syntax_state_color(&syntax_state, TERM_COLOR_BLUE);
