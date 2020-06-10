@@ -405,6 +405,8 @@ ce_buffer_map(void)
 	if (active->data == NULL)
 		return;
 
+	ce_syntax_init();
+
 	line = active->orig_line;
 	ce_term_setpos(active->orig_line, active->orig_column);
 
