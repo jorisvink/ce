@@ -219,8 +219,11 @@ syntax_highlight_numeric(struct state *state)
 	p = state->p;
 	end = state->p + state->len;
 
-	while ((isdigit(*p) || *p == '.' || *p == 'x') && p < end)
+	while ((isxdigit(*p) || *p == '.' || *p == 'x') && p < end)
 		p++;
+
+	if (syntax_is_word(state, p - state->p) == -1)
+		return (-1);
 
 	syntax_state_color(state, TERM_COLOR_RED);
 	syntax_write(state, p - state->p);
@@ -234,10 +237,10 @@ syntax_highlight_c(struct state *state)
 	if (syntax_highlight_c_comment(state) == 0)
 		return;
 
-	if (syntax_highlight_numeric(state) == 0)
+	if (syntax_highlight_c_preproc(state) == 0)
 		return;
 
-	if (syntax_highlight_c_preproc(state) == 0)
+	if (syntax_highlight_numeric(state) == 0)
 		return;
 
 	if (syntax_highlight_literal(state) == 0)
@@ -298,7 +301,11 @@ static int
 syntax_highlight_c_preproc(struct state *state)
 {
 	if (state->inside_preproc) {
-		syntax_write(state, 1);
+		if (syntax_highlight_numeric(state) == -1 &&
+		    syntax_highlight_literal(state) == -1) {
+			syntax_state_color(state, TERM_COLOR_MAGENTA);
+			syntax_write(state, 1);
+		}
 		return (0);
 	}
 
