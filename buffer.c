@@ -253,7 +253,9 @@ ce_buffer_active(void)
 void
 ce_buffer_free(struct cebuf *buf)
 {
+	size_t			idx;
 	struct cebuf		*bp;
+	struct celine		*line;
 
 	if (buf->internal)
 		return;
@@ -277,6 +279,13 @@ ce_buffer_free(struct cebuf *buf)
 		free(buf->data);
 	}
 
+	for (idx = 0; idx < buf->lcnt; idx++) {
+		line = &buf->lines[idx];
+		if (line->flags & CE_LINE_ALLOCATED)
+			free(line->data);
+	}
+
+	free(buf->lines);
 	free(buf->path);
 	free(buf->name);
 	free(buf);
@@ -285,6 +294,9 @@ ce_buffer_free(struct cebuf *buf)
 void
 ce_buffer_free_internal(struct cebuf *buf)
 {
+	size_t			idx;
+	struct celine		*line;
+
 	if (buf->internal == 0) {
 		fatal("%s: called on non internal buffer '%s'",
 		    __func__, buf->name);
@@ -295,6 +307,13 @@ ce_buffer_free_internal(struct cebuf *buf)
 	if (active == buf)
 		active = buf->prev;
 
+	for (idx = 0; idx < buf->lcnt; idx++) {
+		line = &buf->lines[idx];
+		if (line->flags & CE_LINE_ALLOCATED)
+			free(line->data);
+	}
+
+	free(buf->lines);
 	free(buf->data);
 	free(buf->path);
 	free(buf->name);
