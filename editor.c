@@ -203,6 +203,9 @@ ce_editor_loop(void)
 				dirty = 1;
 				ce_term_restore();
 				ce_term_setup();
+
+				cmdbuf->line = ce_term_height();
+				cmdbuf->orig_line = ce_term_height();
 				break;
 			}
 			sig_recv = -1;
