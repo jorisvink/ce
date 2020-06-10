@@ -372,9 +372,12 @@ syntax_is_word(struct state *state, size_t hlen)
 		case '{':
 		case '\t':
 		case '\n':
+		case '[':
+		case ']':
 		case ':':
 		case ';':
 		case ',':
+		case '-':
 			break;
 		default:
 			return (-1);
@@ -389,9 +392,12 @@ syntax_is_word(struct state *state, size_t hlen)
 		case '{':
 		case '\t':
 		case '\n':
+		case '[':
+		case ']':
 		case ':':
 		case ';':
 		case ',':
+		case '-':
 			break;
 		default:
 			return (-1);
