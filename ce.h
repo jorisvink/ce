@@ -186,6 +186,7 @@ void		ce_buffer_delete_line(struct cebuf *);
 void		ce_buffer_insert_line(struct cebuf *);
 void		ce_buffer_line_columns(struct celine *);
 void		ce_buffer_free_internal(struct cebuf *);
+void		ce_buffer_jump_line(struct cebuf *, long);
 void		ce_buffer_input(struct cebuf *, u_int8_t);
 void		ce_buffer_line_alloc_empty(struct cebuf *);
 void		ce_buffer_constrain_cursor_column(struct cebuf *);

@@ -617,6 +617,39 @@ ce_buffer_delete_line(struct cebuf *buf)
 }
 
 void
+ce_buffer_jump_line(struct cebuf *buf, long linenr)
+{
+	size_t		line;
+
+	if (linenr < 0)
+		fatal("%s: linenr %ld < 0", __func__, linenr);
+
+	if (buf->lcnt == 0)
+		return;
+
+	line = linenr;
+
+	if (line > buf->lcnt - 1)
+		line = buf->lcnt - 1;
+
+	if (line == 0)
+		line = TERM_CURSOR_MIN;
+
+	if (line < ce_term_height() - 2) {
+		buf->top = 0;
+		buf->line = line;
+	} else {
+		buf->top = line - ((ce_term_height() - 2) / 2);
+		buf->line = (ce_term_height() - 2) / 2;
+	}
+
+	buffer_update_cursor(buf);
+
+	/* XXX for now. */
+	ce_editor_dirty();
+}
+
+void
 ce_buffer_delete_byte(void)
 {
 	size_t			max;

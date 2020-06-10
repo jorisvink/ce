@@ -488,13 +488,27 @@ editor_draw_status(void)
 static void
 editor_cmdbuf_input(struct cebuf *buf, char key)
 {
+	char			*ep;
 	const char		*cmd;
 	int			force;
+	long			linenr;
 
 	switch (key) {
 	case '\n':
 		ce_buffer_restore();
 		cmd = ce_buffer_as_string(buf);
+
+		if (isdigit((unsigned char)cmd[1])) {
+			errno = 0;
+			linenr = strtol(&cmd[1], &ep, 10);
+			if (*ep == '\0' && errno == 0) {
+				ce_buffer_jump_line(ce_buffer_active(), linenr);
+				ce_buffer_activate(buf);
+				editor_cmd_normal_mode();
+				return;
+			}
+		}
+
 		switch (cmd[1]) {
 		case 'q':
 			editor_cmd_quit();
