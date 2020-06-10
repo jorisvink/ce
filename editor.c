@@ -537,6 +537,7 @@ editor_cmdbuf_input(struct cebuf *buf, char key)
 		editor_cmd_normal_mode();
 		break;
 	case '\b':
+	case 0x7f:
 		if (buf->length <= 1) {
 			editor_cmd_normal_mode();
 			break;
@@ -580,6 +581,7 @@ editor_cmdbuf_search(struct cebuf *buf, char key)
 		editor_cmd_normal_mode();
 		break;
 	case '\b':
+	case 0x7f:
 		if (buf->length <= 1) {
 			editor_cmd_normal_mode();
 			break;
