@@ -173,14 +173,12 @@ ce_buffer_file(const char *path)
 			fatal("%s: strdup: %s", __func__, errno_s);
 
 		buf->mode = S_IRUSR | S_IWUSR;
-		buf->flags |= CE_BUFFER_DIRTY;
 		goto finalize;
 	}
 
 	if (access(buf->path, R_OK) == -1) {
 		if (errno == ENOENT) {
 			buf->mode = S_IRUSR | S_IWUSR;
-			buf->flags |= CE_BUFFER_DIRTY;
 			goto finalize;
 		}
 
