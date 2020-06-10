@@ -42,7 +42,10 @@ struct state {
 };
 
 static void	syntax_write(struct state *, size_t);
+
+static int	syntax_is_seperator(char);
 static int	syntax_is_word(struct state *, size_t);
+
 static void	syntax_state_color(struct state *, int);
 static void	syntax_state_color_reset(struct state *);
 static void	syntax_state_color_clear(struct state *);
@@ -50,6 +53,10 @@ static void	syntax_state_color_clear(struct state *);
 static void	syntax_highlight_c(struct state *);
 static int	syntax_highlight_c_comment(struct state *);
 static int	syntax_highlight_c_preproc(struct state *);
+
+static void	syntax_highlight_python(struct state *);
+static int	syntax_highlight_python_comment(struct state *);
+static int	syntax_highlight_python_multiline_string(struct state *);
 
 static int	syntax_highlight_string(struct state *);
 static int	syntax_highlight_numeric(struct state *);
@@ -72,11 +79,26 @@ static const char *c_types[] = {
 };
 
 static const char *c_special[] = {
-	"NULL",
-	"__file__",
-	"__func__",
-	"__LINE__",
+	"NULL", "__file__", "__func__", "__LINE__",
 	NULL
+};
+
+static const char *py_kw[] = {
+	"and", "del", "for", "is", "raise", "assert", "elif",
+	"lambda", "return", "break", "else", "global", "not", "try",
+	"class", "except", "if", "or", "while", "continue", "exec",
+	"pass", "def", "finally", "in", "await", "async",
+
+	NULL
+};
+
+static const char *py_types[] = {
+	"None", "False", "True", "print",
+	NULL
+};
+
+static const char *py_special[] = {
+	"import", "from", NULL
 };
 
 static struct state	syntax_state = { 0 };
@@ -102,7 +124,6 @@ ce_syntax_write(struct cebuf *buf, struct celine *line, size_t towrite)
 	p = line->data;
 
 	syntax_state.off = 0;
-	syntax_state.inside_string = 0;
 	syntax_state.inside_preproc = 0;
 
 	if (syntax_state.flags & SYNTAX_CLEAR_COMMENT) {
@@ -131,6 +152,7 @@ ce_syntax_write(struct cebuf *buf, struct celine *line, size_t towrite)
 				ce_term_write(".", 1);
 
 			syntax_state.off++;
+			syntax_state_color_clear(&syntax_state);
 			break;
 		default:
 			spaces = syntax_state.off;
@@ -141,6 +163,9 @@ ce_syntax_write(struct cebuf *buf, struct celine *line, size_t towrite)
 			switch (buf->type) {
 			case CE_FILE_TYPE_C:
 				syntax_highlight_c(&syntax_state);
+				break;
+			case CE_FILE_TYPE_PYTHON:
+				syntax_highlight_python(&syntax_state);
 				break;
 			default:
 				syntax_state_color_clear(&syntax_state);
@@ -201,10 +226,12 @@ syntax_highlight_string(struct state *state)
 		syntax_write(state, 1);
 		syntax_state_color_reset(state);
 		state->inside_string = 0;
+		ce_debug("end of string found");
 	} else if (state->inside_string == 0) {
 		state->inside_string = state->p[0];
 		syntax_state_color(state, TERM_COLOR_RED);
 		syntax_write(state, 1);
+		ce_debug("start of string found 0x%02x", state->p[0]);
 	} else {
 		syntax_write(state, 1);
 	}
@@ -334,6 +361,90 @@ syntax_highlight_c_preproc(struct state *state)
 }
 
 static void
+syntax_highlight_python(struct state *state)
+{
+	if (syntax_highlight_python_comment(state) == 0)
+		return;
+
+	if (syntax_highlight_python_multiline_string(state) == 0)
+		return;
+
+	if (syntax_highlight_numeric(state) == 0)
+		return;
+
+	if (syntax_highlight_string(state) == 0)
+		return;
+
+	if (syntax_highlight_word(state, py_kw, TERM_COLOR_YELLOW) == 0)
+		return;
+
+	if (syntax_highlight_word(state, py_types, TERM_COLOR_CYAN) == 0)
+		return;
+
+	if (syntax_highlight_word(state, py_special, TERM_COLOR_MAGENTA) == 0)
+		return;
+
+	syntax_state_color_clear(state);
+	syntax_write(state, 1);
+}
+
+static int
+syntax_highlight_python_comment(struct state *state)
+{
+	if (state->inside_comment == 0) {
+		if (state->p[0] == '#') {
+			state->inside_comment = 1;
+			ce_term_writestr(TERM_SEQUENCE_ATTR_BOLD);
+			syntax_state_color(state, TERM_COLOR_BLUE);
+			syntax_write(state, 1);
+			state->flags |= SYNTAX_CLEAR_COMMENT;
+			return (0);
+		}
+	} else {
+		syntax_write(state, 1);
+		return (0);
+	}
+
+	return (-1);
+}
+
+static int
+syntax_highlight_python_multiline_string(struct state *state)
+{
+	int		hit;
+
+	if (state->len >= 3 && state->p[0] == '"' &&
+	    state->p[1] == '"' && state->p[2] == '"') {
+		hit = 1;
+	} else {
+		hit = 0;
+	}
+
+	if (state->inside_string == 0) {
+		if (hit) {
+			state->inside_string = 0xff;
+			syntax_state_color(state, TERM_COLOR_RED);
+			syntax_write(state, 3);
+			return (0);
+		}
+
+		return (-1);
+	} else if (state->inside_string == 0xff) {
+		if (hit) {
+			state->inside_string = 0;
+			syntax_write(state, 3);
+			syntax_state_color_reset(state);
+		} else {
+			syntax_write(state, 1);
+		}
+
+		return (0);
+	}
+
+	return (-1);
+}
+
+static void
 syntax_highlight_span(struct state *state, char start, char end, int color)
 {
 	const u_int8_t		*p;
@@ -403,47 +514,37 @@ syntax_is_word(struct state *state, size_t hlen)
 	else
 		prev = (state->p - 1);
 
-	if (prev) {
-		switch (*prev) {
-		case ' ':
-		case '(':
-		case ')':
-		case '{':
-		case '\t':
-		case '\n':
-		case '[':
-		case ']':
-		case ':':
-		case ';':
-		case ',':
-		case '-':
-			break;
-		default:
-			return (-1);
-		}
-	}
+	if (prev && syntax_is_seperator(*prev) == -1)
+		return (-1);
 
-	if (next) {
-		switch (*next) {
-		case ' ':
-		case '(':
-		case ')':
-		case '{':
-		case '\t':
-		case '\n':
-		case '[':
-		case ']':
-		case ':':
-		case ';':
-		case ',':
-		case '-':
-			break;
-		default:
-			return (-1);
-		}
-	}
+	if (next && syntax_is_seperator(*next) == -1)
+		return (-1);
 
 	return (0);
+}
+
+static int
+syntax_is_seperator(char byte)
+{
+	switch (byte) {
+	case ' ':
+	case '(':
+	case ')':
+	case '{':
+	case '\t':
+	case '\n':
+	case '[':
+	case ']':
+	case ':':
+	case ';':
+	case ',':
+	case '-':
+		return (0);
+	default:
+		break;
+	}
+
+	return (-1);
 }
 
 static void
