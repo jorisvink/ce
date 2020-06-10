@@ -252,6 +252,7 @@ struct cebuf	*ce_editor_cmdbuf(void);
 void		ce_editor_cmdbuf_reset(void);
 
 void		ce_syntax_init(void);
+void		ce_syntax_finalize(void);
 void		ce_syntax_write(struct cebuf *, struct celine *, size_t);
 
 void		ce_file_type_detect(struct cebuf *);

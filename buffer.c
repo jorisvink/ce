@@ -427,6 +427,8 @@ ce_buffer_map(void)
 			break;
 	}
 
+	ce_syntax_finalize();
+
 	ce_term_setpos(active->cursor_line, active->column);
 }
 

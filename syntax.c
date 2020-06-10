@@ -116,6 +116,12 @@ ce_syntax_init(void)
 }
 
 void
+ce_syntax_finalize(void)
+{
+	syntax_state_color_clear(&syntax_state);
+}
+
+void
 ce_syntax_write(struct cebuf *buf, struct celine *line, size_t towrite)
 {
 	const u_int8_t		*p;
@@ -139,6 +145,9 @@ ce_syntax_write(struct cebuf *buf, struct celine *line, size_t towrite)
 	while (syntax_state.off != towrite) {
 		switch (p[syntax_state.off]) {
 		case '\t':
+			if (syntax_state.inside_comment)
+				syntax_state_color_clear(&syntax_state);
+
 			syntax_state_color(&syntax_state, TERM_COLOR_BLUE);
 
 			if ((col % 8) == 0)
@@ -154,12 +163,15 @@ ce_syntax_write(struct cebuf *buf, struct celine *line, size_t towrite)
 
 			syntax_state.off++;
 			syntax_state_color_reset(&syntax_state);
+
+			if (syntax_state.inside_comment)
+				ce_term_writestr(TERM_SEQUENCE_ATTR_BOLD);
 			break;
 		default:
 			spaces = syntax_state.off;
 
 			syntax_state.p = &p[syntax_state.off];
-			syntax_state.len = line->length - syntax_state.off;
+			syntax_state.len = towrite - syntax_state.off;
 
 			switch (buf->type) {
 			case CE_FILE_TYPE_C:
@@ -185,16 +197,15 @@ syntax_state_color(struct state *state, int color)
 {
 	if (state->color != color) {
 		ce_term_color(color + TERM_COLOR_FG);
+		state->color_prev = state->color;
 		state->color = color;
 	}
-	state->color_prev = state->color;
 }
 
 static void
 syntax_state_color_clear(struct state *state)
 {
-	if (state->color != -1)
-		ce_term_reset();
+	ce_term_reset();
 
 	state->color = -1;
 	state->color_prev = -1;
@@ -320,6 +331,8 @@ syntax_highlight_c_comment(struct state *state)
 			return (0);
 		}
 
+		ce_term_writestr(TERM_SEQUENCE_ATTR_BOLD);
+		syntax_state_color(state, TERM_COLOR_BLUE);
 		syntax_write(state, 1);
 		return (0);
 	}
