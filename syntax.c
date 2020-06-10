@@ -226,12 +226,10 @@ syntax_highlight_string(struct state *state)
 		syntax_write(state, 1);
 		syntax_state_color_reset(state);
 		state->inside_string = 0;
-		ce_debug("end of string found");
 	} else if (state->inside_string == 0) {
 		state->inside_string = state->p[0];
 		syntax_state_color(state, TERM_COLOR_RED);
 		syntax_write(state, 1);
-		ce_debug("start of string found 0x%02x", state->p[0]);
 	} else {
 		syntax_write(state, 1);
 	}
