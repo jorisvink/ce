@@ -104,6 +104,10 @@ ce_syntax_write(struct cebuf *buf, struct celine *line, size_t towrite)
 	if (syntax_state.flags & SYNTAX_CLEAR_COMMENT) {
 		syntax_state.flags &= ~SYNTAX_CLEAR_COMMENT;
 		syntax_state.inside_comment = 0;
+
+		ce_term_reset();
+		syntax_state.color = -1;
+		syntax_state.color_prev = -1;
 	}
 
 	while (syntax_state.off != line->length) {
