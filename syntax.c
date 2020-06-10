@@ -81,7 +81,7 @@ static const char *c_types[] = {
 	"uint8_t", "uint16_t", "uint32_t", "uint64_t",
 	"int8_t", "int16_t", "int32_t", "int64_t",
 	"u_int8_t", "u_int16_t", "u_int32_t", "u_int64_t",
-	"extern", "volatile", "sig_atomic_t",
+	"extern", "volatile", "sig_atomic_t", "time_t",
 	NULL
 };
 
