@@ -60,6 +60,7 @@ static int	syntax_highlight_python_multiline_string(struct state *);
 
 static int	syntax_highlight_string(struct state *);
 static int	syntax_highlight_numeric(struct state *);
+static void	syntax_highlight_format_string(struct state *);
 static void	syntax_highlight_span(struct state *, char, char, int);
 static int	syntax_highlight_word(struct state *, const char *[], int);
 
@@ -223,12 +224,60 @@ syntax_state_color_reset(struct state *state)
 	}
 }
 
+static void
+syntax_highlight_format_string(struct state *state)
+{
+	size_t		idx;
+
+	syntax_state_color(state, TERM_COLOR_MAGENTA);
+	syntax_write(state, 1);
+
+	for (idx = 1; idx < state->len; idx++) {
+		switch (state->p[idx]) {
+		case 'h':
+		case 'l':
+		case 'j':
+		case 't':
+		case 'z':
+		case 'd':
+		case 'i':
+		case 'o':
+		case 'u':
+		case 'x':
+		case 'X':
+		case 'n':
+		case 'p':
+		case 's':
+		case '*':
+		case '.':
+			ce_term_write(&state->p[idx], 1);
+			state->off++;
+			break;
+		default:
+			if (isdigit(state->p[idx])) {
+				ce_term_write(&state->p[idx], 1);
+				state->off++;
+			} else {
+				syntax_state_color_reset(state);
+				return;
+			}
+		}
+	}
+
+	syntax_state_color_reset(state);
+}
+
 static int
 syntax_highlight_string(struct state *state)
 {
 	if (state->p[0] != '"' && state->p[0] != 0x27) {
 		if (state->inside_string) {
-			syntax_write(state, 1);
+			if (state->p[0] == '%') {
+				syntax_highlight_format_string(state);
+			} else {
+				syntax_write(state, 1);
+			}
+
 			return (0);
 		}
 		return (-1);
@@ -563,8 +612,10 @@ syntax_is_seperator(char byte)
 static void
 syntax_write(struct state *state, size_t len)
 {
-	if (len > state->len)
-		fatal("%s: invalid write", __func__);
+	if (len > state->len) {
+		fatal("%s: invalid write %zu > %zu",
+		    __func__, len, state->len);
+	}
 
 	ce_term_write(state->p, len);
 	state->off += len;
