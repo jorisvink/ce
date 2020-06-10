@@ -71,7 +71,12 @@ static u_int16_t		cursor_column = TERM_CURSOR_MIN;
 void
 ce_buffer_init(int argc, char **argv)
 {
-	int		i;
+	int			i;
+	char			*ep;
+	struct cebuf		*last;
+	long			linenr;
+
+	last = NULL;
 
 	TAILQ_INIT(&buffers);
 	TAILQ_INIT(&internals);
@@ -80,7 +85,17 @@ ce_buffer_init(int argc, char **argv)
 	active = scratch;
 
 	for (i = 0; i < argc; i++) {
-		if (ce_buffer_file(argv[i]) == NULL)
+		if (*argv[i] == '+' && last != NULL) {
+			errno = 0;
+			linenr = strtol(argv[i], &ep, 10);
+			if (errno != 0 || *ep != '\0')
+				fatal("%s is a bad line number", argv[i]);
+
+			ce_buffer_jump_line(last, linenr);
+			continue;
+		}
+
+		if ((last = ce_buffer_file(argv[i])) == NULL)
 			ce_editor_message("%s", ce_buffer_strerror());
 	}
 
