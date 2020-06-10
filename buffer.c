@@ -712,6 +712,42 @@ ce_buffer_jump_line(struct cebuf *buf, long linenr)
 }
 
 void
+ce_buffer_join_line(void)
+{
+	u_int8_t		*ptr;
+	size_t			index, len;
+	struct celine		*line, *next;
+
+	if (active->lcnt == 0)
+		return;
+
+	index = ce_buffer_line_index(active);
+	if (index + 1 > active->lcnt - 1)
+		return;
+
+	line = ce_buffer_line_current(active);
+	next = &active->lines[index + 1];
+
+	buffer_line_allocate(active, line);
+	len = line->length + (next->length - 1);
+
+	if ((line->data = realloc(line->data, len)) == NULL)
+		fatal("%s: realloc %zu: %s", __func__, len, errno_s);
+
+	ptr = line->data;
+	memcpy(&ptr[line->length - 1], next->data, next->length);
+
+	line->length = len;
+	line->columns = buffer_line_data_to_columns(line->data, line->length);
+
+	ce_buffer_move_down();
+	ce_buffer_delete_line(active);
+	ce_buffer_move_up();
+
+	ce_editor_dirty();
+}
+
+void
 ce_buffer_delete_byte(void)
 {
 	size_t			max;

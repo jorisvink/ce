@@ -210,6 +210,7 @@ void		ce_buffer_page_down(void);
 void		ce_buffer_move_down(void);
 void		ce_buffer_move_left(void);
 void		ce_buffer_jump_left(void);
+void		ce_buffer_join_line(void);
 void		ce_buffer_move_right(void);
 void		ce_buffer_jump_right(void);
 void		ce_buffer_delete_byte(void);

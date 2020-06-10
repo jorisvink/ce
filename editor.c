@@ -91,12 +91,12 @@ static struct keymap normal_map[] = {
 	{ '$',			ce_buffer_jump_right },
 	{ '0',			ce_buffer_jump_left },
 	{ 'G',			ce_buffer_jump_down },
+	{ 'J',			ce_buffer_join_line },
 
 	{ 0x06,			ce_buffer_page_down },
 	{ 0x02,			ce_buffer_page_up },
 
 	{ 'x',			ce_buffer_delete_byte },
-
 	{ 'p',			editor_cmd_paste },
 	{ 'n',			editor_cmd_search_next },
 	{ 'N',			editor_cmd_search_prev },
