@@ -31,7 +31,7 @@ struct state {
 	size_t		len;
 	size_t		off;
 
-	int		inside_literal;
+	int		inside_string;
 	int		inside_comment;
 	int		inside_preproc;
 
@@ -51,8 +51,8 @@ static void	syntax_highlight_c(struct state *);
 static int	syntax_highlight_c_comment(struct state *);
 static int	syntax_highlight_c_preproc(struct state *);
 
+static int	syntax_highlight_string(struct state *);
 static int	syntax_highlight_numeric(struct state *);
-static int	syntax_highlight_literal(struct state *);
 static int	syntax_highlight_word(struct state *, const char *[], int);
 
 static const char *c_kw[] = {
@@ -98,8 +98,8 @@ ce_syntax_write(struct cebuf *buf, struct celine *line, size_t towrite)
 	p = line->data;
 
 	syntax_state.off = 0;
+	syntax_state.inside_string = 0;
 	syntax_state.inside_preproc = 0;
-	syntax_state.inside_literal = 0;
 
 	if (syntax_state.flags & SYNTAX_CLEAR_COMMENT) {
 		syntax_state.flags &= ~SYNTAX_CLEAR_COMMENT;
@@ -183,22 +183,22 @@ syntax_state_color_reset(struct state *state)
 }
 
 static int
-syntax_highlight_literal(struct state *state)
+syntax_highlight_string(struct state *state)
 {
 	if (state->p[0] != '"' && state->p[0] != '\'') {
-		if (state->inside_literal) {
+		if (state->inside_string) {
 			syntax_write(state, 1);
 			return (0);
 		}
 		return (-1);
 	}
 
-	if (state->inside_literal == state->p[0]) {
+	if (state->inside_string == state->p[0]) {
 		syntax_write(state, 1);
 		syntax_state_color_reset(state);
-		state->inside_literal = 0;
-	} else if (state->inside_literal == 0) {
-		state->inside_literal = state->p[0];
+		state->inside_string = 0;
+	} else if (state->inside_string == 0) {
+		state->inside_string = state->p[0];
 		syntax_state_color(state, TERM_COLOR_RED);
 		syntax_write(state, 1);
 	} else {
@@ -243,7 +243,7 @@ syntax_highlight_c(struct state *state)
 	if (syntax_highlight_numeric(state) == 0)
 		return;
 
-	if (syntax_highlight_literal(state) == 0)
+	if (syntax_highlight_string(state) == 0)
 		return;
 
 	if (syntax_highlight_word(state, c_kw, TERM_COLOR_YELLOW) == 0)
@@ -302,7 +302,7 @@ syntax_highlight_c_preproc(struct state *state)
 {
 	if (state->inside_preproc) {
 		if (syntax_highlight_numeric(state) == -1 &&
-		    syntax_highlight_literal(state) == -1) {
+		    syntax_highlight_string(state) == -1) {
 			syntax_state_color(state, TERM_COLOR_MAGENTA);
 			syntax_write(state, 1);
 		}
