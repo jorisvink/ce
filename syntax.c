@@ -153,7 +153,7 @@ ce_syntax_write(struct cebuf *buf, struct celine *line, size_t towrite)
 				ce_term_write(".", 1);
 
 			syntax_state.off++;
-			syntax_state_color_clear(&syntax_state);
+			syntax_state_color_reset(&syntax_state);
 			break;
 		default:
 			spaces = syntax_state.off;
@@ -185,9 +185,9 @@ syntax_state_color(struct state *state, int color)
 {
 	if (state->color != color) {
 		ce_term_color(color + TERM_COLOR_FG);
-		state->color_prev = state->color;
 		state->color = color;
 	}
+	state->color_prev = state->color;
 }
 
 static void
