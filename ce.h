@@ -72,6 +72,10 @@
 #define TERM_SEQUENCE_ALTERNATE_ON	TERM_ESCAPE "?1049h"
 #define TERM_SEQUENCE_ALTERNATE_OFF	TERM_ESCAPE "?1049l"
 
+#define CE_FILE_TYPE_PLAIN		0
+#define CE_FILE_TYPE_C			1
+#define CE_FILE_TYPE_PYTHON		2
+
 /*
  * An operation that happened on a line.
  */
@@ -124,6 +128,9 @@ struct cebuf {
 
 	/* Buffer flags. */
 	u_int32_t		flags;
+
+	/* File type, for syntax and tabs etc. */
+	u_int32_t		type;
 
 	/* The data inside the buffer, its max size and current length. */
 	void			*data;
@@ -243,6 +250,8 @@ void		ce_editor_cmdbuf_reset(void);
 
 void		ce_syntax_init(void);
 void		ce_syntax_write(struct cebuf *, struct celine *, size_t);
+
+void		ce_file_type_detect(struct cebuf *);
 
 void		ce_debug(const char *, ...)
 		    __attribute__((format (printf, 1, 2)));

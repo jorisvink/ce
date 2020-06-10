@@ -172,12 +172,14 @@ ce_buffer_file(const char *path)
 		if ((buf->path = strdup(path)) == NULL)
 			fatal("%s: strdup: %s", __func__, errno_s);
 
+		buf->mode = S_IRUSR | S_IWUSR;
 		buf->flags |= CE_BUFFER_DIRTY;
 		goto finalize;
 	}
 
 	if (access(buf->path, R_OK) == -1) {
 		if (errno == ENOENT) {
+			buf->mode = S_IRUSR | S_IWUSR;
 			buf->flags |= CE_BUFFER_DIRTY;
 			goto finalize;
 		}
@@ -223,6 +225,8 @@ ce_buffer_file(const char *path)
 	}
 
 finalize:
+	ce_file_type_detect(buf);
+
 	buffer_populate_lines(buf);
 
 	ret = buf;
@@ -516,6 +520,7 @@ ce_buffer_list(struct cebuf *output)
 void
 ce_buffer_input(struct cebuf *buf, u_int8_t byte)
 {
+	int			i;
 	struct celine		*line;
 
 	if (buf->cb != NULL) {
@@ -538,6 +543,14 @@ ce_buffer_input(struct cebuf *buf, u_int8_t byte)
 	case '\n':
 		buffer_line_insert_byte(buf, line, byte);
 		ce_buffer_insert_line(buf);
+		break;
+	case '\t':
+		if (buf->type == CE_FILE_TYPE_PYTHON) {
+			for (i = 0; i < 4; i++)
+				buffer_line_insert_byte(buf, line, ' ');
+		} else {
+			buffer_line_insert_byte(buf, line, byte);
+		}
 		break;
 	default:
 		buffer_line_insert_byte(buf, line, byte);

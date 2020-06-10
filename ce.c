@@ -22,6 +22,16 @@
 
 #include "ce.h"
 
+static struct {
+	const char		*ext;
+	u_int32_t		type;
+} file_types[] = {
+	{ ".c",		CE_FILE_TYPE_C },
+	{ ".h",		CE_FILE_TYPE_C },
+	{ ".py",	CE_FILE_TYPE_PYTHON },
+	{ NULL,		0 },
+};
+
 static FILE	*fp = NULL;
 
 int
@@ -66,6 +76,28 @@ main(int argc, char *argv[])
 		(void)fclose(fp);
 
 	return (0);
+}
+
+void
+ce_file_type_detect(struct cebuf *buf)
+{
+	int			idx;
+	const char		*ext;
+
+	buf->type = CE_FILE_TYPE_PLAIN;
+
+	if ((ext = strrchr(buf->path, '.')) == NULL)
+		return;
+
+	for (idx = 0; file_types[idx].ext != NULL; idx++) {
+		if (strcmp(ext, file_types[idx].ext))
+			continue;
+
+		buf->type = file_types[idx].type;
+		break;
+	}
+
+	ce_debug("'%s' is type '%d'", buf->path, buf->type);
 }
 
 void
