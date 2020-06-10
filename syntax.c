@@ -33,6 +33,7 @@ struct state {
 
 	int		inside_literal;
 	int		inside_comment;
+	int		inside_preproc;
 
 	int		color;
 	int		color_prev;
@@ -97,6 +98,7 @@ ce_syntax_write(struct cebuf *buf, struct celine *line, size_t towrite)
 	p = line->data;
 
 	syntax_state.off = 0;
+	syntax_state.inside_preproc = 0;
 	syntax_state.inside_literal = 0;
 
 	if (syntax_state.flags & SYNTAX_CLEAR_COMMENT) {
@@ -228,13 +230,13 @@ syntax_highlight_c(struct state *state)
 	if (syntax_highlight_c_comment(state) == 0)
 		return;
 
+	if (syntax_highlight_numeric(state) == 0)
+		return;
+
 	if (syntax_highlight_c_preproc(state) == 0)
 		return;
 
 	if (syntax_highlight_literal(state) == 0)
-		return;
-
-	if (syntax_highlight_numeric(state) == 0)
 		return;
 
 	if (syntax_highlight_word(state, c_kw, TERM_COLOR_YELLOW) == 0)
@@ -291,9 +293,15 @@ syntax_highlight_c_comment(struct state *state)
 static int
 syntax_highlight_c_preproc(struct state *state)
 {
+	if (state->inside_preproc) {
+		syntax_write(state, 1);
+		return (0);
+	}
+
 	if (state->off == 0 && state->p[0] == '#') {
 		syntax_state_color(state, TERM_COLOR_MAGENTA);
 		syntax_write(state, 1);
+		state->inside_preproc = 1;
 		return (0);
 	}
 
