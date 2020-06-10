@@ -55,7 +55,7 @@ static ssize_t	editor_read(int, void *, size_t, int);
 
 static void	editor_draw_status(void);
 
-static void	editor_cmd_quit(void);
+static void	editor_cmd_quit(int);
 static void	editor_cmd_reset(void);
 static void	editor_cmd_suspend(void);
 static void	editor_cmd_paste(void);
@@ -511,7 +511,8 @@ editor_cmdbuf_input(struct cebuf *buf, char key)
 
 		switch (cmd[1]) {
 		case 'q':
-			editor_cmd_quit();
+			force = cmd[2] == '!';
+			editor_cmd_quit(force);
 			break;
 		case 'w':
 			force = cmd[2] == '!';
@@ -715,8 +716,16 @@ editor_cmd_yank_lines(struct cebuf *buf, long num)
 }
 
 static void
-editor_cmd_quit(void)
+editor_cmd_quit(int force)
 {
+	struct cebuf		*buf;
+
+	if ((buf = ce_buffer_first_dirty()) != NULL && force == 0) {
+		ce_editor_message("buffer %s is modified", buf->name);
+		ce_buffer_activate(buf);
+		return;
+	}
+
 	quit = 1;
 }
 

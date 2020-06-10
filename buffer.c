@@ -250,6 +250,19 @@ ce_buffer_active(void)
 	return (active);
 }
 
+struct cebuf *
+ce_buffer_first_dirty(void)
+{
+	struct cebuf		*buf;
+
+	TAILQ_FOREACH(buf, &buffers, list) {
+		if (buf->flags & CE_BUFFER_DIRTY)
+			return (buf);
+	}
+
+	return (NULL);
+}
+
 void
 ce_buffer_free(struct cebuf *buf)
 {

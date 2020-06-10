@@ -216,6 +216,7 @@ const char	*ce_buffer_strerror(void);
 const char	*ce_buffer_as_string(struct cebuf *);
 
 struct cebuf	*ce_buffer_active(void);
+struct cebuf	*ce_buffer_first_dirty(void);
 struct cebuf	*ce_buffer_file(const char *);
 struct cebuf	*ce_buffer_internal(const char *);
 struct celine	*ce_buffer_line_current(struct cebuf *);
