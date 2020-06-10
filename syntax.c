@@ -53,6 +53,7 @@ static int	syntax_highlight_c_preproc(struct state *);
 
 static int	syntax_highlight_string(struct state *);
 static int	syntax_highlight_numeric(struct state *);
+static void	syntax_highlight_span(struct state *, char, char, int);
 static int	syntax_highlight_word(struct state *, const char *[], int);
 
 static const char *c_kw[] = {
@@ -72,6 +73,9 @@ static const char *c_types[] = {
 
 static const char *c_special[] = {
 	"NULL",
+	"__file__",
+	"__func__",
+	"__LINE__",
 	NULL
 };
 
@@ -185,7 +189,7 @@ syntax_state_color_reset(struct state *state)
 static int
 syntax_highlight_string(struct state *state)
 {
-	if (state->p[0] != '"' && state->p[0] != '\'') {
+	if (state->p[0] != '"' && state->p[0] != 0x27) {
 		if (state->inside_string) {
 			syntax_write(state, 1);
 			return (0);
@@ -301,11 +305,21 @@ static int
 syntax_highlight_c_preproc(struct state *state)
 {
 	if (state->inside_preproc) {
-		if (syntax_highlight_numeric(state) == -1 &&
-		    syntax_highlight_string(state) == -1) {
+		if (state->p[0] == '<') {
+			syntax_highlight_span(state, '<', '>', TERM_COLOR_RED);
+			return (0);
+		}
+
+		if (state->p[0] == '"') {
+			syntax_highlight_span(state, '"', '"', TERM_COLOR_RED);
+			return (0);
+		}
+
+		if (syntax_highlight_numeric(state) == -1) {
 			syntax_state_color(state, TERM_COLOR_MAGENTA);
 			syntax_write(state, 1);
 		}
+
 		return (0);
 	}
 
@@ -317,6 +331,31 @@ syntax_highlight_c_preproc(struct state *state)
 	}
 
 	return (-1);
+}
+
+static void
+syntax_highlight_span(struct state *state, char start, char end, int color)
+{
+	const u_int8_t		*p;
+	size_t			len;
+
+	p = state->p;
+	if (*p != start)
+		fatal("%s: p (0x%02x) != start (0x%02x)", __func__, *p, start);
+
+	len = 1;
+	syntax_state_color(state, color);
+
+	while (len < state->len) {
+		if (p[len] == end) {
+			len++;
+			break;
+		}
+
+		len++;
+	}
+
+	syntax_write(state, len);
 }
 
 static int
