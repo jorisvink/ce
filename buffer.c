@@ -471,6 +471,8 @@ ce_buffer_list(struct cebuf *output)
 	struct cebuf	*buf;
 
 	idx = 1;
+	output->flags |= CE_BUFFER_RO;
+
 	ce_buffer_reset(output);
 
 	/* Add scratch as the first buffer. */
