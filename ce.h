@@ -204,6 +204,7 @@ void		ce_buffer_appendf(struct cebuf *, const char *, ...)
 
 void		ce_buffer_page_up(void);
 void		ce_buffer_move_up(void);
+void		ce_buffer_jump_down(void);
 void		ce_buffer_page_down(void);
 void		ce_buffer_move_down(void);
 void		ce_buffer_move_left(void);

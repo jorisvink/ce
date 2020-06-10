@@ -689,8 +689,8 @@ ce_buffer_jump_line(struct cebuf *buf, long linenr)
 
 	line = linenr;
 
-	if (line > buf->lcnt - 1)
-		line = buf->lcnt - 1;
+	if (line > buf->lcnt)
+		line = buf->lcnt;
 
 	if (line == 0)
 		line = TERM_CURSOR_MIN;
@@ -1013,6 +1013,12 @@ ce_buffer_jump_right(void)
 	cursor_column = active->column;
 
 	ce_term_setpos(active->cursor_line, active->column);
+}
+
+void
+ce_buffer_jump_down(void)
+{
+	ce_buffer_jump_line(active, active->lcnt);
 }
 
 void

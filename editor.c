@@ -90,6 +90,7 @@ static struct keymap normal_map[] = {
 
 	{ '$',			ce_buffer_jump_right },
 	{ '0',			ce_buffer_jump_left },
+	{ 'G',			ce_buffer_jump_down },
 
 	{ 0x06,			ce_buffer_page_down },
 	{ 0x02,			ce_buffer_page_up },
