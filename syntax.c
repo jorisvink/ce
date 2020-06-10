@@ -64,6 +64,11 @@ static void	syntax_highlight_format_string(struct state *);
 static void	syntax_highlight_span(struct state *, char, char, int);
 static int	syntax_highlight_word(struct state *, const char *[], int);
 
+static const char *tags[] = {
+	"XXX",
+	NULL
+};
+
 static const char *c_kw[] = {
 	"if", "do", "for", "else", "while", "return", "sizeof",
 	"case", "switch", "default", "break", "goto", "continue",
@@ -324,6 +329,9 @@ syntax_highlight_numeric(struct state *state)
 static void
 syntax_highlight_c(struct state *state)
 {
+	if (syntax_highlight_word(state, tags, TERM_COLOR_YELLOW) == 0)
+		return;
+
 	if (syntax_highlight_c_comment(state) == 0)
 		return;
 
@@ -424,6 +432,9 @@ syntax_highlight_c_preproc(struct state *state)
 static void
 syntax_highlight_python(struct state *state)
 {
+	if (syntax_highlight_word(state, tags, TERM_COLOR_YELLOW) == 0)
+		return;
+
 	if (syntax_highlight_python_comment(state) == 0)
 		return;
 
