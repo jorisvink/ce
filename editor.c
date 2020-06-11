@@ -696,6 +696,10 @@ editor_cmd_delete_lines(struct cebuf *buf, long num)
 
 	for (i = 0; i < num; i++)
 		ce_buffer_delete_line(buf);
+
+#if defined(__APPLE__)
+	ce_macos_set_pasteboard_contents(pbuffer->data, pbuffer->length);
+#endif
 }
 
 static void
@@ -715,6 +719,10 @@ editor_cmd_yank_lines(struct cebuf *buf, long num)
 		line = &buf->lines[idx];
 		ce_editor_pbuffer_append(line->data, line->length);
 	}
+
+#if defined(__APPLE__)
+	ce_macos_set_pasteboard_contents(pbuffer->data, pbuffer->length);
+#endif
 
 	ce_editor_message("yanked %zu line(s)", end - index);
 }
@@ -791,6 +799,15 @@ editor_cmd_paste(void)
 	size_t			idx;
 	const u_int8_t		*ptr;
 	struct cebuf		*buf;
+#if defined(__APPLE__)
+	u_int8_t		*pb;
+#endif
+
+#if defined(__APPLE__)
+	ce_editor_pbuffer_reset();
+	ce_macos_get_pasteboard_contents(&pb, &pbuffer->length);
+	pbuffer->data = pb;
+#endif
 
 	if (pbuffer->length == 0)
 		return;

@@ -16,6 +16,13 @@ CFLAGS+=-DPREFIX='"$(PREFIX)"' -fstack-protector-all
 
 OBJS=	$(SRC:%.c=$(OBJDIR)/%.o)
 
+OSNAME=$(shell uname -s | sed -e 's/[-_].*//g' | tr A-Z a-z)
+ifeq ("$(OSNAME)", "darwin")
+	OBJS+=$(OBJDIR)/macos.o
+	LDFLAGS+=-framework Foundation -framework Appkit
+endif
+
+
 all: $(BIN)
 
 $(BIN): $(OBJDIR) $(OBJS)
@@ -27,6 +34,9 @@ $(OBJDIR):
 install:
 	mkdir -p $(INSTALL_DIR)
 	install -m 555 $(BIN) $(INSTALL_DIR)/$(BIN)
+
+$(OBJDIR)/%.o: %.m
+	$(CC) $(CFLAGS) -c $< -o $@
 
 $(OBJDIR)/%.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@

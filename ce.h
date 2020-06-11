@@ -263,4 +263,9 @@ void		ce_debug(const char *, ...)
 void		fatal(const char *, ...)
 		    __attribute__((format (printf, 1, 2)));
 
+#if defined(__APPLE__)
+void		ce_macos_get_pasteboard_contents(u_int8_t **, size_t *);
+void		ce_macos_set_pasteboard_contents(const void *, size_t);
+#endif
+
 #endif
