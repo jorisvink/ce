@@ -1290,7 +1290,7 @@ ce_buffer_save_active(int force)
 
 	ret = 0;
 	active->flags &= ~CE_BUFFER_DIRTY;
-	ce_editor_message("wrote %zu lines to %s", active->lcnt, active->path);
+	ce_editor_message("wrote %zu lines to %s", active->lcnt, active->name);
 
 cleanup:
 	free(iov);
