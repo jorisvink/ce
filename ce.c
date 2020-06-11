@@ -29,6 +29,8 @@ static struct {
 	{ ".c",		CE_FILE_TYPE_C },
 	{ ".h",		CE_FILE_TYPE_C },
 	{ ".py",	CE_FILE_TYPE_PYTHON },
+	{ ".diff",	CE_FILE_TYPE_DIFF },
+	{ ".patch",	CE_FILE_TYPE_DIFF },
 	{ NULL,		0 },
 };
 
@@ -47,7 +49,7 @@ main(int argc, char *argv[])
 			debug = 1;
 			break;
 		case 'v':
-			printf("coma editor 0.1\n");
+			printf("coma editor 0.2\n");
 			exit(0);
 		}
 	}

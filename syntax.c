@@ -50,6 +50,8 @@ static void	syntax_state_color(struct state *, int);
 static void	syntax_state_color_reset(struct state *);
 static void	syntax_state_color_clear(struct state *);
 
+static void	syntax_highlight_diff(struct state *);
+
 static void	syntax_highlight_c(struct state *);
 static int	syntax_highlight_c_comment(struct state *);
 static int	syntax_highlight_c_preproc(struct state *);
@@ -185,6 +187,9 @@ ce_syntax_write(struct cebuf *buf, struct celine *line, size_t towrite)
 				break;
 			case CE_FILE_TYPE_PYTHON:
 				syntax_highlight_python(&syntax_state);
+				break;
+			case CE_FILE_TYPE_DIFF:
+				syntax_highlight_diff(&syntax_state);
 				break;
 			default:
 				syntax_state_color_clear(&syntax_state);
@@ -514,6 +519,30 @@ syntax_highlight_python_multiline_string(struct state *state)
 	}
 
 	return (-1);
+}
+
+static void
+syntax_highlight_diff(struct state *state)
+{
+	if (state->off > 0) {
+		syntax_write(state, 1);
+		return;
+	}
+
+	if (state->p[0] == '+' && state->p[1] != '+') {
+		syntax_state_color(state, TERM_COLOR_CYAN);
+		syntax_write(state, 1);
+		return;
+	}
+
+	if (state->p[0] == '-' && state->p[1] != '-') {
+		syntax_state_color(state, TERM_COLOR_MAGENTA);
+		syntax_write(state, 1);
+		return;
+	}
+
+	syntax_state_color_clear(state);
+	syntax_write(state, 1);
 }
 
 static void

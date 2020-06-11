@@ -76,6 +76,7 @@
 #define CE_FILE_TYPE_PLAIN		0
 #define CE_FILE_TYPE_C			1
 #define CE_FILE_TYPE_PYTHON		2
+#define CE_FILE_TYPE_DIFF		3
 
 /*
  * An operation that happened on a line.
