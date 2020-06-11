@@ -478,7 +478,11 @@ ce_buffer_search(struct cebuf *buf, const char *needle, int which)
 		end[0] = 0;
 
 		/* search 2, from end until current line. */
-		start[1] = buf->lcnt;
+		if (buf->lcnt > 0)
+			start[1] = buf->lcnt - 1;
+		else
+			start[1] = index;
+
 		end[1] = index;
 		dir = BUFFER_SEARCH_REVERSE;
 		break;
