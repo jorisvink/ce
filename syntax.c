@@ -612,6 +612,7 @@ syntax_is_seperator(char byte)
 	case ',':
 	case '-':
 	case '=':
+	case '*':
 		return (0);
 	default:
 		break;
