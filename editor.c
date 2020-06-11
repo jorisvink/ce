@@ -712,7 +712,7 @@ editor_cmd_yank_lines(struct cebuf *buf, long num)
 	index = ce_buffer_line_index(buf);
 
 	end = index + num;
-	if (end > buf->lcnt)
+	if (end >= buf->lcnt)
 		end = buf->lcnt - 1;
 
 	for (idx = index; idx < end; idx++) {
