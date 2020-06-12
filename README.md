@@ -72,9 +72,13 @@ ctrl-r       = show list of buffers
 
 ctrl-z       = suspend ce
 
-<num>dd      = delete number of lines
+[num]dd      = delete number of lines
 
-<num>yy      = yank number of lines
+[num]yy      = yank number of lines
+
+[num]w       = jump to next word
+
+[num]b       = jump to previous word
 
 **insert mode key bindings**
 
