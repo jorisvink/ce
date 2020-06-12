@@ -614,10 +614,10 @@ syntax_is_word(struct state *state, size_t hlen)
 	else
 		prev = (state->p - 1);
 
-	if (prev && ce_editor_word_separator(*prev) == -1)
+	if (prev && ce_editor_word_separator(*prev) == 0)
 		return (-1);
 
-	if (next && ce_editor_word_separator(*next) == -1)
+	if (next && ce_editor_word_separator(*next) == 0)
 		return (-1);
 
 	return (0);

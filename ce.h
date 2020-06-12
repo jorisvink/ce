@@ -203,6 +203,9 @@ int		ce_buffer_search(struct cebuf *, const char *, int);
 void		ce_buffer_append(struct cebuf *, const void *, size_t);
 void		ce_buffer_appendf(struct cebuf *, const char *, ...)
 		    __attribute__((format (printf, 2, 3)));
+
+void		ce_buffer_word_next(struct cebuf *);
+void		ce_buffer_word_prev(struct cebuf *);
 int		ce_buffer_word_cursor(struct cebuf *,
 		    const u_int8_t **, size_t *);
 

@@ -473,6 +473,72 @@ ce_buffer_word_cursor(struct cebuf *buf, const u_int8_t **word, size_t *len)
 	return (0);
 }
 
+void
+ce_buffer_word_next(struct cebuf *buf)
+{
+	size_t			idx;
+	const u_int8_t		*ptr;
+	struct celine		*line;
+
+	if (buf->lcnt == 0)
+		return;
+
+	line = ce_buffer_line_current(buf);
+
+	ptr = line->data;
+
+	for (idx = buf->loff; idx < line->length - 1; idx++) {
+		if (ce_editor_word_byte(ptr[idx]) == 0)
+			break;
+	}
+
+	while (idx < line->length - 1) {
+		if (ce_editor_word_byte(ptr[idx]) == 1)
+			break;
+		idx++;
+	}
+
+	buf->loff = idx;
+	buf->column = buffer_line_data_to_columns(line->data, buf->loff);
+	cursor_column = buf->column;
+
+	ce_term_setpos(buf->cursor_line, buf->column);
+}
+
+void
+ce_buffer_word_prev(struct cebuf *buf)
+{
+	size_t			idx;
+	const u_int8_t		*ptr;
+	struct celine		*line;
+
+	if (buf->lcnt == 0 || buf->loff == 0)
+		return;
+
+	line = ce_buffer_line_current(buf);
+	ptr = line->data;
+
+	for (idx = buf->loff - 1; idx > 0; idx--) {
+		if (ce_editor_word_byte(ptr[idx]) == 1)
+			break;
+	}
+
+	while (idx > 0) {
+		if (ce_editor_word_byte(ptr[idx]) == 0)
+			break;
+		idx--;
+	}
+
+	if (idx != 0)
+		idx += 1;
+
+	buf->loff = idx;
+	buf->column = buffer_line_data_to_columns(line->data, buf->loff);
+	cursor_column = buf->column;
+
+	ce_term_setpos(buf->cursor_line, buf->column);
+}
+
 int
 ce_buffer_search(struct cebuf *buf, const char *needle, int which)
 {

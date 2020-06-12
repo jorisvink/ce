@@ -35,8 +35,10 @@
 #define EDITOR_KEY_LEFT		0xfc
 #define EDITOR_KEY_RIGHT	0xfd
 
-#define EDITOR_COMMAND_DELETE	1
-#define EDITOR_COMMAND_YANK	2
+#define EDITOR_COMMAND_DELETE		1
+#define EDITOR_COMMAND_YANK		2
+#define EDITOR_COMMAND_WORD_NEXT	3
+#define EDITOR_COMMAND_WORD_PREV	4
 
 #define KEY_MAP_LEN(x)		((sizeof(x) / sizeof(x[0])))
 
@@ -70,6 +72,8 @@ static void	editor_cmd_command_mode(void);
 static void	editor_cmd_search_mode(void);
 static void	editor_cmd_normal_mode(void);
 
+static void	editor_cmd_word_prev(struct cebuf *, long);
+static void	editor_cmd_word_next(struct cebuf *, long);
 static void	editor_cmd_yank_lines(struct cebuf *, long);
 static void	editor_cmd_delete_lines(struct cebuf *, long);
 
@@ -327,12 +331,13 @@ ce_editor_word_separator(u_int8_t byte)
 	case '-':
 	case '=':
 	case '*':
-		return (0);
+	case '.':
+		return (1);
 	default:
 		break;
 	}
 
-	return (-1);
+	return (0);
 }
 
 
@@ -692,17 +697,24 @@ editor_normal_mode_command(char key)
 		ce_buffer_append(cmdbuf, &key, sizeof(key));
 
 		switch (key) {
+		case 'b':
+			normalcmd = EDITOR_COMMAND_WORD_PREV;
+			goto direct;
 		case 'd':
 			normalcmd = EDITOR_COMMAND_DELETE;
 			break;
 		case 'y':
 			normalcmd = EDITOR_COMMAND_YANK;
 			break;
+		case 'w':
+			normalcmd = EDITOR_COMMAND_WORD_NEXT;
+			goto direct;
 		case EDITOR_KEY_ESC:
 			reset = 1;
 			break;
 		}
 	} else {
+direct:
 		reset = 1;
 		str = ce_buffer_as_string(cmdbuf);
 
@@ -720,6 +732,12 @@ editor_normal_mode_command(char key)
 			break;
 		case EDITOR_COMMAND_YANK:
 			editor_cmd_yank_lines(buf, num);
+			break;
+		case EDITOR_COMMAND_WORD_NEXT:
+			editor_cmd_word_next(buf, num);
+			break;
+		case EDITOR_COMMAND_WORD_PREV:
+			editor_cmd_word_prev(buf, num);
 			break;
 		}
 	}
@@ -772,6 +790,24 @@ editor_cmd_yank_lines(struct cebuf *buf, long num)
 #endif
 
 	ce_editor_message("yanked %zu line(s)", end - index);
+}
+
+static void
+editor_cmd_word_next(struct cebuf *buf, long num)
+{
+	long		i;
+
+	for (i = 0; i < num; i++)
+		ce_buffer_word_next(buf);
+}
+
+static void
+editor_cmd_word_prev(struct cebuf *buf, long num)
+{
+	long		i;
+
+	for (i = 0; i < num; i++)
+		ce_buffer_word_prev(buf);
 }
 
 static void
