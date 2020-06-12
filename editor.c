@@ -61,6 +61,7 @@ static void	editor_cmd_suspend(void);
 static void	editor_cmd_paste(void);
 static void	editor_cmd_search_next(void);
 static void	editor_cmd_search_prev(void);
+static void	editor_cmd_search_word(void);
 static void	editor_cmd_buffer_list(void);
 
 static void	editor_cmd_open_file(const char *);
@@ -100,6 +101,7 @@ static struct keymap normal_map[] = {
 	{ 'p',			editor_cmd_paste },
 	{ 'n',			editor_cmd_search_next },
 	{ 'N',			editor_cmd_search_prev },
+	{ 0x23,			editor_cmd_search_word },
 
 	{ 'i',			editor_cmd_insert_mode },
 	{ 'o',			editor_cmd_insert_mode_append },
@@ -288,6 +290,51 @@ ce_editor_pbuffer_append(const void *data, size_t len)
 	ce_debug("paste buffer got %zu bytes", len);
 	ce_buffer_append(pbuffer, data, len);
 }
+
+int
+ce_editor_word_byte(u_int8_t byte)
+{
+	if (isalnum(byte) || isxdigit(byte)) {
+		ce_debug("'%c' is word byte", (char)byte);
+		return (1);
+	}
+
+	switch (byte) {
+	case '_':
+		return (1);
+	default:
+		break;
+	}
+
+	return (0);
+}
+
+int
+ce_editor_word_separator(u_int8_t byte)
+{
+	switch (byte) {
+	case ' ':
+	case '(':
+	case ')':
+	case '{':
+	case '\t':
+	case '\n':
+	case '[':
+	case ']':
+	case ':':
+	case ';':
+	case ',':
+	case '-':
+	case '=':
+	case '*':
+		return (0);
+	default:
+		break;
+	}
+
+	return (-1);
+}
+
 
 static void
 editor_signal(int sig)
@@ -788,6 +835,30 @@ editor_cmd_search_prev(void)
 
 	if (search == NULL)
 		return;
+
+	if (ce_buffer_search(buf, search, CE_BUFFER_SEARCH_PREVIOUS))
+		ce_editor_dirty();
+}
+
+static void
+editor_cmd_search_word(void)
+{
+	struct cebuf		*buf;
+	const u_int8_t		*word;
+	size_t			length;
+
+	buf = ce_buffer_active();
+
+	if (ce_buffer_word_cursor(buf, &word, &length) == -1)
+		return;
+
+	free(search);
+
+	if ((search = malloc(length + 1)) == NULL)
+		fatal("%s: malloc: %s", __func__, errno_s);
+
+	memcpy(search, word, length);
+	search[length] = '\0';
 
 	if (ce_buffer_search(buf, search, CE_BUFFER_SEARCH_PREVIOUS))
 		ce_editor_dirty();

@@ -42,8 +42,6 @@ struct state {
 };
 
 static void	syntax_write(struct state *, size_t);
-
-static int	syntax_is_seperator(char);
 static int	syntax_is_word(struct state *, size_t);
 
 static void	syntax_state_color(struct state *, int);
@@ -244,6 +242,7 @@ syntax_highlight_format_string(struct state *state)
 
 	for (idx = 1; idx < state->len; idx++) {
 		switch (state->p[idx]) {
+		case 'c':
 		case 'h':
 		case 'l':
 		case 'j':
@@ -615,39 +614,13 @@ syntax_is_word(struct state *state, size_t hlen)
 	else
 		prev = (state->p - 1);
 
-	if (prev && syntax_is_seperator(*prev) == -1)
+	if (prev && ce_editor_word_separator(*prev) == -1)
 		return (-1);
 
-	if (next && syntax_is_seperator(*next) == -1)
+	if (next && ce_editor_word_separator(*next) == -1)
 		return (-1);
 
 	return (0);
-}
-
-static int
-syntax_is_seperator(char byte)
-{
-	switch (byte) {
-	case ' ':
-	case '(':
-	case ')':
-	case '{':
-	case '\t':
-	case '\n':
-	case '[':
-	case ']':
-	case ':':
-	case ';':
-	case ',':
-	case '-':
-	case '=':
-	case '*':
-		return (0);
-	default:
-		break;
-	}
-
-	return (-1);
 }
 
 static void

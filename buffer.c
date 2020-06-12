@@ -19,6 +19,7 @@
 #include <sys/mman.h>
 #include <sys/uio.h>
 
+#include <ctype.h>
 #include <errno.h>
 #include <libgen.h>
 #include <fcntl.h>
@@ -430,6 +431,46 @@ ce_buffer_map(void)
 	ce_syntax_finalize();
 
 	ce_term_setpos(active->cursor_line, active->column);
+}
+
+int
+ce_buffer_word_cursor(struct cebuf *buf, const u_int8_t **word, size_t *len)
+{
+	const u_int8_t		*ptr;
+	struct celine		*line;
+	size_t			end, start;
+
+	if (buf->lcnt == 0)
+		return (-1);
+
+	line = ce_buffer_line_current(buf);
+
+	ptr = line->data;
+
+	for (start = buf->loff; start > 0; start--) {
+		if (ce_editor_word_byte(ptr[start]) == 0)
+			break;
+	}
+
+	if (ce_editor_word_byte(ptr[start]) == 0)
+		start++;
+
+	for (end = buf->loff; end < line->length - 1; end++) {
+		if (ce_editor_word_byte(ptr[end]) == 0)
+			break;
+	}
+
+	if (start > end)
+		return (-1);
+
+	*len = end - start;
+	*word = &ptr[start];
+
+	ce_debug("word: '%.*s'", (int)*len, *word);
+	ce_debug("found start at %zu (%zu)", start, buf->loff);
+	ce_debug("end of word %zu (%zu)", end, line->length);
+
+	return (0);
 }
 
 int

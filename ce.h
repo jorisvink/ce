@@ -203,6 +203,8 @@ int		ce_buffer_search(struct cebuf *, const char *, int);
 void		ce_buffer_append(struct cebuf *, const void *, size_t);
 void		ce_buffer_appendf(struct cebuf *, const char *, ...)
 		    __attribute__((format (printf, 2, 3)));
+int		ce_buffer_word_cursor(struct cebuf *,
+		    const u_int8_t **, size_t *);
 
 void		ce_buffer_page_up(void);
 void		ce_buffer_move_up(void);
@@ -244,7 +246,10 @@ void		ce_editor_init(void);
 void		ce_editor_loop(void);
 int		ce_editor_mode(void);
 void		ce_editor_dirty(void);
+int		ce_editor_word_byte(u_int8_t);
+int		ce_editor_word_separator(u_int8_t);
 void		ce_editor_message(const char *, ...);
+
 void		ce_editor_pbuffer_reset(void);
 void		ce_editor_pbuffer_append(const void *, size_t);
 void		ce_editor_cmdline_append(const char *, ...)
