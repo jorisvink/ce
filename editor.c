@@ -75,6 +75,7 @@ static void	editor_cmd_normal_mode(void);
 static void	editor_cmd_word_prev(struct cebuf *, long);
 static void	editor_cmd_word_next(struct cebuf *, long);
 static void	editor_cmd_yank_lines(struct cebuf *, long);
+static void	editor_cmd_delete_words(struct cebuf *, long);
 static void	editor_cmd_delete_lines(struct cebuf *, long);
 
 static void	editor_cmd_insert_mode(void);
@@ -728,7 +729,14 @@ direct:
 
 		switch (normalcmd) {
 		case EDITOR_COMMAND_DELETE:
-			editor_cmd_delete_lines(buf, num);
+			switch (key) {
+			case 'd':
+				editor_cmd_delete_lines(buf, num);
+				break;
+			case 'w':
+				editor_cmd_delete_words(buf, num);
+				break;
+			}
 			break;
 		case EDITOR_COMMAND_YANK:
 			editor_cmd_yank_lines(buf, num);
@@ -765,6 +773,35 @@ editor_cmd_delete_lines(struct cebuf *buf, long num)
 #if defined(__APPLE__)
 	ce_macos_set_pasteboard_contents(pbuffer->data, pbuffer->length);
 #endif
+}
+
+static void
+editor_cmd_delete_words(struct cebuf *buf, long num)
+{
+	long			i;
+	const u_int8_t		*ptr;
+	struct celine		*line;
+	size_t			start, end, idx;
+
+	if (buf->lcnt == 0)
+		return;
+
+	line = ce_buffer_line_current(buf);
+
+	for (i = 0; i < num; i++) {
+		start = buf->loff;
+		ptr = line->data;
+
+		for (end = start; end < line->length; end++) {
+			if (ce_editor_word_byte(ptr[end]) == 0)
+				break;
+		}
+
+		while (isspace(ptr[end]))
+			end++;
+		for (idx = 0; idx < end - start; idx++)
+			ce_buffer_delete_byte();
+	}
 }
 
 static void

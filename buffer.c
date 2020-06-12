@@ -476,9 +476,9 @@ ce_buffer_word_cursor(struct cebuf *buf, const u_int8_t **word, size_t *len)
 void
 ce_buffer_word_next(struct cebuf *buf)
 {
-	size_t			idx;
 	const u_int8_t		*ptr;
 	struct celine		*line;
+	size_t			idx, start;
 
 	if (buf->lcnt == 0)
 		return;
@@ -487,16 +487,20 @@ ce_buffer_word_next(struct cebuf *buf)
 
 	ptr = line->data;
 
-	for (idx = buf->loff; idx < line->length - 1; idx++) {
+	for (idx = buf->loff; idx < line->length; idx++) {
 		if (ce_editor_word_byte(ptr[idx]) == 0)
 			break;
 	}
 
-	while (idx < line->length - 1) {
+	start = idx;
+	while (idx < line->length) {
 		if (ce_editor_word_byte(ptr[idx]) == 1)
 			break;
 		idx++;
 	}
+
+	if (idx == line->length && start != buf->loff)
+		idx = start;
 
 	buf->loff = idx;
 	buf->column = buffer_line_data_to_columns(line->data, buf->loff);
