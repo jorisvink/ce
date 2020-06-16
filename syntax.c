@@ -172,6 +172,7 @@ ce_syntax_write(struct cebuf *buf, struct celine *line, size_t towrite)
 				ce_term_write(".", 1);
 
 			syntax_state.off++;
+			syntax_state_color_reset(&syntax_state);
 
 			if (syntax_state.inside_comment)
 				ce_term_writestr(TERM_SEQUENCE_ATTR_BOLD);
