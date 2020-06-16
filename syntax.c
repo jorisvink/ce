@@ -31,6 +31,7 @@ struct state {
 	size_t		len;
 	size_t		off;
 
+	int		dirty;
 	int		inside_string;
 	int		inside_comment;
 	int		inside_preproc;
@@ -43,6 +44,8 @@ struct state {
 
 static void	syntax_write(struct state *, size_t);
 static int	syntax_is_word(struct state *, size_t);
+
+static void	syntax_state_term_reset(struct state *);
 
 static void	syntax_state_color(struct state *, int);
 static void	syntax_state_color_reset(struct state *);
@@ -143,7 +146,8 @@ ce_syntax_write(struct cebuf *buf, struct celine *line, size_t towrite)
 		syntax_state.flags &= ~SYNTAX_CLEAR_COMMENT;
 		syntax_state.inside_comment = 0;
 
-		ce_term_reset();
+		syntax_state_term_reset(&syntax_state);
+
 		syntax_state.color = -1;
 		syntax_state.color_prev = -1;
 	}
@@ -168,7 +172,6 @@ ce_syntax_write(struct cebuf *buf, struct celine *line, size_t towrite)
 				ce_term_write(".", 1);
 
 			syntax_state.off++;
-			syntax_state_color_reset(&syntax_state);
 
 			if (syntax_state.inside_comment)
 				ce_term_writestr(TERM_SEQUENCE_ATTR_BOLD);
@@ -202,10 +205,20 @@ ce_syntax_write(struct cebuf *buf, struct celine *line, size_t towrite)
 }
 
 static void
+syntax_state_term_reset(struct state *state)
+{
+	if (state->dirty) {
+		ce_term_reset();
+		state->dirty = 0;
+	}
+}
+
+static void
 syntax_state_color(struct state *state, int color)
 {
 	if (state->color != color) {
 		ce_term_color(color + TERM_COLOR_FG);
+		state->dirty = 1;
 		state->color_prev = state->color;
 		state->color = color;
 	}
@@ -214,7 +227,7 @@ syntax_state_color(struct state *state, int color)
 static void
 syntax_state_color_clear(struct state *state)
 {
-	ce_term_reset();
+	syntax_state_term_reset(state);
 
 	state->color = -1;
 	state->color_prev = -1;
@@ -227,7 +240,7 @@ syntax_state_color_reset(struct state *state)
 		syntax_state_color(state, state->color_prev);
 		state->color_prev = -1;
 	} else if (state->color != -1) {
-		ce_term_reset();
+		syntax_state_term_reset(state);
 		state->color = -1;
 	}
 }
