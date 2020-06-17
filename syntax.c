@@ -31,13 +31,14 @@ struct state {
 	size_t		len;
 	size_t		off;
 
+	int		bold;
 	int		dirty;
+
 	int		inside_string;
 	int		inside_comment;
 	int		inside_preproc;
 
 	int		color;
-	int		color_prev;
 
 	u_int32_t	flags;
 };
@@ -46,9 +47,9 @@ static void	syntax_write(struct state *, size_t);
 static int	syntax_is_word(struct state *, size_t);
 
 static void	syntax_state_term_reset(struct state *);
+static void	syntax_state_term_bold(struct state *, int);
 
 static void	syntax_state_color(struct state *, int);
-static void	syntax_state_color_reset(struct state *);
 static void	syntax_state_color_clear(struct state *);
 
 static void	syntax_highlight_diff(struct state *);
@@ -84,12 +85,19 @@ static const char *c_types[] = {
 	"uint8_t", "uint16_t", "uint32_t", "uint64_t",
 	"int8_t", "int16_t", "int32_t", "int64_t",
 	"u_int8_t", "u_int16_t", "u_int32_t", "u_int64_t",
-	"extern", "volatile", "sig_atomic_t", "time_t",
+	"extern", "volatile", "sig_atomic_t", "time_t", "FILE",
 	NULL
 };
 
 static const char *c_special[] = {
 	"NULL", "__file__", "__func__", "__LINE__",
+	"SIGHUP", "SIGINT", "SIGQUIT", "SIGILL",
+	"SIGABRT", "SIGFPE", "SIGKILL", "SIGSEGV",
+	"SIGPIPE", "SIGALRM", "SIGTERM", "SIGUSR1",
+	"SIGUSR2", "SIGCHLD", "SIGCONT", "SIGSTOP",
+	"SIGTSTP", "SIGTTIN", "SIGTTOU", "SIGBUS",
+	"SIGPOLL", "SIGPROF", "SIGSYS", "SIGTRAP",
+	"SIGURG", "SIGVTALRM", "SIGXCPU", "SIGXFSZ",
 	NULL
 };
 
@@ -119,7 +127,6 @@ ce_syntax_init(void)
 	memset(&syntax_state, 0, sizeof(syntax_state));
 
 	syntax_state.color = -1;
-	syntax_state.color_prev = -1;
 
 	ce_term_reset();
 }
@@ -127,7 +134,7 @@ ce_syntax_init(void)
 void
 ce_syntax_finalize(void)
 {
-	syntax_state_color_clear(&syntax_state);
+	syntax_state_term_reset(&syntax_state);
 }
 
 void
@@ -147,17 +154,18 @@ ce_syntax_write(struct cebuf *buf, struct celine *line, size_t towrite)
 		syntax_state.inside_comment = 0;
 
 		syntax_state_term_reset(&syntax_state);
-
 		syntax_state.color = -1;
-		syntax_state.color_prev = -1;
+	}
+
+	if (towrite == 1 && p[0] == '\n') {
+		ce_term_write(p, 1);
+		return;
 	}
 
 	while (syntax_state.off != towrite) {
 		switch (p[syntax_state.off]) {
 		case '\t':
-			if (syntax_state.inside_comment)
-				syntax_state_color_clear(&syntax_state);
-
+			syntax_state_term_bold(&syntax_state, 0);
 			syntax_state_color(&syntax_state, TERM_COLOR_BLUE);
 
 			if ((col % 8) == 0)
@@ -172,10 +180,9 @@ ce_syntax_write(struct cebuf *buf, struct celine *line, size_t towrite)
 				ce_term_write(".", 1);
 
 			syntax_state.off++;
-			syntax_state_color_reset(&syntax_state);
 
 			if (syntax_state.inside_comment)
-				ce_term_writestr(TERM_SEQUENCE_ATTR_BOLD);
+				syntax_state_term_bold(&syntax_state, 1);
 			break;
 		default:
 			spaces = syntax_state.off;
@@ -210,7 +217,31 @@ syntax_state_term_reset(struct state *state)
 {
 	if (state->dirty) {
 		ce_term_reset();
+
+		state->bold = 0;
 		state->dirty = 0;
+		state->color = -1;
+	}
+}
+
+static void
+syntax_state_term_bold(struct state *state, int onoff)
+{
+	int	color;
+
+	color = state->color;
+
+	if (state->bold != onoff) {
+		if (state->bold) {
+			syntax_state_term_reset(state);
+			if (color != -1)
+				syntax_state_color(state, color);
+		} else {
+			state->dirty = 1;
+			ce_term_writestr(TERM_SEQUENCE_ATTR_BOLD);
+		}
+
+		state->bold = onoff;
 	}
 }
 
@@ -218,9 +249,8 @@ static void
 syntax_state_color(struct state *state, int color)
 {
 	if (state->color != color) {
-		ce_term_color(color + TERM_COLOR_FG);
 		state->dirty = 1;
-		state->color_prev = state->color;
+		ce_term_color(color + TERM_COLOR_FG);
 		state->color = color;
 	}
 }
@@ -228,22 +258,12 @@ syntax_state_color(struct state *state, int color)
 static void
 syntax_state_color_clear(struct state *state)
 {
+	int		bold;
+
+	bold = state->bold;
+
 	syntax_state_term_reset(state);
-
-	state->color = -1;
-	state->color_prev = -1;
-}
-
-static void
-syntax_state_color_reset(struct state *state)
-{
-	if (state->color_prev != -1) {
-		syntax_state_color(state, state->color_prev);
-		state->color_prev = -1;
-	} else if (state->color != -1) {
-		syntax_state_term_reset(state);
-		state->color = -1;
-	}
+	syntax_state_term_bold(state, bold);
 }
 
 static void
@@ -281,13 +301,10 @@ syntax_highlight_format_string(struct state *state)
 				ce_term_write(&state->p[idx], 1);
 				state->off++;
 			} else {
-				syntax_state_color_reset(state);
 				return;
 			}
 		}
 	}
-
-	syntax_state_color_reset(state);
 }
 
 static int
@@ -298,6 +315,7 @@ syntax_highlight_string(struct state *state)
 			if (state->p[0] == '%') {
 				syntax_highlight_format_string(state);
 			} else {
+				syntax_state_color(state, TERM_COLOR_RED);
 				syntax_write(state, 1);
 			}
 
@@ -308,7 +326,6 @@ syntax_highlight_string(struct state *state)
 
 	if (state->inside_string == state->p[0]) {
 		syntax_write(state, 1);
-		syntax_state_color_reset(state);
 		state->inside_string = 0;
 	} else if (state->inside_string == 0) {
 		state->inside_string = state->p[0];
@@ -382,7 +399,7 @@ syntax_highlight_c_comment(struct state *state)
 		if (state->len >= 2 &&
 		    state->p[0] == '/' && state->p[1] == '/') {
 			state->inside_comment = 1;
-			ce_term_writestr(TERM_SEQUENCE_ATTR_BOLD);
+			syntax_state_term_bold(state, 1);
 			syntax_state_color(state, TERM_COLOR_BLUE);
 			syntax_write(state, 2);
 			state->flags |= SYNTAX_CLEAR_COMMENT;
@@ -392,7 +409,7 @@ syntax_highlight_c_comment(struct state *state)
 		if (state->len >= 2 &&
 		    state->p[0] == '/' && state->p[1] == '*') {
 			state->inside_comment = 1;
-			ce_term_writestr(TERM_SEQUENCE_ATTR_BOLD);
+			syntax_state_term_bold(state, 1);
 			syntax_state_color(state, TERM_COLOR_BLUE);
 			syntax_write(state, 2);
 			return (0);
@@ -402,12 +419,10 @@ syntax_highlight_c_comment(struct state *state)
 		    state->p[0] == '*' && state->p[1] == '/') {
 			syntax_write(state, 2);
 			state->inside_comment = 0;
-			syntax_state_color_reset(state);
+			syntax_state_term_bold(state, 0);
 			return (0);
 		}
 
-		ce_term_writestr(TERM_SEQUENCE_ATTR_BOLD);
-		syntax_state_color(state, TERM_COLOR_BLUE);
 		syntax_write(state, 1);
 		return (0);
 	}
@@ -523,7 +538,6 @@ syntax_highlight_python_multiline_string(struct state *state)
 		if (hit) {
 			state->inside_string = 0;
 			syntax_write(state, 3);
-			syntax_state_color_reset(state);
 		} else {
 			syntax_write(state, 1);
 		}
