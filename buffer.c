@@ -42,6 +42,9 @@ static struct cebuf	*buffer_alloc(int);
 
 static void		buffer_grow(struct cebuf *, size_t);
 static void		buffer_resize_lines(struct cebuf *, size_t);
+static void		buffer_next_character(struct cebuf *, struct celine *);
+static void		buffer_prev_character(struct cebuf *, struct celine *);
+
 static void		buffer_seterr(const char *, ...)
 			    __attribute__((format (printf, 1, 2)));
 
@@ -57,7 +60,7 @@ static void		buffer_update_cursor_line(struct cebuf *);
 static void		buffer_update_cursor_column(struct cebuf *);
 static u_int16_t	buffer_line_data_to_columns(const void *, size_t);
 static void		buffer_line_allocate(struct cebuf *, struct celine *);
-static void		buffer_line_erase_byte(struct cebuf *,
+static void		buffer_line_erase_character(struct cebuf *,
 			    struct celine *, int);
 static void		buffer_line_insert_byte(struct cebuf *,
 			    struct celine *, u_int8_t);
@@ -687,7 +690,7 @@ ce_buffer_input(struct cebuf *buf, u_int8_t byte)
 	case '\b':
 	case 0x7f:
 		if (buf->loff > 0)
-			buffer_line_erase_byte(buf, line, 0);
+			buffer_line_erase_character(buf, line, 0);
 		break;
 	case '\n':
 		buffer_line_insert_byte(buf, line, byte);
@@ -863,7 +866,7 @@ ce_buffer_join_line(void)
 }
 
 void
-ce_buffer_delete_byte(void)
+ce_buffer_delete_character(void)
 {
 	size_t			max;
 	const u_int8_t		*ptr;
@@ -881,7 +884,7 @@ ce_buffer_delete_byte(void)
 	active->flags |= CE_BUFFER_DIRTY;
 
 	buffer_line_allocate(active, line);
-	buffer_line_erase_byte(active, line, 1);
+	buffer_line_erase_character(active, line, 1);
 
 	if (line->length > 0) {
 		max = line->length - 1;
@@ -1102,8 +1105,8 @@ ce_buffer_move_left(void)
 		return;
 
 	line = ce_buffer_line_current(active);
+	buffer_prev_character(active, line);
 
-	active->loff--;
 	active->column = buffer_line_data_to_columns(line->data, active->loff);
 	cursor_column = active->column;
 
@@ -1124,7 +1127,7 @@ ce_buffer_jump_left(void)
 void
 ce_buffer_move_right(void)
 {
-	struct celine	*line;
+	struct celine		*line;
 
 	if (active->lcnt == 0)
 		return;
@@ -1134,8 +1137,7 @@ ce_buffer_move_right(void)
 	if (active->loff == line->length)
 		return;
 
-	if (active->loff < line->length - 1)
-		active->loff++;
+	if (active->loff < line->length - 1) 		buffer_next_character(active, line);
 
 	active->column = buffer_line_data_to_columns(line->data, active->loff);
 	ce_buffer_constrain_cursor_column(active);
@@ -1259,7 +1261,7 @@ ce_buffer_constrain_cursor_column(struct cebuf *buf)
 
 	if (buf->loff == line->length - 1 && ptr[buf->loff] == '\n') {
 		if (buf->loff > TERM_CURSOR_MIN)
-			buf->loff--;
+			buffer_prev_character(buf, line);
 		if (buf->column > TERM_CURSOR_MIN)
 			buf->column--;
 	}
@@ -1524,9 +1526,9 @@ buffer_line_span(struct celine *line)
 static u_int16_t
 buffer_line_data_to_columns(const void *data, size_t length)
 {
-	size_t			idx;
 	u_int16_t		cols;
 	const u_int8_t		*ptr;
+	size_t			idx, seqlen;
 
 	ptr = data;
 	cols = TERM_CURSOR_MIN;
@@ -1542,6 +1544,8 @@ buffer_line_data_to_columns(const void *data, size_t length)
 				cols += 8 - (cols % 8) + 1;
 		} else {
 			cols++;
+			if (ce_utf8_sequence(data, length, idx, &seqlen))
+				idx += seqlen - 1;
 		}
 	}
 
@@ -1637,45 +1641,37 @@ buffer_line_insert_byte(struct cebuf *buf, struct celine *line, u_int8_t byte)
 }
 
 static void
-buffer_line_erase_byte(struct cebuf *buf, struct celine *line, int inplace)
+buffer_line_erase_character(struct cebuf *buf, struct celine *line, int inplace)
 {
 	u_int8_t	*ptr;
-	size_t		index;
+	size_t		seqlen, cur;
 
-	if (line->length == 0) {
-		if (inplace)
-			return;
-
-		if (buf->lcnt == 1)
-			return;
-
-		index = ce_buffer_line_index(buf);
-		memmove(&buf->lines[index], &buf->lines[index + 1],
-		    (buf->lcnt - index) * sizeof(struct celine));
-
-		buf->lcnt--;
-
-		ce_buffer_move_up();
-		ce_buffer_jump_right();
-
-		return;
-	}
+	if (line->length == 0) 		return;
 
 	ptr = line->data;
 
+	if (ce_utf8_sequence(line->data, line->length, buf->loff, &seqlen) == 0)
+		seqlen = 1;
+
 	if (inplace) {
-		memmove(&ptr[buf->loff], &ptr[buf->loff + 1],
-		    line->length - buf->loff - 1);
+		memmove(&ptr[buf->loff], &ptr[buf->loff + seqlen],
+		    line->length - buf->loff - seqlen);
 	} else {
-		memmove(&ptr[buf->loff - 1],
-		    &ptr[buf->loff], line->length - buf->loff);
+		cur = buf->loff;
+		buffer_prev_character(buf, line);
+		memmove(&ptr[buf->loff], &ptr[cur], line->length - cur);
+		seqlen = cur - buf->loff;
 	}
 
-	line->length--;
-	ce_buffer_line_columns(line);
+	line->length -= seqlen;
 
-	if (inplace == 0)
-		ce_buffer_move_left();
+	if (inplace == 0) {
+		buf->column =
+		    buffer_line_data_to_columns(line->data, buf->loff);
+		cursor_column = buf->column;
+		ce_buffer_line_columns(line);
+		ce_term_setpos(buf->cursor_line, buf->column);
+	}
 
 	/* XXX for now. */
 	buf->flags |= CE_BUFFER_DIRTY;
@@ -1722,8 +1718,51 @@ buffer_update_cursor_column(struct cebuf *buf)
 		buffer_line_column_to_data(buf);
 		if (buf->column != TERM_CURSOR_MIN &&
 		    buf->loff < line->length - 1)
-			buf->loff++;
+			buffer_next_character(buf, line);
 	}
+}
+
+static void
+buffer_next_character(struct cebuf *buf, struct celine *line)
+{
+	size_t		seqlen;
+
+	if (ce_utf8_sequence(line->data, line->length, buf->loff, &seqlen)) {
+		buf->loff += seqlen;
+	} else {
+		buf->loff++;
+	}
+}
+
+static void
+buffer_prev_character(struct cebuf *buf, struct celine *line)
+{
+	const u_int8_t		*ptr;
+	size_t			seqlen, bytes, off, valid;
+
+	valid = 0;
+	bytes = 0;
+	seqlen = 0;
+	ptr = line->data;
+
+	buf->loff--;
+	off = buf->loff;
+
+	while (ce_utf8_continuation_byte(ptr[buf->loff]) && buf->loff > 0) {
+		buf->loff--;
+		bytes++;
+	}
+
+	if (bytes > 0) {
+		if (ce_utf8_sequence(line->data,
+		    line->length, buf->loff, &seqlen)) {
+			if ((seqlen - 1) == bytes)
+				valid = 1;
+		}
+	}
+ 
+	if (valid == 0)
+		buf->loff = off;
 }
 
 static void

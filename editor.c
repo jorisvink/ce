@@ -102,7 +102,8 @@ static struct keymap normal_map[] = {
 	{ 0x06,			ce_buffer_page_down },
 	{ 0x02,			ce_buffer_page_up },
 
-	{ 'x',			ce_buffer_delete_byte },
+	{ 'x',			ce_buffer_delete_character},
+
 	{ 'p',			editor_cmd_paste },
 	{ 'n',			editor_cmd_search_next },
 	{ 'N',			editor_cmd_search_prev },
@@ -800,7 +801,7 @@ editor_cmd_delete_words(struct cebuf *buf, long num)
 		while (isspace(ptr[end]))
 			end++;
 		for (idx = 0; idx < end - start; idx++)
-			ce_buffer_delete_byte();
+			ce_buffer_delete_character();
 	}
 }
 

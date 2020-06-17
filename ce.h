@@ -219,7 +219,7 @@ void		ce_buffer_jump_left(void);
 void		ce_buffer_join_line(void);
 void		ce_buffer_move_right(void);
 void		ce_buffer_jump_right(void);
-void		ce_buffer_delete_byte(void);
+void		ce_buffer_delete_character(void);
 
 const char	*ce_buffer_strerror(void);
 const char	*ce_buffer_as_string(struct cebuf *);
@@ -260,6 +260,9 @@ void		ce_editor_cmdline_append(const char *, ...)
 
 struct cebuf	*ce_editor_cmdbuf(void);
 void		ce_editor_cmdbuf_reset(void);
+
+int		ce_utf8_continuation_byte(u_int8_t);
+int		ce_utf8_sequence(const void *, size_t, size_t, size_t *);
 
 void		ce_syntax_init(void);
 void		ce_syntax_finalize(void);
