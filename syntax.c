@@ -431,6 +431,7 @@ syntax_highlight_c_comment(struct state *state)
 			return (0);
 		}
 
+		syntax_state_color(state, TERM_COLOR_BLUE);
 		syntax_write(state, 1);
 		return (0);
 	}
