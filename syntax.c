@@ -28,14 +28,19 @@
 
 struct state {
 	const u_int8_t	*p;
+
 	size_t		len;
 	size_t		off;
+	size_t		avail;
 
 	int		bold;
 	int		dirty;
 
 	int		inside_string;
 	int		inside_comment;
+
+	const u_int8_t	*ppword;
+	size_t		ppwlen;
 	int		inside_preproc;
 
 	int		color;
@@ -79,7 +84,7 @@ static const char *c_kw[] = {
 	NULL
 };
 
-static const char *c_types[] = {
+static const char *c_type[] = {
 	"int", "char", "short", "long", "double", "float", "size_t",
 	"ssize_t", "const", "struct", "static", "unsigned", "void",
 	"uint8_t", "uint16_t", "uint32_t", "uint64_t",
@@ -148,7 +153,7 @@ ce_syntax_write(struct cebuf *buf, struct celine *line, size_t towrite)
 	p = line->data;
 
 	syntax_state.off = 0;
-	syntax_state.inside_preproc = 0;
+	syntax_state.avail = towrite;
 
 	if (syntax_state.flags & SYNTAX_CLEAR_COMMENT) {
 		syntax_state.flags &= ~SYNTAX_CLEAR_COMMENT;
@@ -159,6 +164,8 @@ ce_syntax_write(struct cebuf *buf, struct celine *line, size_t towrite)
 	}
 
 	if (towrite == 1 && p[0] == '\n') {
+		syntax_state.inside_preproc = 0;
+		syntax_state_color_clear(&syntax_state);
 		ce_term_write(p, 1);
 		return;
 	}
@@ -383,7 +390,7 @@ syntax_highlight_c(struct state *state)
 	if (syntax_highlight_word(state, c_kw, TERM_COLOR_YELLOW) == 0)
 		return;
 
-	if (syntax_highlight_word(state, c_types, TERM_COLOR_GREEN) == 0)
+	if (syntax_highlight_word(state, c_type, TERM_COLOR_GREEN) == 0)
 		return;
 
 	if (syntax_highlight_word(state, c_special, TERM_COLOR_RED) == 0)
@@ -434,29 +441,66 @@ syntax_highlight_c_comment(struct state *state)
 static int
 syntax_highlight_c_preproc(struct state *state)
 {
+	const char		*w;
+	const u_int8_t		*p, *end;
+
 	if (state->inside_preproc) {
-		if (state->p[0] == '<') {
-			syntax_highlight_span(state, '<', '>', TERM_COLOR_RED);
-			return (0);
+		w = (const char *)state->ppword;
+
+		if (!strncmp(w, "#include", state->ppwlen)) {
+			if (state->p[0] == '<') {
+				syntax_highlight_span(state,
+				    '<', '>', TERM_COLOR_RED);
+				return (0);
+			}
+
+			if (state->p[0] == '"') {
+				syntax_highlight_span(state,
+				    '"', '"', TERM_COLOR_RED);
+				return (0);
+			}
 		}
 
-		if (state->p[0] == '"') {
-			syntax_highlight_span(state, '"', '"', TERM_COLOR_RED);
+		if (syntax_highlight_numeric(state) == 0)
 			return (0);
-		}
 
-		if (syntax_highlight_numeric(state) == -1) {
-			syntax_state_color(state, TERM_COLOR_MAGENTA);
-			syntax_write(state, 1);
+		if (syntax_highlight_word(state, c_kw, TERM_COLOR_YELLOW) == 0)
+			return (0);
+
+		if (syntax_highlight_word(state, c_type, TERM_COLOR_GREEN) == 0)
+			return (0);
+
+		syntax_state_color(state, TERM_COLOR_MAGENTA);
+		syntax_write(state, 1);
+
+		if (state->off == state->avail - 1) {
+			if (state->p[0] != '\\') {
+				syntax_state_color_clear(state);
+				state->inside_preproc = 0;
+			}
 		}
 
 		return (0);
 	}
 
 	if (state->off == 0 && state->p[0] == '#') {
+		state->inside_preproc = 1;
+
 		syntax_state_color(state, TERM_COLOR_MAGENTA);
 		syntax_write(state, 1);
-		state->inside_preproc = 1;
+
+		state->ppword = NULL;
+		state->ppwlen = 0;
+
+		p = state->p;
+		end = p + state->len;
+
+		while (!isspace(*p) && p < end)
+			p++;
+
+		state->ppword = state->p;
+		state->ppwlen = p - state->p;
+
 		return (0);
 	}
 
