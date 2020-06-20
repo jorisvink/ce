@@ -35,6 +35,7 @@ struct state {
 
 	int		bold;
 	int		dirty;
+	int		diffcolor;
 
 	int		inside_string;
 	int		inside_comment;
@@ -153,6 +154,7 @@ ce_syntax_write(struct cebuf *buf, struct celine *line, size_t towrite)
 	p = line->data;
 
 	syntax_state.off = 0;
+	syntax_state.diffcolor = -1;
 	syntax_state.avail = towrite;
 
 	if (syntax_state.flags & SYNTAX_CLEAR_COMMENT) {
@@ -454,12 +456,11 @@ syntax_highlight_c_preproc(struct state *state)
 				    '<', '>', TERM_COLOR_RED);
 				return (0);
 			}
+		}
 
-			if (state->p[0] == '"') {
-				syntax_highlight_span(state,
-				    '"', '"', TERM_COLOR_RED);
-				return (0);
-			}
+		if (state->p[0] == '"') {
+			syntax_highlight_span(state, '"', '"', TERM_COLOR_RED);
+			return (0);
 		}
 
 		if (syntax_highlight_numeric(state) == 0)
@@ -598,18 +599,34 @@ static void
 syntax_highlight_diff(struct state *state)
 {
 	if (state->off > 0) {
+		if (state->diffcolor != -1)
+			syntax_state_color(state, state->diffcolor);
+		else
+			syntax_state_color_clear(state);
 		syntax_write(state, 1);
 		return;
 	}
 
 	if (state->p[0] == '+' && state->p[1] != '+') {
+		state->diffcolor = TERM_COLOR_CYAN;
 		syntax_state_color(state, TERM_COLOR_CYAN);
+		syntax_write(state, 1);
+		return;
+	} else if (state->len > 3 && state->p[1] == '+' && state->p[2] == '+') {
+		state->diffcolor = TERM_COLOR_GREEN;
+		syntax_state_color(state, TERM_COLOR_GREEN);
 		syntax_write(state, 1);
 		return;
 	}
 
 	if (state->p[0] == '-' && state->p[1] != '-') {
+		state->diffcolor = TERM_COLOR_MAGENTA;
 		syntax_state_color(state, TERM_COLOR_MAGENTA);
+		syntax_write(state, 1);
+		return;
+	} else if (state->len > 3 && state->p[1] == '-' && state->p[2] == '-') {
+		state->diffcolor = TERM_COLOR_GREEN;
+		syntax_state_color(state, TERM_COLOR_GREEN);
 		syntax_write(state, 1);
 		return;
 	}
