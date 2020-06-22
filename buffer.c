@@ -55,8 +55,8 @@ static void		*buffer_search(struct cebuf *, int, const void *,
 static size_t		buffer_line_span(struct celine *);
 static void		buffer_update_cursor(struct cebuf *);
 static void		buffer_populate_lines(struct cebuf *);
-static void		buffer_line_column_to_data(struct cebuf *);
 static void		buffer_update_cursor_line(struct cebuf *);
+static void		buffer_line_column_to_data(struct cebuf *);
 static void		buffer_update_cursor_column(struct cebuf *);
 static u_int16_t	buffer_line_data_to_columns(const void *, size_t);
 static void		buffer_line_allocate(struct cebuf *, struct celine *);
@@ -281,10 +281,8 @@ ce_buffer_free(struct cebuf *buf)
 		active = buf->prev;
 
 	TAILQ_FOREACH(bp, &buffers, list) {
-		if (bp->prev == buf) {
-			ce_debug("adjusted %s", bp->name);
+		if (bp->prev == buf)
 			bp->prev = active;
-		}
 	}
 
 	if (buf->flags & CE_BUFFER_MMAP) {
@@ -468,10 +466,6 @@ ce_buffer_word_cursor(struct cebuf *buf, const u_int8_t **word, size_t *len)
 
 	*len = end - start;
 	*word = &ptr[start];
-
-	ce_debug("word: '%.*s'", (int)*len, *word);
-	ce_debug("found start at %zu (%zu)", start, buf->loff);
-	ce_debug("end of word %zu (%zu)", end, line->length);
 
 	return (0);
 }
@@ -1688,13 +1682,22 @@ buffer_update_cursor(struct cebuf *buf)
 static void
 buffer_update_cursor_line(struct cebuf *buf)
 {
-	size_t		index, current;
+	size_t		index, current, span;
 
 	current = ce_buffer_line_index(buf);
 	buf->cursor_line = TERM_CURSOR_MIN;
 
-	for (index = buf->top; index < current; index++)
-		buf->cursor_line += buffer_line_span(&buf->lines[index]);
+	for (index = buf->top; index < current; index++) {
+		span = buffer_line_span(&buf->lines[index]);
+		buf->cursor_line += span;
+		if (buf->cursor_line > ce_term_height() - 2) {
+			buf->cursor_line -= span;
+			buf->top += span;
+			buf->line -= span;
+			buffer_update_cursor_line(buf);
+			break;
+		}
+	}
 }
 
 static void
