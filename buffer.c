@@ -1638,11 +1638,13 @@ static void
 buffer_line_erase_character(struct cebuf *buf, struct celine *line, int inplace)
 {
 	u_int8_t	*ptr;
+	int		update;
 	size_t		seqlen, cur;
 
 	if (line->length == 0)
 		return;
 
+	update = 0;
 	ptr = line->data;
 
 	if (ce_utf8_sequence(line->data, line->length, buf->loff, &seqlen) == 0)
@@ -1653,9 +1655,12 @@ buffer_line_erase_character(struct cebuf *buf, struct celine *line, int inplace)
 			return;
 		memmove(&ptr[buf->loff], &ptr[buf->loff + seqlen],
 		    line->length - buf->loff - seqlen);
-		if (buf->loff >= seqlen)
+		if (buf->loff >= seqlen && buf->loff + 1 == line->length - 1) {
 			buf->loff -= seqlen;
+			update = 1;
+		}
 	} else {
+		update = 1;
 		cur = buf->loff;
 		buffer_prev_character(buf, line);
 		memmove(&ptr[buf->loff], &ptr[cur], line->length - cur);
@@ -1664,10 +1669,13 @@ buffer_line_erase_character(struct cebuf *buf, struct celine *line, int inplace)
 
 	line->length -= seqlen;
 
-	buf->column = buffer_line_data_to_columns(line->data, buf->loff);
-	cursor_column = buf->column;
-	ce_buffer_line_columns(line);
-	ce_term_setpos(buf->cursor_line, buf->column);
+	if (update) {
+		buf->column =
+		    buffer_line_data_to_columns(line->data, buf->loff);
+		cursor_column = buf->column;
+		ce_buffer_line_columns(line);
+		ce_term_setpos(buf->cursor_line, buf->column);
+	}
 
 	/* XXX for now. */
 	buf->flags |= CE_BUFFER_DIRTY;
