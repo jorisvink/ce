@@ -1640,7 +1640,8 @@ buffer_line_erase_character(struct cebuf *buf, struct celine *line, int inplace)
 	u_int8_t	*ptr;
 	size_t		seqlen, cur;
 
-	if (line->length == 0) 		return;
+	if (line->length == 0)
+		return;
 
 	ptr = line->data;
 
@@ -1648,8 +1649,12 @@ buffer_line_erase_character(struct cebuf *buf, struct celine *line, int inplace)
 		seqlen = 1;
 
 	if (inplace) {
+		if (ptr[buf->loff] == '\n')
+			return;
 		memmove(&ptr[buf->loff], &ptr[buf->loff + seqlen],
 		    line->length - buf->loff - seqlen);
+		if (buf->loff >= seqlen)
+			buf->loff -= seqlen;
 	} else {
 		cur = buf->loff;
 		buffer_prev_character(buf, line);
@@ -1659,13 +1664,10 @@ buffer_line_erase_character(struct cebuf *buf, struct celine *line, int inplace)
 
 	line->length -= seqlen;
 
-	if (inplace == 0) {
-		buf->column =
-		    buffer_line_data_to_columns(line->data, buf->loff);
-		cursor_column = buf->column;
-		ce_buffer_line_columns(line);
-		ce_term_setpos(buf->cursor_line, buf->column);
-	}
+	buf->column = buffer_line_data_to_columns(line->data, buf->loff);
+	cursor_column = buf->column;
+	ce_buffer_line_columns(line);
+	ce_term_setpos(buf->cursor_line, buf->column);
 
 	/* XXX for now. */
 	buf->flags |= CE_BUFFER_DIRTY;
