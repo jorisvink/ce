@@ -762,11 +762,15 @@ ce_buffer_delete_line(struct cebuf *buf)
 
 	ce_editor_pbuffer_append(line->data, line->length);
 
-	if (line->flags & CE_LINE_ALLOCATED)
+	if (line->flags & CE_LINE_ALLOCATED) {
 		free(line->data);
+		line->data = NULL;
+	}
 
-	memmove(&buf->lines[index], &buf->lines[index + 1],
-	    (buf->lcnt - index - 1) * sizeof(struct celine));
+	if (index < buf->lcnt - 1) {
+		memmove(&buf->lines[index], &buf->lines[index + 1],
+		    (buf->lcnt - index - 1) * sizeof(struct celine));
+	}
 
 	buf->lcnt--;
 
