@@ -293,17 +293,14 @@ ce_editor_pbuffer_reset(void)
 void
 ce_editor_pbuffer_append(const void *data, size_t len)
 {
-	ce_debug("paste buffer got %zu bytes", len);
 	ce_buffer_append(pbuffer, data, len);
 }
 
 int
 ce_editor_word_byte(u_int8_t byte)
 {
-	if (isalnum(byte) || isxdigit(byte)) {
-		ce_debug("'%c' is word byte", (char)byte);
+	if (isalnum(byte) || isxdigit(byte))
 		return (1);
-	}
 
 	switch (byte) {
 	case '_':
@@ -765,6 +762,15 @@ static void
 editor_cmd_delete_lines(struct cebuf *buf, long num)
 {
 	long		i;
+	size_t		index, remain;
+
+	index = ce_buffer_line_index(buf);
+	remain = buf->lcnt - index;
+
+	if ((size_t)num > remain) {
+		ce_debug("reducing %ld, to %zu", num, remain);
+		num = remain;
+	}
 
 	ce_editor_pbuffer_reset();
 
@@ -816,7 +822,7 @@ editor_cmd_yank_lines(struct cebuf *buf, long num)
 
 	end = index + num;
 	if (end >= buf->lcnt)
-		end = buf->lcnt - 1;
+		end = buf->lcnt;
 
 	for (idx = index; idx < end; idx++) {
 		line = &buf->lines[idx];
@@ -945,17 +951,18 @@ editor_cmd_paste(void)
 	const u_int8_t		*ptr;
 	struct cebuf		*buf;
 #if defined(__APPLE__)
-	u_int8_t		*pb;
-#endif
-
-#if defined(__APPLE__)
-	ce_editor_pbuffer_reset();
-	ce_macos_get_pasteboard_contents(&pb, &pbuffer->length);
-	pbuffer->data = pb;
+	u_int8_t		*pb, *old;
 #endif
 
 	if (pbuffer->length == 0)
 		return;
+
+#if defined(__APPLE__)
+	ce_editor_pbuffer_reset();
+	ce_macos_get_pasteboard_contents(&pb, &pbuffer->length);
+	old = pbuffer->data;
+	pbuffer->data = pb;
+#endif
 
 	buf = ce_buffer_active();
 	ptr = pbuffer->data;
@@ -972,6 +979,10 @@ editor_cmd_paste(void)
 
 	ce_buffer_jump_left();
 	mode = CE_EDITOR_MODE_NORMAL;
+
+#if defined(__APPLE__)
+	pbuffer->data = old;
+#endif
 }
 
 static void
