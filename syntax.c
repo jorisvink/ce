@@ -35,7 +35,10 @@ struct state {
 
 	int		bold;
 	int		dirty;
+
+	int		keepcolor;
 	int		diffcolor;
+	int		stringcolor;
 
 	int		inside_string;
 	int		inside_comment;
@@ -50,6 +53,8 @@ struct state {
 };
 
 static void	syntax_write(struct state *, size_t);
+
+static int	syntax_escaped_quote(struct state *);
 static int	syntax_is_word(struct state *, size_t);
 
 static void	syntax_state_term_reset(struct state *);
@@ -154,6 +159,7 @@ ce_syntax_write(struct cebuf *buf, struct celine *line, size_t towrite)
 	p = line->data;
 
 	syntax_state.off = 0;
+	syntax_state.keepcolor = 0;
 	syntax_state.diffcolor = -1;
 	syntax_state.avail = towrite;
 
@@ -320,13 +326,26 @@ syntax_highlight_format_string(struct state *state)
 static int
 syntax_highlight_string(struct state *state)
 {
-	if (state->p[0] != '"' && state->p[0] != 0x27) {
+	if (state->p[0] != '"' && state->p[0] != '\'') {
 		if (state->inside_string) {
-			if (state->p[0] == '%') {
+			switch (state->p[0]) {
+			case '%':
 				syntax_highlight_format_string(state);
-			} else {
-				syntax_state_color(state, TERM_COLOR_RED);
+				break;
+			case '\\':
+				state->keepcolor = 1;
+				syntax_state_color(state, TERM_COLOR_MAGENTA);
 				syntax_write(state, 1);
+				break;
+			default:
+				if (state->keepcolor == 0) {
+					syntax_state_color(state,
+					    state->stringcolor);
+				} else {
+					state->keepcolor--;
+				}
+				syntax_write(state, 1);
+				break;
 			}
 
 			return (0);
@@ -334,12 +353,20 @@ syntax_highlight_string(struct state *state)
 		return (-1);
 	}
 
-	if (state->inside_string == state->p[0]) {
+	if (state->inside_string == state->p[0] &&
+	    syntax_escaped_quote(state) == -1) {
+		syntax_state_color(state, state->stringcolor);
 		syntax_write(state, 1);
 		state->inside_string = 0;
 	} else if (state->inside_string == 0) {
 		state->inside_string = state->p[0];
-		syntax_state_color(state, TERM_COLOR_RED);
+
+		if (state->p[0] == '\'' && state->p[1] == '\\')
+			state->stringcolor = TERM_COLOR_MAGENTA;
+		else
+			state->stringcolor = TERM_COLOR_RED;
+
+		syntax_state_color(state, state->stringcolor);
 		syntax_write(state, 1);
 	} else {
 		syntax_write(state, 1);
@@ -685,6 +712,26 @@ syntax_highlight_word(struct state *state, const char *words[], int color)
 
 		state->off = state->off + len;
 		return (0);
+	}
+
+	return (-1);
+}
+
+static int
+syntax_escaped_quote(struct state *state)
+{
+	if (state->off == 0)
+		return (-1);
+
+	switch (state->p[0]) {
+	case '\'':
+	case '"':
+		if (state->p[-1] == '\\') {
+			if (state->off > 2 && state->p[-2] == '\\')
+				return (-1);
+			return (0);
+		}
+		break;
 	}
 
 	return (-1);
