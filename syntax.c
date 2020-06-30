@@ -63,6 +63,7 @@ static void	syntax_state_term_bold(struct state *, int);
 static void	syntax_state_color(struct state *, int);
 static void	syntax_state_color_clear(struct state *);
 
+static void	syntax_highlight_js(struct state *);
 static void	syntax_highlight_diff(struct state *);
 
 static void	syntax_highlight_c(struct state *);
@@ -143,6 +144,18 @@ static const char *py_types[] = {
 
 static const char *py_special[] = {
 	"import", "from", NULL
+};
+
+static const char *js_kw[] = {
+	"break", "case", "catch", "continue", "debugger", "default",
+	"delete", "do", "else", "finally", "for", "if", "in", "new",
+	"return", "switch", "throw", "try", "void", "while", "width",
+	NULL
+};
+
+static const char *js_other[] = {
+	"function", "instanceof", "this", "typeof", "var",
+	NULL
 };
 
 static struct state	syntax_state = { 0 };
@@ -230,6 +243,9 @@ ce_syntax_write(struct cebuf *buf, struct celine *line, size_t towrite)
 				break;
 			case CE_FILE_TYPE_DIFF:
 				syntax_highlight_diff(&syntax_state);
+				break;
+			case CE_FILE_TYPE_JS:
+				syntax_highlight_js(&syntax_state);
 				break;
 			default:
 				syntax_state_color_clear(&syntax_state);
@@ -341,7 +357,7 @@ syntax_highlight_format_string(struct state *state)
 static int
 syntax_highlight_string(struct state *state)
 {
-	if (state->p[0] != '"' && state->p[0] != '\'') {
+	if (state->p[0] != '"' && state->p[0] != '\'' && state->p[0] != '`') {
 		if (state->inside_string) {
 			switch (state->p[0]) {
 			case '%':
@@ -687,6 +703,28 @@ syntax_highlight_diff(struct state *state)
 		syntax_write(state, 1);
 		return;
 	}
+
+	syntax_state_color_clear(state);
+	syntax_write(state, 1);
+}
+
+static void
+syntax_highlight_js(struct state *state)
+{
+	if (syntax_highlight_word(state, tags, TERM_COLOR_YELLOW) == 0)
+		return;
+
+	if (syntax_highlight_numeric(state) == 0)
+		return;
+
+	if (syntax_highlight_string(state) == 0)
+		return;
+
+	if (syntax_highlight_word(state, js_kw, TERM_COLOR_YELLOW) == 0)
+		return;
+
+	if (syntax_highlight_word(state, js_other, TERM_COLOR_CYAN) == 0)
+		return;
 
 	syntax_state_color_clear(state);
 	syntax_write(state, 1);

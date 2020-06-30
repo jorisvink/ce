@@ -32,6 +32,7 @@ static struct {
 	{ ".py",	CE_FILE_TYPE_PYTHON },
 	{ ".diff",	CE_FILE_TYPE_DIFF },
 	{ ".patch",	CE_FILE_TYPE_DIFF },
+	{ ".js",	CE_FILE_TYPE_JS },
 	{ NULL,		0 },
 };
 
