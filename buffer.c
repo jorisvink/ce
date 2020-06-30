@@ -830,9 +830,10 @@ ce_buffer_jump_line(struct cebuf *buf, long linenr)
 void
 ce_buffer_join_line(void)
 {
+	const u_int8_t		*p;
 	u_int8_t		*ptr;
-	size_t			index, len;
 	struct celine		*line, *next;
+	size_t			index, len, tojoin, off;
 
 	if (active->lcnt == 0)
 		return;
@@ -844,14 +845,26 @@ ce_buffer_join_line(void)
 	line = ce_buffer_line_current(active);
 	next = &active->lines[index + 1];
 
+	p = next->data;
+	tojoin = next->length;
+	while (isspace(*p) && tojoin > 0) {
+		tojoin--;
+		p++;
+	}
+
+	if (*p == '\n' || tojoin == 0)
+		return;
+
 	buffer_line_allocate(active, line);
-	len = line->length + (next->length - 1);
+	len = line->length + (tojoin - 1) + 1;
 
 	if ((line->data = realloc(line->data, len)) == NULL)
 		fatal("%s: realloc %zu: %s", __func__, len, errno_s);
 
+	off = line->length;
 	ptr = line->data;
-	memcpy(&ptr[line->length - 1], next->data, next->length);
+	ptr[line->length - 1] = ' ';
+	memcpy(&ptr[line->length], p, tojoin);
 
 	line->length = len;
 	line->columns = buffer_line_data_to_columns(line->data, line->length);
@@ -859,6 +872,13 @@ ce_buffer_join_line(void)
 	ce_buffer_move_down();
 	ce_buffer_delete_line(active);
 	ce_buffer_move_up();
+
+	active->loff = off;
+	active->column = buffer_line_data_to_columns(line->data, active->loff);
+	ce_buffer_constrain_cursor_column(active);
+
+	cursor_column = active->column;
+	ce_term_setpos(active->cursor_line, active->column);
 
 	ce_editor_dirty();
 }
@@ -1135,7 +1155,8 @@ ce_buffer_move_right(void)
 	if (active->loff == line->length)
 		return;
 
-	if (active->loff < line->length - 1) 		buffer_next_character(active, line);
+	if (active->loff < line->length - 1)
+		buffer_next_character(active, line);
 
 	active->column = buffer_line_data_to_columns(line->data, active->loff);
 	ce_buffer_constrain_cursor_column(active);
