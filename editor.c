@@ -664,6 +664,12 @@ editor_buflist_input(struct cebuf *buf, char key)
 {
 	size_t		index;
 
+	if (key >= '0' && key <= '9') {
+		ce_buffer_activate_index(key - '0');
+		mode = CE_EDITOR_MODE_NORMAL;
+		return;
+	}
+
 	switch (key) {
 	case '\n':
 		index = buf->top + (buf->line - 1);

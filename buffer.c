@@ -641,7 +641,7 @@ ce_buffer_list(struct cebuf *output)
 	ce_buffer_reset(output);
 
 	/* Add scratch as the first buffer. */
-	ce_buffer_appendf(output, "[scratch] (%zu lines)\n", scratch->lcnt);
+	ce_buffer_appendf(output, "[0] [scratch] (%zu lines)\n", scratch->lcnt);
 	if (scratch == active) {
 		output->line = idx;
 		output->cursor_line = idx;
@@ -654,7 +654,7 @@ ce_buffer_list(struct cebuf *output)
 			output->line = idx;
 			output->cursor_line = idx;
 		}
-		ce_buffer_appendf(output, "[%s%s] (%zu lines)\n",
+		ce_buffer_appendf(output, "[%zd] [%s%s] (%zu lines)\n", idx - 1,
 		    buf->name, (buf->flags & CE_BUFFER_DIRTY) ? "*" : "",
 		    buf->lcnt);
 		idx++;
