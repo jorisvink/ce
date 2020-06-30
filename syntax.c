@@ -186,7 +186,8 @@ ce_syntax_write(struct cebuf *buf, struct celine *line, size_t towrite)
 
 	if (towrite == 1 && p[0] == '\n') {
 		syntax_state.inside_preproc = 0;
-		syntax_state_color_clear(&syntax_state);
+		if (syntax_state.inside_string == 0)
+			syntax_state_color_clear(&syntax_state);
 		ce_term_write(p, 1);
 		return;
 	}
