@@ -71,6 +71,7 @@ static int	syntax_highlight_c_preproc(struct state *);
 
 static void	syntax_highlight_python(struct state *);
 static int	syntax_highlight_python_comment(struct state *);
+static int	syntax_highlight_python_decorator(struct state *);
 static int	syntax_highlight_python_multiline_string(struct state *);
 
 static int	syntax_highlight_string(struct state *);
@@ -117,7 +118,7 @@ static const char *py_kw[] = {
 	"and", "del", "for", "is", "raise", "assert", "elif",
 	"lambda", "return", "break", "else", "global", "not", "try",
 	"class", "except", "if", "or", "while", "continue", "exec",
-	"pass", "def", "finally", "in", "await", "async",
+	"pass", "def", "finally", "in", "await", "async", "as",
 	NULL
 };
 
@@ -562,6 +563,9 @@ syntax_highlight_python(struct state *state)
 	if (syntax_highlight_python_multiline_string(state) == 0)
 		return;
 
+	if (syntax_highlight_python_decorator(state) == 0)
+		return;
+
 	if (syntax_highlight_numeric(state) == 0)
 		return;
 
@@ -579,6 +583,18 @@ syntax_highlight_python(struct state *state)
 
 	syntax_state_color_clear(state);
 	syntax_write(state, 1);
+}
+
+static int
+syntax_highlight_python_decorator(struct state *state)
+{
+	if (state->off == 0 && state->p[0] == '@') {
+		syntax_state_color(state, TERM_COLOR_CYAN);
+		syntax_write(state, state->len);
+		return (0);
+	}
+
+	return (-1);
 }
 
 static int
