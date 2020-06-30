@@ -135,7 +135,7 @@ static const char *py_types[] = {
 	"chr", "frozenset", "list", "range", "vars",
 	"classmethod", "getattr", "locals", "repr", "zip",
 	"compile", "globals", "map", "reversed", "__import__",
-	"complex", "hasattr", "max", "round",
+	"complex", "hasattr", "max", "round", "len",
 
 	NULL
 };
