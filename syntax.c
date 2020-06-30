@@ -118,12 +118,25 @@ static const char *py_kw[] = {
 	"lambda", "return", "break", "else", "global", "not", "try",
 	"class", "except", "if", "or", "while", "continue", "exec",
 	"pass", "def", "finally", "in", "await", "async",
-
 	NULL
 };
 
 static const char *py_types[] = {
 	"None", "False", "True", "print",
+	"abs", "delattr", "hash", "memoryview", "set",
+	"all", "dict", "help", "min", "setattr",
+	"any", "dir", "hex", "next", "slice",
+	"ascii", "divmod", "id", "object", "sorted",
+	"bin", "enumerate", "input", "oct", "staticmethod",
+	"bool", "eval", "int", "open", "str",
+	"breakpoint", "exec", "isinstance", "ord", "sum",
+	"bytearray", "filter", "issubclass", "pow", "super",
+	"bytes", "float", "iter", "print", "tuple",
+	"chr", "frozenset", "list", "range", "vars",
+	"classmethod", "getattr", "locals", "repr", "zip",
+	"compile", "globals", "map", "reversed", "__import__",
+	"complex", "hasattr", "max", "round",
+
 	NULL
 };
 
