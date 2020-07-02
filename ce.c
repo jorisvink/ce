@@ -33,6 +33,7 @@ static struct {
 	{ ".diff",	CE_FILE_TYPE_DIFF },
 	{ ".patch",	CE_FILE_TYPE_DIFF },
 	{ ".js",	CE_FILE_TYPE_JS },
+	{ ".sh",	CE_FILE_TYPE_SHELL },
 	{ NULL,		0 },
 };
 

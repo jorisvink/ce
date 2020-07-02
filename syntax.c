@@ -66,12 +66,14 @@ static void	syntax_state_color_clear(struct state *);
 static void	syntax_highlight_js(struct state *);
 static void	syntax_highlight_diff(struct state *);
 
+static void	syntax_highlight_shell(struct state *);
+static int	syntax_highlight_shell_variable(struct state *);
+
 static void	syntax_highlight_c(struct state *);
 static int	syntax_highlight_c_comment(struct state *);
 static int	syntax_highlight_c_preproc(struct state *);
 
 static void	syntax_highlight_python(struct state *);
-static int	syntax_highlight_python_comment(struct state *);
 static int	syntax_highlight_python_decorator(struct state *);
 static int	syntax_highlight_python_multiline_string(struct state *);
 
@@ -80,6 +82,7 @@ static int	syntax_highlight_numeric(struct state *);
 static void	syntax_highlight_format_string(struct state *);
 static void	syntax_highlight_span(struct state *, char, char, int);
 static int	syntax_highlight_word(struct state *, const char *[], int);
+static int	syntax_highlight_pound_comment(struct state *);
 
 static const char *tags[] = {
 	"XXX",
@@ -246,6 +249,9 @@ ce_syntax_write(struct cebuf *buf, struct celine *line, size_t towrite)
 				break;
 			case CE_FILE_TYPE_JS:
 				syntax_highlight_js(&syntax_state);
+				break;
+			case CE_FILE_TYPE_SHELL:
+				syntax_highlight_shell(&syntax_state);
 				break;
 			default:
 				syntax_state_color_clear(&syntax_state);
@@ -573,7 +579,7 @@ syntax_highlight_python(struct state *state)
 	if (syntax_highlight_word(state, tags, TERM_COLOR_YELLOW) == 0)
 		return;
 
-	if (syntax_highlight_python_comment(state) == 0)
+	if (syntax_highlight_pound_comment(state) == 0)
 		return;
 
 	if (syntax_highlight_python_multiline_string(state) == 0)
@@ -607,26 +613,6 @@ syntax_highlight_python_decorator(struct state *state)
 	if (state->off == 0 && state->p[0] == '@') {
 		syntax_state_color(state, TERM_COLOR_CYAN);
 		syntax_write(state, state->len);
-		return (0);
-	}
-
-	return (-1);
-}
-
-static int
-syntax_highlight_python_comment(struct state *state)
-{
-	if (state->inside_comment == 0) {
-		if (state->p[0] == '#') {
-			state->inside_comment = 1;
-			ce_term_writestr(TERM_SEQUENCE_ATTR_BOLD);
-			syntax_state_color(state, TERM_COLOR_BLUE);
-			syntax_write(state, 1);
-			state->flags |= SYNTAX_CLEAR_COMMENT;
-			return (0);
-		}
-	} else {
-		syntax_write(state, 1);
 		return (0);
 	}
 
@@ -731,6 +717,61 @@ syntax_highlight_js(struct state *state)
 }
 
 static void
+syntax_highlight_shell(struct state *state)
+{
+	if (syntax_highlight_word(state, tags, TERM_COLOR_YELLOW) == 0)
+		return;
+
+	if (syntax_highlight_pound_comment(state) == 0)
+		return;
+
+	if (syntax_highlight_shell_variable(state) == 0)
+		return;
+
+	if (syntax_highlight_string(state) == 0)
+		return;
+
+	if (syntax_highlight_numeric(state) == 0)
+		return;
+
+	syntax_state_color_clear(state);
+	syntax_write(state, 1);
+}
+
+static int
+syntax_highlight_shell_variable(struct state *state)
+{
+	size_t		len;
+	int		prev;
+
+	if (state->p[0] == '$') {
+		prev = state->color;
+		syntax_state_color(state, TERM_COLOR_MAGENTA);
+
+		for (len = 0; len < state->len; len++) {
+			if (state->p[len] == '{' ||
+			    state->p[len] == '}' ||
+			    state->p[len] == '$')
+				continue;
+
+			if (ce_editor_word_byte(state->p[len]) == 0)
+				break;
+		}
+
+		syntax_write(state, len);
+
+		if (prev != -1)
+			syntax_state_color(state, prev);
+		else
+			syntax_state_color_clear(state);
+
+		return (0);
+	}
+
+	return (-1);
+}
+
+static void
 syntax_highlight_span(struct state *state, char start, char end, int color)
 {
 	const u_int8_t		*p;
@@ -779,6 +820,26 @@ syntax_highlight_word(struct state *state, const char *words[], int color)
 		ce_term_writestr(words[i]);
 
 		state->off = state->off + len;
+		return (0);
+	}
+
+	return (-1);
+}
+
+static int
+syntax_highlight_pound_comment(struct state *state)
+{
+	if (state->inside_comment == 0) {
+		if (state->p[0] == '#') {
+			state->inside_comment = 1;
+			ce_term_writestr(TERM_SEQUENCE_ATTR_BOLD);
+			syntax_state_color(state, TERM_COLOR_BLUE);
+			syntax_write(state, 1);
+			state->flags |= SYNTAX_CLEAR_COMMENT;
+			return (0);
+		}
+	} else {
+		syntax_write(state, 1);
 		return (0);
 	}
 

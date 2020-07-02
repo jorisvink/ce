@@ -78,6 +78,7 @@
 #define CE_FILE_TYPE_PYTHON		2
 #define CE_FILE_TYPE_DIFF		3
 #define CE_FILE_TYPE_JS			4
+#define CE_FILE_TYPE_SHELL		5
 
 /*
  * An operation that happened on a line.
