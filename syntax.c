@@ -161,6 +161,12 @@ static const char *js_other[] = {
 	NULL
 };
 
+static const char *sh_kw[] = {
+	"if", "fi", "while", "do", "exit", "return",
+	"shift", "case", "esac", "echo", "print", "set",
+	NULL
+};
+
 static struct state	syntax_state = { 0 };
 
 void
@@ -728,10 +734,13 @@ syntax_highlight_shell(struct state *state)
 	if (syntax_highlight_shell_variable(state) == 0)
 		return;
 
+	if (syntax_highlight_numeric(state) == 0)
+		return;
+
 	if (syntax_highlight_string(state) == 0)
 		return;
 
-	if (syntax_highlight_numeric(state) == 0)
+	if (syntax_highlight_word(state, sh_kw, TERM_COLOR_YELLOW) == 0)
 		return;
 
 	syntax_state_color_clear(state);
