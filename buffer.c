@@ -417,12 +417,7 @@ ce_buffer_map(void)
 		if (towrite > active->lines[idx].length)
 			towrite = active->lines[idx].length;
 
-		if (active->internal) {
-			ce_term_write(active->lines[idx].data, towrite);
-		} else {
-			ce_syntax_write(active, &active->lines[idx], towrite);
-		}
-
+		ce_syntax_write(active, &active->lines[idx], towrite);
 		line += buffer_line_span(&active->lines[idx]);
 
 		if (line > ce_term_height() - 2)
