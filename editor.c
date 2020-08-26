@@ -770,6 +770,9 @@ editor_cmd_delete_lines(struct cebuf *buf, long num)
 	long		i;
 	size_t		index, remain;
 
+	if (buf->lcnt == 0)
+		return;
+
 	index = ce_buffer_line_index(buf);
 	remain = buf->lcnt - index;
 
@@ -1000,12 +1003,19 @@ editor_cmd_insert_mode(void)
 static void
 editor_cmd_insert_mode_append(void)
 {
-	ce_buffer_jump_left();
-	ce_buffer_move_down();
-	ce_buffer_input(ce_buffer_active(), '\n');
-	ce_buffer_move_up();
+	struct cebuf		*buf = ce_buffer_active();
 
-	mode = CE_EDITOR_MODE_INSERT;
+	if (buf->lcnt == 0 || buf->line == buf->lcnt) {
+		mode = CE_EDITOR_MODE_INSERT;
+		ce_buffer_jump_right();
+		ce_buffer_input(buf, '\n');
+	} else {
+		ce_buffer_jump_left();
+		ce_buffer_move_down();
+		ce_buffer_input(buf, '\n');
+		ce_buffer_move_up();
+		mode = CE_EDITOR_MODE_INSERT;
+	}
 }
 
 static void
