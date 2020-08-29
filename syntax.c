@@ -70,6 +70,7 @@ static void	syntax_highlight_shell(struct state *);
 static int	syntax_highlight_shell_variable(struct state *);
 
 static void	syntax_highlight_c(struct state *);
+static int	syntax_highlight_c_label(struct state *);
 static int	syntax_highlight_c_comment(struct state *);
 static int	syntax_highlight_c_preproc(struct state *);
 
@@ -453,6 +454,9 @@ syntax_highlight_c(struct state *state)
 	if (syntax_highlight_c_preproc(state) == 0)
 		return;
 
+	if (syntax_highlight_c_label(state) == 0)
+		return;
+
 	if (syntax_highlight_numeric(state) == 0)
 		return;
 
@@ -505,6 +509,19 @@ syntax_highlight_c_comment(struct state *state)
 
 		syntax_state_color(state, TERM_COLOR_BLUE);
 		syntax_write(state, 1);
+		return (0);
+	}
+
+	return (-1);
+}
+
+static int
+syntax_highlight_c_label(struct state *state)
+{
+	if (state->off == 0 && state->len > 2 &&
+	    state->p[state->len - 2] == ':') {
+		syntax_state_color(state, TERM_COLOR_YELLOW);
+		syntax_write(state, state->len - 2);
 		return (0);
 	}
 
