@@ -36,6 +36,8 @@ ce uses a modal approach to editing much like vi.
 
 **normal mode key bindings**
 
+C            = center view on line at cursor
+
 k            = move up one row
 
 j            = move down one row
