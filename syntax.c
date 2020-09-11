@@ -479,6 +479,9 @@ syntax_highlight_c(struct state *state)
 static int
 syntax_highlight_c_comment(struct state *state)
 {
+	if (state->inside_string)
+		return (-1);
+
 	if (state->inside_comment == 0) {
 		if (state->len >= 2 &&
 		    state->p[0] == '/' && state->p[1] == '/') {
