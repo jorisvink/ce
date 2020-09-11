@@ -912,9 +912,35 @@ ce_buffer_delete_character(void)
 }
 
 void
+ce_buffer_center(void)
+{
+	int		adj;
+	size_t		half;
+
+	adj = 0;
+	half = ce_term_height() / 2;
+
+	if (active->cursor_line < half && active->top > half) {
+		adj = 1;
+		active->top -= half - active->cursor_line;
+		active->line += half - active->cursor_line;
+	} else if (active->cursor_line > half) {
+		adj = 1;
+		active->top += active->cursor_line - half;
+		active->line -= active->cursor_line - half;
+	}
+
+	if (adj) {
+		active->cursor_line = (ce_term_height() / 2);
+		ce_term_setpos(active->cursor_line, active->column);
+		ce_editor_dirty();
+	}
+}
+
+void
 ce_buffer_move_up(void)
 {
-	int			scroll;
+	int		scroll;
 
 	if (active->cursor_line < TERM_CURSOR_MIN)
 		fatal("%s: line (%zu) < min", __func__, active->cursor_line);
@@ -924,22 +950,23 @@ ce_buffer_move_up(void)
 
 	scroll = 0;
 
-	if (active->cursor_line < TERM_SCROLL_OFFSET) {
-		if (active->top > 0) {
+	if (active->cursor_line == TERM_CURSOR_MIN) {
+		if (active->top >= ce_term_height() / 2) {
 			scroll = 1;
-			active->top--;
+			active->top -= ce_term_height() / 2;
+			active->line += ce_term_height() / 2;
+			active->cursor_line = (ce_term_height() / 2) + 1;
 		} else if (active->line > TERM_CURSOR_MIN) {
 			active->line--;
 		}
 	} else if (active->line > TERM_CURSOR_MIN) {
 		active->line--;
+		buffer_update_cursor(active);
 	}
 
-	buffer_update_cursor(active);
+	ce_term_setpos(active->cursor_line, active->column);
 
-	if (!scroll)
-		ce_term_setpos(active->cursor_line, active->column);
-	else
+	if (scroll)
 		ce_editor_dirty();
 }
 
@@ -1013,12 +1040,12 @@ ce_buffer_move_down(void)
 	if (active->cursor_line == ce_term_height() - 2)
 		scroll = 1;
 
-	if (active->cursor_line >= (ce_term_height() - 2 - TERM_SCROLL_OFFSET))
-		scroll = 1;
-
 	if (scroll) {
+		active->top += ce_term_height() / 2;
+		active->line -= ce_term_height() / 2;
+		active->cursor_line = (ce_term_height() / 2) - 2;
 		if (index < active->lcnt - 1) {
-			line = &active->lines[active->top++];
+			line = &active->lines[active->top];
 			upper = buffer_line_span(line);
 		}
 	} else {
@@ -1053,14 +1080,12 @@ ce_buffer_move_down(void)
 		}
 	}
 
-	buffer_update_cursor(active);
-
-	line = ce_buffer_line_current(active);
-
-	if (!scroll)
+	if (!scroll) {
+		buffer_update_cursor(active);
 		ce_term_setpos(active->cursor_line, active->column);
-	else
+	} else {
 		ce_editor_dirty();
+	}
 }
 
 void

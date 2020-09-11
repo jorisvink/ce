@@ -93,6 +93,7 @@ static struct keymap normal_map[] = {
 	{ 'j',			ce_buffer_move_down },
 	{ 'l',			ce_buffer_move_right },
 	{ 'h',			ce_buffer_move_left },
+	{ 'C',			ce_buffer_center },
 
 	{ '$',			ce_buffer_jump_right },
 	{ '0',			ce_buffer_jump_left },
