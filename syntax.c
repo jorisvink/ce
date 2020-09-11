@@ -445,9 +445,6 @@ syntax_highlight_numeric(struct state *state)
 static void
 syntax_highlight_c(struct state *state)
 {
-	if (syntax_highlight_string(state) == 0)
-		return;
-
 	if (syntax_highlight_word(state, tags, TERM_COLOR_YELLOW) == 0)
 		return;
 
@@ -461,6 +458,9 @@ syntax_highlight_c(struct state *state)
 		return;
 
 	if (syntax_highlight_numeric(state) == 0)
+		return;
+
+	if (syntax_highlight_string(state) == 0)
 		return;
 
 	if (syntax_highlight_word(state, c_kw, TERM_COLOR_YELLOW) == 0)
