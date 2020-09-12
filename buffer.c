@@ -1043,7 +1043,7 @@ ce_buffer_move_down(void)
 	if (scroll) {
 		active->top += ce_term_height() / 2;
 		active->line -= ce_term_height() / 2;
-		active->cursor_line = (ce_term_height() / 2) - 2;
+		active->cursor_line = (ce_term_height() / 2) - 1;
 		if (index < active->lcnt - 1) {
 			line = &active->lines[active->top];
 			upper = buffer_line_span(line);
