@@ -969,11 +969,11 @@ ce_buffer_center(void)
 	if (active->cursor_line < half && active->top > half) {
 		adj = 1;
 		active->top -= half - active->cursor_line;
-		active->line += half - active->cursor_line;
+		active->line += half - active->cursor_line - 1;
 	} else if (active->cursor_line > half) {
 		adj = 1;
 		active->top += active->cursor_line - half;
-		active->line -= active->cursor_line - half;
+		active->line -= active->cursor_line - half - 1;
 	}
 
 	if (adj) {
@@ -1000,8 +1000,8 @@ ce_buffer_move_up(void)
 		if (active->top >= ce_term_height() / 2) {
 			scroll = 1;
 			active->top -= ce_term_height() / 2;
-			active->line += ce_term_height() / 2;
-			active->cursor_line = (ce_term_height() / 2) + 1;
+			active->line += (ce_term_height() / 2) - 1;
+			active->cursor_line = (ce_term_height() / 2);
 		} else if (active->line > TERM_CURSOR_MIN) {
 			active->line--;
 		}
@@ -1088,8 +1088,8 @@ ce_buffer_move_down(void)
 
 	if (scroll) {
 		active->top += ce_term_height() / 2;
-		active->line -= ce_term_height() / 2;
-		active->cursor_line = (ce_term_height() / 2) - 1;
+		active->line -= (ce_term_height() / 2) - 1;
+		active->cursor_line = (ce_term_height() / 2);
 		if (index < active->lcnt - 1) {
 			line = &active->lines[active->top];
 			upper = buffer_line_span(line);

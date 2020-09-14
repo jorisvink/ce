@@ -156,7 +156,7 @@ struct cebuf {
 	/* Current cursor line. */
 	size_t			cursor_line;
 
-	/* Current line / column offsets. */
+	/* Current line / column offsets (indexed from 1). */
 	size_t			line;
 	size_t			column;
 
@@ -164,13 +164,13 @@ struct cebuf {
 	size_t			orig_line;
 	size_t			orig_column;
 
-	/* The "top" of where to begin to render the lines. */
+	/* The "top" of where to begin to render the lines (0 based index). */
 	size_t			top;
 
-	/* The byte offset in the current line we're at. */
+	/* The byte offset in the current line we're at (0 based index). */
 	size_t			loff;
 
-	/* Number of lines in this buffer. */
+	/* Number of lines in this buffer (0 based index). */
 	size_t			lcnt;
 	struct celine		*lines;
 
