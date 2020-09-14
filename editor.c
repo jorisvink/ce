@@ -161,6 +161,13 @@ static struct {
 	time_t			when;
 } msg;
 
+static struct {
+	int			act;
+	size_t			end;
+	size_t			start;
+	size_t			range;
+} range;
+
 static int			quit = 0;
 static int			dirty = 1;
 static volatile sig_atomic_t	sig_recv = -1;
@@ -171,14 +178,11 @@ static struct cebuf		*buflist = NULL;
 static struct cebuf		*pbuffer = NULL;
 static int			mode = CE_EDITOR_MODE_NORMAL;
 
-static size_t			range_end = 0;
-static size_t			range_start = 0;
-
 void
 ce_editor_init(void)
 {
-	msg.message = NULL;
-	msg.when = 0;
+	memset(&msg, 0, sizeof(msg));
+	memset(&range, 0, sizeof(range));
 
 	editor_signal_setup();
 }
@@ -698,7 +702,7 @@ editor_normal_mode_command(char key)
 	long			num;
 	const char		*str;
 	struct cebuf		*buf;
-	int			reset;
+	int			reset, range_reset;
 
 	if (key >= '0' && key <= '9') {
 		mode = CE_EDITOR_MODE_NORMAL_CMD;
@@ -707,6 +711,7 @@ editor_normal_mode_command(char key)
 	}
 
 	reset = 0;
+	range_reset = 0;
 	buf = ce_buffer_active();
 
 	if (normalcmd == -1) {
@@ -728,6 +733,7 @@ editor_normal_mode_command(char key)
 			goto direct;
 		case EDITOR_KEY_ESC:
 			reset = 1;
+			range_reset = 1;
 			break;
 		}
 	} else {
@@ -747,12 +753,15 @@ direct:
 		case EDITOR_COMMAND_DELETE:
 			switch (key) {
 			case 's':
-				range_start = ce_buffer_line_index(buf);
-				ce_editor_message("delete start @ %zu",
-				    range_start);
+				range.act = EDITOR_COMMAND_DELETE;
+				range.start = ce_buffer_line_index(buf);
+				ce_editor_message("delete range start @ %zu",
+				    range.start);
 				break;
 			case 'e':
-				range_end = ce_buffer_line_index(buf);
+				if (range.act != EDITOR_COMMAND_DELETE)
+					break;
+				range.end = ce_buffer_line_index(buf);
 				editor_cmd_range(buf, ce_buffer_delete_lines);
 				break;
 			case 'd':
@@ -766,12 +775,15 @@ direct:
 		case EDITOR_COMMAND_YANK:
 			switch (key) {
 			case 's':
-				range_start = ce_buffer_line_index(buf);
-				ce_editor_message("yank start @ %zu",
-				    range_start);
+				range.act = EDITOR_COMMAND_YANK;
+				range.start = ce_buffer_line_index(buf);
+				ce_editor_message("yank range start @ %zu",
+				    range.start);
 				break;
 			case 'e':
-				range_end = ce_buffer_line_index(buf);
+				if (range.act != EDITOR_COMMAND_YANK)
+					break;
+				range.end = ce_buffer_line_index(buf);
 				editor_cmd_range(buf, editor_yank_lines);
 				break;
 			case 'y':
@@ -796,6 +808,11 @@ direct:
 		ce_buffer_reset(cmdbuf);
 		mode = CE_EDITOR_MODE_NORMAL;
 	}
+
+	if (range_reset && range.act != 0) {
+		ce_editor_message("range command aborted");
+		memset(&range, 0, sizeof(range));
+	}
 }
 
 static void
@@ -803,21 +820,21 @@ editor_cmd_range(struct cebuf *buf,
     void (*cb)(struct cebuf *, size_t, size_t, int))
 {
 	int		rev;
-	size_t		start, end, range;
+	size_t		start, end;
 
-	if (range_end < range_start) {
+	if (range.end < range.start) {
 		rev = 1;
-		start = range_end;
-		end = range_start;
+		start = range.end;
+		end = range.start;
 	} else {
 		rev = 0;
-		start = range_start;
-		end = range_end;
+		start = range.start;
+		end = range.end;
 	}
 
 	end += 1;
-	range = end - start;
-	if (range == 0)
+	range.range = end - start;
+	if (range.range == 0)
 		return;
 
 	if (end >= buf->lcnt)
@@ -830,8 +847,7 @@ editor_cmd_range(struct cebuf *buf,
 
 	cb(buf, start, end, rev);
 
-	range_start = 0;
-	range_end = 0;
+	memset(&range, 0, sizeof(range));
 
 #if defined(__APPLE__)
 	ce_macos_set_pasteboard_contents(pbuffer->data, pbuffer->length);
