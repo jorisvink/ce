@@ -98,6 +98,7 @@ struct ceop {
  * Represents a single line in a file.
  */
 #define CE_LINE_ALLOCATED	0x0001
+
 struct celine {
 	/* Flags. */
 	u_int32_t		flags;
@@ -124,6 +125,7 @@ struct celine {
 #define CE_BUFFER_DIRTY		0x0001
 #define CE_BUFFER_MMAP		0x0002
 #define CE_BUFFER_RO		0x0004
+
 struct cebuf {
 	/* Internal buffer? */
 	int			internal;
@@ -183,7 +185,6 @@ TAILQ_HEAD(cebuflist, cebuf);
 void		ce_buffer_map(void);
 void		ce_buffer_cleanup(void);
 void		ce_buffer_restore(void);
-int		ce_buffer_save_active(int);
 void		ce_buffer_init(int, char **);
 void		ce_buffer_free(struct cebuf *);
 void		ce_buffer_list(struct cebuf *);
@@ -195,6 +196,7 @@ void		ce_buffer_delete_line(struct cebuf *);
 void		ce_buffer_insert_line(struct cebuf *);
 void		ce_buffer_line_columns(struct celine *);
 void		ce_buffer_free_internal(struct cebuf *);
+int		ce_buffer_save_active(int, const char *);
 void		ce_buffer_jump_line(struct cebuf *, long);
 void		ce_buffer_input(struct cebuf *, u_int8_t);
 void		ce_buffer_line_alloc_empty(struct cebuf *);

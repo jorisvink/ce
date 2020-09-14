@@ -86,6 +86,7 @@ ce_buffer_init(int argc, char **argv)
 	TAILQ_INIT(&internals);
 
 	scratch = ce_buffer_internal("scratch");
+	scratch->mode = 0644;
 	active = scratch;
 
 	for (i = 0; i < argc; i++) {
@@ -1307,7 +1308,7 @@ ce_buffer_constrain_cursor_column(struct cebuf *buf)
 }
 
 int
-ce_buffer_save_active(int force)
+ce_buffer_save_active(int force, const char *dstpath)
 {
 	struct iovec		*iov;
 	const char		*file, *dir;
@@ -1321,9 +1322,15 @@ ce_buffer_save_active(int force)
 	copy = NULL;
 	path[0] = '\0';
 
-	if (active->path == NULL) {
-		buffer_seterr("buffer has no active path");
-		goto cleanup;
+	if (dstpath == NULL) {
+		if (active->path == NULL) {
+			buffer_seterr("buffer has no active path");
+			goto cleanup;
+		}
+
+		dstpath = active->path;
+	} else {
+		force = 1;
 	}
 
 	if ((active->flags & CE_BUFFER_RO) && force == 0) {
@@ -1334,7 +1341,7 @@ ce_buffer_save_active(int force)
 	if (!(active->flags & CE_BUFFER_DIRTY) && force == 0)
 		return (0);
 
-	if ((copy = strdup(active->path)) == NULL)
+	if ((copy = strdup(dstpath)) == NULL)
 		fatal("%s: strdup failed %s", __func__, errno_s);
 
 	if ((file = basename(copy)) == NULL) {
@@ -1435,14 +1442,14 @@ ce_buffer_save_active(int force)
 
 	fd = -1;
 
-	if (rename(path, active->path) == -1) {
+	if (rename(path, dstpath) == -1) {
 		buffer_seterr("rename(%s): %s", path, errno_s);
 		goto cleanup;
 	}
 
 	ret = 0;
 	active->flags &= ~CE_BUFFER_DIRTY;
-	ce_editor_message("wrote %zu lines to %s", active->lcnt, active->name);
+	ce_editor_message("wrote %zu lines to %s", active->lcnt, dstpath);
 
 cleanup:
 	free(iov);

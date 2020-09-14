@@ -545,9 +545,9 @@ static void
 editor_cmdbuf_input(struct cebuf *buf, char key)
 {
 	char			*ep;
-	const char		*cmd;
 	int			force;
 	long			linenr;
+	const char		*cmd, *path;
 
 	switch (key) {
 	case '\n':
@@ -572,7 +572,11 @@ editor_cmdbuf_input(struct cebuf *buf, char key)
 			break;
 		case 'w':
 			force = cmd[2] == '!';
-			if (ce_buffer_save_active(force) == -1) {
+			if (strlen(cmd) > 3)
+				path = &cmd[3];
+			else
+				path = NULL;
+			if (ce_buffer_save_active(force, path) == -1) {
 				ce_editor_message("failed to save: %s",
 				    ce_buffer_strerror());
 			}
