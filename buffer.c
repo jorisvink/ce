@@ -1714,11 +1714,29 @@ buffer_line_insert_byte(struct cebuf *buf, struct celine *line, u_int8_t byte)
 	line->length++;
 	ce_buffer_line_columns(line);
 
-	ce_buffer_move_right();
+	if (byte == '\n') {
+		ce_buffer_move_right();
+		buf->flags |= CE_BUFFER_DIRTY;
+		ce_editor_dirty();
+		return;
+	}
 
-	/* XXX for now. */
+	/* Erase the current line and rewrite it completely. */
+	ce_term_setpos(buf->cursor_line, TERM_CURSOR_MIN);
+	ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
+	ce_syntax_write(buf, line, line->length);
+
+	/*
+	 * Mimic ce_buffer_move_right().
+	 */
+	buffer_next_character(buf, line);
+	buf->column = buffer_line_data_to_columns(line->data, buf->loff);
+	ce_buffer_constrain_cursor_column(buf);
+
+	cursor_column = buf->column;
+	ce_term_setpos(buf->cursor_line, active->column);
+
 	buf->flags |= CE_BUFFER_DIRTY;
-	ce_editor_dirty();
 }
 
 static void
