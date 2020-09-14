@@ -930,7 +930,7 @@ editor_yank_lines(struct cebuf *buf, size_t start, size_t end, int rev)
 		ce_editor_pbuffer_append(line->data, line->length);
 	}
 
-	ce_editor_message("yanked %zu line(s)", end - start);
+	ce_editor_message("yanked %zu line(s)", (end - start) + 1);
 }
 
 static void
