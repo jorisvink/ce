@@ -1506,7 +1506,13 @@ ce_buffer_save_active(int force, const char *dstpath)
 		goto cleanup;
 	}
 
+	if (stat(dstpath, &st) == -1) {
+		buffer_seterr("stat failed: %s", errno_s);
+		goto cleanup;
+	}
+
 	ret = 0;
+	active->mtime = st.st_mtime;
 	active->flags &= ~CE_BUFFER_DIRTY;
 	ce_editor_message("wrote %zu lines to %s", active->lcnt, dstpath);
 
