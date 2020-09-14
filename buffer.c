@@ -753,22 +753,23 @@ ce_buffer_delete_line(struct cebuf *buf)
 		return;
 
 	index = ce_buffer_line_index(buf);
-	ce_buffer_delete_lines(buf, index, index + 1);
+	ce_buffer_delete_lines(buf, index, index + 1, 0);
 }
 
 void
-ce_buffer_delete_lines(struct cebuf *buf, size_t start, size_t end)
+ce_buffer_delete_lines(struct cebuf *buf, size_t start, size_t end, int rev)
 {
-	size_t			index;
 	struct celine		*line;
+	size_t			index;
 
 	if (start > end)
-		fatal("%s: start=%zu > end=%zu", __func__, start, end);
+		fatal("%s: start(%zu) > end(%zu)", __func__, start, end);
 
 	if (buf->lcnt == 0 || end > buf->lcnt || start == end)
 		return;
 
-	ce_debug("start: %zu, end: %zu (lcnt:%zu)", start, end, buf->lcnt);
+	ce_debug("start: %zu, end: %zu (lcnt:%zu)",
+	    start, end, buf->lcnt);
 
 	ce_editor_pbuffer_reset();
 
@@ -788,20 +789,36 @@ ce_buffer_delete_lines(struct cebuf *buf, size_t start, size_t end)
 	}
 
 	buf->lcnt -= end - start;
-	ce_buffer_jump_line(buf, start);
 
-	if (end - 1 != buf->lcnt) {
-		line = ce_buffer_line_current(buf);
-		buffer_line_allocate(buf, line);
+	if (rev == 0) {
+		if (buf->top > (end - start)) {
+			buf->top -= end - start;
+		} else {
+			buf->top = 0;
+
+			if (buf->line > (end - start))
+				buf->line -= end - start;
+			else
+				buf->line = TERM_CURSOR_MIN;
+		}
+	} else {
+		buf->line--;
 	}
+
+	if (buf->line == 0)
+		buf->line = TERM_CURSOR_MIN;
 
 	if (buf->lcnt == 0) {
 		cursor_column = TERM_CURSOR_MIN;
 		buf->column = TERM_CURSOR_MIN;
 		buf->loff = 0;
+		ce_buffer_line_alloc_empty(buf);
 	}
 
 	buf->flags |= CE_BUFFER_DIRTY;
+	buffer_update_cursor(buf);
+	ce_term_setpos(buf->cursor_line, buf->column);
+
 	ce_editor_dirty();
 
 #if defined(__APPLE__)
@@ -1032,7 +1049,7 @@ ce_buffer_move_down(void)
 {
 	struct celine	*line;
 	int		scroll;
-	size_t		index, next, upper, current, lower, lines, diff;
+	size_t		index, next, current, upper, lower, lines, diff;
 
 	if (active->lcnt == 0)
 		return;
@@ -1068,7 +1085,7 @@ ce_buffer_move_down(void)
 		active->cursor_line = (ce_term_height() / 2) - 1;
 		if (index < active->lcnt - 1) {
 			line = &active->lines[active->top];
-			upper = buffer_line_span(line);
+			//upper = buffer_line_span(line);
 		}
 	} else {
 		next = active->line + 1;

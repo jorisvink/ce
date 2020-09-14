@@ -203,8 +203,8 @@ void		ce_buffer_input(struct cebuf *, u_int8_t);
 void		ce_buffer_line_alloc_empty(struct cebuf *);
 void		ce_buffer_constrain_cursor_column(struct cebuf *);
 int		ce_buffer_search(struct cebuf *, const char *, int);
-void		ce_buffer_delete_lines(struct cebuf *, size_t, size_t);
 void		ce_buffer_append(struct cebuf *, const void *, size_t);
+void		ce_buffer_delete_lines(struct cebuf *, size_t, size_t, int);
 void		ce_buffer_appendf(struct cebuf *, const char *, ...)
 		    __attribute__((format (printf, 2, 3)));
 

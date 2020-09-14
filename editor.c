@@ -54,7 +54,7 @@ static void	editor_process_input(void);
 static u_int8_t	editor_process_escape(void);
 static int	editor_allowed_command_key(char);
 static ssize_t	editor_read(int, void *, size_t, int);
-static void	editor_yank_lines(struct cebuf *, size_t, size_t);
+static void	editor_yank_lines(struct cebuf *, size_t, size_t, int);
 
 static void	editor_draw_status(void);
 
@@ -73,7 +73,7 @@ static void	editor_cmd_command_mode(void);
 static void	editor_cmd_search_mode(void);
 static void	editor_cmd_normal_mode(void);
 static void	editor_cmd_range(struct cebuf *,
-		    void (*cb)(struct cebuf *, size_t, size_t));
+		    void (*cb)(struct cebuf *, size_t, size_t, int));
 
 static void	editor_cmd_word_prev(struct cebuf *, long);
 static void	editor_cmd_word_next(struct cebuf *, long);
@@ -798,14 +798,18 @@ direct:
 }
 
 static void
-editor_cmd_range(struct cebuf *buf, void (*cb)(struct cebuf *, size_t, size_t))
+editor_cmd_range(struct cebuf *buf,
+    void (*cb)(struct cebuf *, size_t, size_t, int))
 {
+	int		rev;
 	size_t		start, end, range;
 
 	if (range_end < range_start) {
+		rev = 1;
 		start = range_end;
 		end = range_start;
 	} else {
+		rev = 0;
 		start = range_start;
 		end = range_end;
 	}
@@ -821,7 +825,7 @@ editor_cmd_range(struct cebuf *buf, void (*cb)(struct cebuf *, size_t, size_t))
 	if (start >= end)
 		return;
 
-	cb(buf, start, end);
+	cb(buf, start, end, rev);
 
 	range_start = 0;
 	range_end = 0;
@@ -836,7 +840,7 @@ editor_cmd_delete_lines(struct cebuf *buf, long end)
 		return;
 
 	start = ce_buffer_line_index(buf);
-	ce_buffer_delete_lines(buf, start, start + end);
+	ce_buffer_delete_lines(buf, start, start + end, 0);
 }
 
 static void
@@ -880,11 +884,11 @@ editor_cmd_yank_lines(struct cebuf *buf, long num)
 	if (end >= buf->lcnt)
 		end = buf->lcnt;
 
-	editor_yank_lines(buf, index, end);
+	editor_yank_lines(buf, index, end, 0);
 }
 
 static void
-editor_yank_lines(struct cebuf *buf, size_t start, size_t end)
+editor_yank_lines(struct cebuf *buf, size_t start, size_t end, int rev)
 {
 	size_t		idx;
 	struct celine	*line;
