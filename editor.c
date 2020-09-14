@@ -720,6 +720,7 @@ editor_normal_mode_command(char key)
 			normalcmd = EDITOR_COMMAND_DELETE;
 			break;
 		case 'y':
+		case 'c':
 			normalcmd = EDITOR_COMMAND_YANK;
 			break;
 		case 'w':
