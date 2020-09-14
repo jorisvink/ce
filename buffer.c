@@ -1729,7 +1729,10 @@ buffer_line_insert_byte(struct cebuf *buf, struct celine *line, u_int8_t byte)
 	/* Erase the current line and rewrite it completely. */
 	ce_term_setpos(buf->cursor_line, TERM_CURSOR_MIN);
 	ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
+
+	ce_syntax_init();
 	ce_syntax_write(buf, line, line->length);
+	ce_syntax_finalize();
 
 	/*
 	 * Mimic ce_buffer_move_right().
