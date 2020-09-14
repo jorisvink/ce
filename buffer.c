@@ -1770,6 +1770,10 @@ buffer_line_insert_byte(struct cebuf *buf, struct celine *line, u_int8_t byte)
 	ce_term_setpos(buf->cursor_line, active->column);
 
 	buf->flags |= CE_BUFFER_DIRTY;
+
+	/* If we overflow terminal width, just redraw completely. */
+	if (buffer_line_span(line) > 1)
+		ce_editor_dirty();
 }
 
 static void
