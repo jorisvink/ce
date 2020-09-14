@@ -150,6 +150,9 @@ struct cebuf {
 	/* File mode. */
 	mode_t			mode;
 
+	/* Last mtime. */
+	time_t			mtime;
+
 	/* Name of the buffer. */
 	char			*name;
 

@@ -214,6 +214,7 @@ ce_buffer_file(const char *path)
 	buf->maxsz = (size_t)st.st_size;
 	buf->length = buf->maxsz;
 	buf->mode = st.st_mode;
+	buf->mtime = st.st_mtime;
 
 	if (buf->maxsz > 0) {
 		buf->data = mmap(NULL, buf->maxsz,
@@ -1357,6 +1358,7 @@ ce_buffer_constrain_cursor_column(struct cebuf *buf)
 int
 ce_buffer_save_active(int force, const char *dstpath)
 {
+	struct stat		st;
 	struct iovec		*iov;
 	const char		*file, *dir;
 	int			fd, len, ret;
@@ -1387,6 +1389,16 @@ ce_buffer_save_active(int force, const char *dstpath)
 
 	if (!(active->flags & CE_BUFFER_DIRTY) && force == 0)
 		return (0);
+
+	if (stat(dstpath, &st) == -1) {
+		buffer_seterr("stat failed: %s", errno_s);
+		goto cleanup;
+	}
+
+	if (st.st_mtime != active->mtime && force == 0) {
+		buffer_seterr("underlying file has changed, use force");
+		goto cleanup;
+	}
 
 	if ((copy = strdup(dstpath)) == NULL)
 		fatal("%s: strdup failed %s", __func__, errno_s);
