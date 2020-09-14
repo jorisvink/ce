@@ -1074,6 +1074,7 @@ editor_cmd_paste(void)
 	for (idx = 0; idx < pbuffer->length - 1; idx++)
 		ce_buffer_input(buf, ptr[idx]);
 
+	ce_editor_dirty();
 	ce_buffer_jump_left();
 	mode = CE_EDITOR_MODE_NORMAL;
 

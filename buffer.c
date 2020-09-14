@@ -821,6 +821,9 @@ ce_buffer_delete_lines(struct cebuf *buf, size_t start, size_t end, int rev)
 		buf->column = TERM_CURSOR_MIN;
 		buf->loff = 0;
 		ce_buffer_line_alloc_empty(buf);
+	} else {
+		line = ce_buffer_line_current(buf);
+		buffer_line_allocate(buf, line);
 	}
 
 	buf->flags |= CE_BUFFER_DIRTY;
