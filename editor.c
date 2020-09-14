@@ -54,6 +54,7 @@ static void	editor_process_input(void);
 static u_int8_t	editor_process_escape(void);
 static int	editor_allowed_command_key(char);
 static ssize_t	editor_read(int, void *, size_t, int);
+static void	editor_yank_lines(struct cebuf *, size_t, size_t);
 
 static void	editor_draw_status(void);
 
@@ -71,6 +72,8 @@ static void	editor_cmd_open_file(const char *);
 static void	editor_cmd_command_mode(void);
 static void	editor_cmd_search_mode(void);
 static void	editor_cmd_normal_mode(void);
+static void	editor_cmd_range(struct cebuf *,
+		    void (*cb)(struct cebuf *, size_t, size_t));
 
 static void	editor_cmd_word_prev(struct cebuf *, long);
 static void	editor_cmd_word_next(struct cebuf *, long);
@@ -167,6 +170,9 @@ static struct cebuf		*cmdbuf = NULL;
 static struct cebuf		*buflist = NULL;
 static struct cebuf		*pbuffer = NULL;
 static int			mode = CE_EDITOR_MODE_NORMAL;
+
+static size_t			range_end = 0;
+static size_t			range_start = 0;
 
 void
 ce_editor_init(void)
@@ -739,6 +745,15 @@ direct:
 		switch (normalcmd) {
 		case EDITOR_COMMAND_DELETE:
 			switch (key) {
+			case 's':
+				range_start = ce_buffer_line_index(buf);
+				ce_editor_message("delete start @ %zu",
+				    range_start);
+				break;
+			case 'e':
+				range_end = ce_buffer_line_index(buf);
+				editor_cmd_range(buf, ce_buffer_delete_lines);
+				break;
 			case 'd':
 				editor_cmd_delete_lines(buf, num);
 				break;
@@ -748,7 +763,20 @@ direct:
 			}
 			break;
 		case EDITOR_COMMAND_YANK:
-			editor_cmd_yank_lines(buf, num);
+			switch (key) {
+			case 's':
+				range_start = ce_buffer_line_index(buf);
+				ce_editor_message("yank start @ %zu",
+				    range_start);
+				break;
+			case 'e':
+				range_end = ce_buffer_line_index(buf);
+				editor_cmd_range(buf, editor_yank_lines);
+				break;
+			case 'y':
+				editor_cmd_yank_lines(buf, num);
+				break;
+			}
 			break;
 		case EDITOR_COMMAND_WORD_NEXT:
 			editor_cmd_word_next(buf, num);
@@ -770,30 +798,45 @@ direct:
 }
 
 static void
-editor_cmd_delete_lines(struct cebuf *buf, long num)
+editor_cmd_range(struct cebuf *buf, void (*cb)(struct cebuf *, size_t, size_t))
 {
-	long		i;
-	size_t		index, remain;
+	size_t		start, end, range;
+
+	if (range_end < range_start) {
+		start = range_end;
+		end = range_start;
+	} else {
+		start = range_start;
+		end = range_end;
+	}
+
+	end += 1;
+	range = end - start;
+	if (range == 0)
+		return;
+
+	if (end >= buf->lcnt)
+		end = buf->lcnt;
+
+	if (start >= end)
+		return;
+
+	cb(buf, start, end);
+
+	range_start = 0;
+	range_end = 0;
+}
+
+static void
+editor_cmd_delete_lines(struct cebuf *buf, long end)
+{
+	size_t		start;
 
 	if (buf->lcnt == 0)
 		return;
 
-	index = ce_buffer_line_index(buf);
-	remain = buf->lcnt - index;
-
-	if ((size_t)num > remain) {
-		ce_debug("reducing %ld, to %zu", num, remain);
-		num = remain;
-	}
-
-	ce_editor_pbuffer_reset();
-
-	for (i = 0; i < num; i++)
-		ce_buffer_delete_line(buf);
-
-#if defined(__APPLE__)
-	ce_macos_set_pasteboard_contents(pbuffer->data, pbuffer->length);
-#endif
+	start = ce_buffer_line_index(buf);
+	ce_buffer_delete_lines(buf, start, start + end);
 }
 
 static void
@@ -828,8 +871,7 @@ editor_cmd_delete_words(struct cebuf *buf, long num)
 static void
 editor_cmd_yank_lines(struct cebuf *buf, long num)
 {
-	struct celine	*line;
-	size_t		index, idx, end;
+	size_t		index, end;
 
 	ce_editor_pbuffer_reset();
 	index = ce_buffer_line_index(buf);
@@ -838,7 +880,18 @@ editor_cmd_yank_lines(struct cebuf *buf, long num)
 	if (end >= buf->lcnt)
 		end = buf->lcnt;
 
-	for (idx = index; idx < end; idx++) {
+	editor_yank_lines(buf, index, end);
+}
+
+static void
+editor_yank_lines(struct cebuf *buf, size_t start, size_t end)
+{
+	size_t		idx;
+	struct celine	*line;
+
+	ce_editor_pbuffer_reset();
+
+	for (idx = start; idx < end; idx++) {
 		line = &buf->lines[idx];
 		ce_editor_pbuffer_append(line->data, line->length);
 	}
@@ -846,8 +899,7 @@ editor_cmd_yank_lines(struct cebuf *buf, long num)
 #if defined(__APPLE__)
 	ce_macos_set_pasteboard_contents(pbuffer->data, pbuffer->length);
 #endif
-
-	ce_editor_message("yanked %zu line(s)", end - index);
+	ce_editor_message("yanked %zu line(s)", end - start);
 }
 
 static void

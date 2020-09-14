@@ -748,34 +748,51 @@ void
 ce_buffer_delete_line(struct cebuf *buf)
 {
 	size_t			index;
-	struct celine		*line;
 
 	if (buf->lcnt == 0)
 		return;
 
 	index = ce_buffer_line_index(buf);
-	line = ce_buffer_line_current(buf);
+	ce_buffer_delete_lines(buf, index, index + 1);
+}
 
-	ce_editor_pbuffer_append(line->data, line->length);
+void
+ce_buffer_delete_lines(struct cebuf *buf, size_t start, size_t end)
+{
+	size_t			index;
+	struct celine		*line;
 
-	if (line->flags & CE_LINE_ALLOCATED) {
-		free(line->data);
-		line->data = NULL;
+	if (start > end)
+		fatal("%s: start=%zu > end=%zu", __func__, start, end);
+
+	if (buf->lcnt == 0 || end > buf->lcnt || start == end)
+		return;
+
+	ce_debug("start: %zu, end: %zu (lcnt:%zu)", start, end, buf->lcnt);
+
+	ce_editor_pbuffer_reset();
+
+	for (index = start; index < end; index++) {
+		line = &buf->lines[index];
+		ce_editor_pbuffer_append(line->data, line->length);
+
+		if (line->flags & CE_LINE_ALLOCATED) {
+			free(line->data);
+			line->data = NULL;
+		}
 	}
 
-	if (index < buf->lcnt - 1) {
-		memmove(&buf->lines[index], &buf->lines[index + 1],
-		    (buf->lcnt - index - 1) * sizeof(struct celine));
+	if (end < buf->lcnt) {
+		memmove(&buf->lines[start], &buf->lines[end],
+		    (buf->lcnt - end) * sizeof(struct celine));
 	}
 
-	buf->lcnt--;
+	buf->lcnt -= end - start;
+	ce_buffer_jump_line(buf, start);
 
-	if (index == buf->lcnt) {
-		ce_buffer_move_up();
-	} else {
+	if (end - 1 != buf->lcnt) {
 		line = ce_buffer_line_current(buf);
 		buffer_line_allocate(buf, line);
-		buffer_update_cursor(buf);
 	}
 
 	if (buf->lcnt == 0) {
@@ -785,9 +802,13 @@ ce_buffer_delete_line(struct cebuf *buf)
 	}
 
 	buf->flags |= CE_BUFFER_DIRTY;
-
-	/* XXX for now. */
 	ce_editor_dirty();
+
+#if defined(__APPLE__)
+	ce_macos_set_pasteboard_contents(pbuffer->data, pbuffer->length);
+#endif
+
+	ce_editor_message("deleted %zu line(s)", end - start);
 }
 
 void

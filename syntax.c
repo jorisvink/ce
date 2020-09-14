@@ -33,6 +33,7 @@ struct state {
 	size_t		off;
 	size_t		avail;
 
+	int		vis;
 	int		bold;
 	int		dirty;
 
