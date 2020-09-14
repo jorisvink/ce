@@ -792,12 +792,12 @@ ce_buffer_delete_lines(struct cebuf *buf, size_t start, size_t end, int rev)
 
 	if (rev == 0) {
 		if (buf->top > (end - start)) {
-			buf->top -= end - start;
+			buf->top -= end - start - 1;
 		} else {
 			buf->top = 0;
 
 			if (buf->line > (end - start))
-				buf->line -= end - start;
+				buf->line -= end - start - 1;
 			else
 				buf->line = TERM_CURSOR_MIN;
 		}
