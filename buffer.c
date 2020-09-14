@@ -755,7 +755,7 @@ ce_buffer_delete_line(struct cebuf *buf)
 	ce_editor_pbuffer_reset();
 
 	index = ce_buffer_line_index(buf);
-	ce_buffer_delete_lines(buf, index, index + 1, 0);
+	ce_buffer_delete_lines(buf, index, index, 0);
 
 	ce_editor_pbuffer_sync();
 }
@@ -764,18 +764,19 @@ void
 ce_buffer_delete_lines(struct cebuf *buf, size_t start, size_t end, int rev)
 {
 	struct celine		*line;
-	size_t			index;
+	size_t			index, range;
 
 	if (start > end)
 		fatal("%s: start(%zu) > end(%zu)", __func__, start, end);
 
-	if (buf->lcnt == 0 || end > buf->lcnt || start == end)
-		return;
-
 	ce_debug("start: %zu, end: %zu (lcnt:%zu)",
 	    start, end, buf->lcnt);
 
-	for (index = start; index < end; index++) {
+	if (buf->lcnt == 0 || end >= buf->lcnt)
+		return;
+
+	range = (end - start) + 1;
+	for (index = start; index <= end; index++) {
 		line = &buf->lines[index];
 		ce_editor_pbuffer_append(line->data, line->length);
 
@@ -785,21 +786,21 @@ ce_buffer_delete_lines(struct cebuf *buf, size_t start, size_t end, int rev)
 		}
 	}
 
-	if (end < buf->lcnt) {
-		memmove(&buf->lines[start], &buf->lines[end],
-		    (buf->lcnt - end) * sizeof(struct celine));
+	if (end < buf->lcnt - 1) {
+		memmove(&buf->lines[start], &buf->lines[end + 1],
+		    (buf->lcnt - end - 1) * sizeof(struct celine));
 	}
 
-	buf->lcnt -= end - start;
+	buf->lcnt -= range;
 
 	if (rev == 0) {
-		if (buf->top > (end - start)) {
-			buf->top -= end - start - 1;
+		if (buf->top > range) {
+			buf->top -= range - 1;
 		} else {
 			buf->top = 0;
 
-			if (buf->line > (end - start))
-				buf->line -= end - start - 1;
+			if (buf->line > range)
+				buf->line -= range - 1;
 			else
 				buf->line = TERM_CURSOR_MIN;
 		}
@@ -807,8 +808,8 @@ ce_buffer_delete_lines(struct cebuf *buf, size_t start, size_t end, int rev)
 		buf->line--;
 	}
 
-	if (end - 1 == buf->lcnt)
-		buf->line--;
+	if (end >= buf->lcnt)
+		buf->line = buf->lcnt;
 
 	if (buf->line == 0)
 		buf->line = TERM_CURSOR_MIN;
@@ -1308,6 +1309,7 @@ ce_buffer_line_alloc_empty(struct cebuf *buf)
 	}
 
 	buf->lcnt = 1;
+	free(buf->lines);
 
 	if ((buf->lines = calloc(1, sizeof(struct celine))) == NULL) {
 		fatal("%s: calloc(%zu): %s", __func__,

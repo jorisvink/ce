@@ -840,13 +840,8 @@ editor_cmd_range(struct cebuf *buf,
 		end = range.end;
 	}
 
-	end += 1;
-	range.range = end - start;
-	if (range.range == 0)
-		return;
-
-	if (end >= buf->lcnt)
-		end = buf->lcnt;
+	if (end > buf->lcnt - 1)
+		end = buf->lcnt - 1;
 
 	if (start >= end)
 		return;
@@ -867,6 +862,7 @@ editor_cmd_delete_lines(struct cebuf *buf, long end)
 	if (buf->lcnt == 0)
 		return;
 
+	end = end - 1;
 	ce_editor_pbuffer_reset();
 
 	start = ce_buffer_line_index(buf);
@@ -909,11 +905,12 @@ editor_cmd_yank_lines(struct cebuf *buf, long num)
 {
 	size_t		index, end;
 
+	num--;
 	index = ce_buffer_line_index(buf);
 
 	end = index + num;
-	if (end >= buf->lcnt)
-		end = buf->lcnt;
+	if (end > buf->lcnt - 1)
+		end = buf->lcnt - 1;
 
 	ce_editor_pbuffer_reset();
 
@@ -928,7 +925,7 @@ editor_yank_lines(struct cebuf *buf, size_t start, size_t end, int rev)
 	size_t		idx;
 	struct celine	*line;
 
-	for (idx = start; idx < end; idx++) {
+	for (idx = start; idx <= end; idx++) {
 		line = &buf->lines[idx];
 		ce_editor_pbuffer_append(line->data, line->length);
 	}
