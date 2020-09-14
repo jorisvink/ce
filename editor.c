@@ -307,6 +307,14 @@ ce_editor_pbuffer_append(const void *data, size_t len)
 	ce_buffer_append(pbuffer, data, len);
 }
 
+void
+ce_editor_pbuffer_sync(void)
+{
+#if defined(__APPLE__)
+	ce_macos_set_pasteboard_contents(pbuffer->data, pbuffer->length);
+#endif
+}
+
 int
 ce_editor_word_byte(u_int8_t byte)
 {
@@ -846,12 +854,9 @@ editor_cmd_range(struct cebuf *buf,
 	ce_editor_pbuffer_reset();
 
 	cb(buf, start, end, rev);
-
 	memset(&range, 0, sizeof(range));
 
-#if defined(__APPLE__)
-	ce_macos_set_pasteboard_contents(pbuffer->data, pbuffer->length);
-#endif
+	ce_editor_pbuffer_sync();
 }
 
 static void
@@ -862,8 +867,12 @@ editor_cmd_delete_lines(struct cebuf *buf, long end)
 	if (buf->lcnt == 0)
 		return;
 
+	ce_editor_pbuffer_reset();
+
 	start = ce_buffer_line_index(buf);
 	ce_buffer_delete_lines(buf, start, start + end, 0);
+
+	ce_editor_pbuffer_sync();
 }
 
 static void
@@ -906,7 +915,11 @@ editor_cmd_yank_lines(struct cebuf *buf, long num)
 	if (end >= buf->lcnt)
 		end = buf->lcnt;
 
+	ce_editor_pbuffer_reset();
+
 	editor_yank_lines(buf, index, end, 0);
+
+	ce_editor_pbuffer_sync();
 }
 
 static void

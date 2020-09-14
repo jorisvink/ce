@@ -752,8 +752,12 @@ ce_buffer_delete_line(struct cebuf *buf)
 	if (buf->lcnt == 0)
 		return;
 
+	ce_editor_pbuffer_reset();
+
 	index = ce_buffer_line_index(buf);
 	ce_buffer_delete_lines(buf, index, index + 1, 0);
+
+	ce_editor_pbuffer_sync();
 }
 
 void
@@ -770,8 +774,6 @@ ce_buffer_delete_lines(struct cebuf *buf, size_t start, size_t end, int rev)
 
 	ce_debug("start: %zu, end: %zu (lcnt:%zu)",
 	    start, end, buf->lcnt);
-
-	ce_editor_pbuffer_reset();
 
 	for (index = start; index < end; index++) {
 		line = &buf->lines[index];

@@ -258,6 +258,7 @@ int		ce_editor_word_byte(u_int8_t);
 int		ce_editor_word_separator(u_int8_t);
 void		ce_editor_message(const char *, ...);
 
+void		ce_editor_pbuffer_sync(void);
 void		ce_editor_pbuffer_reset(void);
 void		ce_editor_pbuffer_append(const void *, size_t);
 void		ce_editor_cmdline_append(const char *, ...)
