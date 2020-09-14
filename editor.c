@@ -825,10 +825,16 @@ editor_cmd_range(struct cebuf *buf,
 	if (start >= end)
 		return;
 
+	ce_editor_pbuffer_reset();
+
 	cb(buf, start, end, rev);
 
 	range_start = 0;
 	range_end = 0;
+
+#if defined(__APPLE__)
+	ce_macos_set_pasteboard_contents(pbuffer->data, pbuffer->length);
+#endif
 }
 
 static void
@@ -877,7 +883,6 @@ editor_cmd_yank_lines(struct cebuf *buf, long num)
 {
 	size_t		index, end;
 
-	ce_editor_pbuffer_reset();
 	index = ce_buffer_line_index(buf);
 
 	end = index + num;
@@ -893,16 +898,11 @@ editor_yank_lines(struct cebuf *buf, size_t start, size_t end, int rev)
 	size_t		idx;
 	struct celine	*line;
 
-	ce_editor_pbuffer_reset();
-
 	for (idx = start; idx < end; idx++) {
 		line = &buf->lines[idx];
 		ce_editor_pbuffer_append(line->data, line->length);
 	}
 
-#if defined(__APPLE__)
-	ce_macos_set_pasteboard_contents(pbuffer->data, pbuffer->length);
-#endif
 	ce_editor_message("yanked %zu line(s)", end - start);
 }
 

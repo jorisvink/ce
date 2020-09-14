@@ -821,10 +821,6 @@ ce_buffer_delete_lines(struct cebuf *buf, size_t start, size_t end, int rev)
 
 	ce_editor_dirty();
 
-#if defined(__APPLE__)
-	ce_macos_set_pasteboard_contents(pbuffer->data, pbuffer->length);
-#endif
-
 	ce_editor_message("deleted %zu line(s)", end - start);
 }
 
