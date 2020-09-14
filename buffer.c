@@ -808,8 +808,10 @@ ce_buffer_delete_lines(struct cebuf *buf, size_t start, size_t end, int rev)
 		buf->line--;
 	}
 
-	if (end >= buf->lcnt)
+	if (end >= buf->lcnt) {
+		buf->top = 0;
 		buf->line = buf->lcnt;
+	}
 
 	if (buf->line == 0)
 		buf->line = TERM_CURSOR_MIN;
