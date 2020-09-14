@@ -472,8 +472,14 @@ syntax_highlight_c(struct state *state)
 	if (syntax_highlight_word(state, c_special, TERM_COLOR_RED) == 0)
 		return;
 
-	syntax_state_color_clear(state);
-	syntax_write(state, 1);
+	if (state->p[0] == ' ' && state->p[1] == '\n') {
+		syntax_state_color(state, TERM_COLOR_BLUE);
+		ce_term_write(".", 1);
+		syntax_state.off++;
+	} else {
+		syntax_state_color_clear(state);
+		syntax_write(state, 1);
+	}
 }
 
 static int
