@@ -866,7 +866,7 @@ editor_cmd_delete_lines(struct cebuf *buf, long end)
 	ce_editor_pbuffer_reset();
 
 	start = ce_buffer_line_index(buf);
-	ce_buffer_delete_lines(buf, start, start + end, 0);
+	ce_buffer_delete_lines(buf, start, start + end, 1);
 
 	ce_editor_pbuffer_sync();
 }
