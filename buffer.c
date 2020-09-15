@@ -967,18 +967,25 @@ ce_buffer_center(void)
 	adj = 0;
 	half = ce_term_height() / 2;
 
-	if (active->cursor_line < half && active->top > half) {
+	if (active->cursor_line < half) {
 		adj = 1;
-		active->top -= half - active->cursor_line;
-		active->line += half - active->cursor_line - 1;
+		if (active->top > half) {
+			active->top -= half - active->cursor_line;
+			active->line = ce_term_height() / 2;
+			active->cursor_line = (ce_term_height() / 2);
+		} else {
+			active->line = active->top + active->line;
+			active->cursor_line = active->line;
+			active->top = 0;
+		}
 	} else if (active->cursor_line > half) {
 		adj = 1;
 		active->top += active->cursor_line - half;
-		active->line -= active->cursor_line - half - 1;
+		active->line = ce_term_height() / 2;
+		active->cursor_line = (ce_term_height() / 2);
 	}
 
 	if (adj) {
-		active->cursor_line = (ce_term_height() / 2);
 		ce_term_setpos(active->cursor_line, active->column);
 		ce_editor_dirty();
 	}
@@ -1001,7 +1008,7 @@ ce_buffer_move_up(void)
 		if (active->top >= ce_term_height() / 2) {
 			scroll = 1;
 			active->top -= ce_term_height() / 2;
-			active->line += (ce_term_height() / 2) - 1;
+			active->line = (ce_term_height() / 2);
 			active->cursor_line = (ce_term_height() / 2);
 		} else if (active->line > TERM_CURSOR_MIN) {
 			active->line--;
@@ -1045,7 +1052,7 @@ ce_buffer_page_up(void)
 		curline += lines;
 	}
 
-	active->line = index - (active->top - 1);
+	active->line = ce_term_height() / 2;
 
 	buffer_update_cursor(active);
 
@@ -1089,8 +1096,7 @@ ce_buffer_move_down(void)
 
 	if (scroll) {
 		active->top += ce_term_height() / 2;
-		active->line -= (ce_term_height() / 2) - 1;
-		active->cursor_line = (ce_term_height() / 2);
+		active->line = ce_term_height() / 2;
 		if (index < active->lcnt - 1) {
 			line = &active->lines[active->top];
 			upper = buffer_line_span(line);
@@ -1169,7 +1175,7 @@ ce_buffer_page_down(void)
 		curline += lines;
 	}
 
-	active->line = index - (active->top - 1);
+	active->line = ce_term_height() / 2;
 
 	buffer_update_cursor(active);
 
@@ -1448,17 +1454,32 @@ ce_buffer_save_active(int force, const char *dstpath)
 		iov[elms].iov_base = active->lines[line].data;
 		iov[elms].iov_len = active->lines[line].length;
 
+		ce_debug("line #%zu (%zu) (allocated:%d)",
+		    line, active->lines[line].length,
+		    active->lines[line].flags & CE_LINE_ALLOCATED);
+
 		if (!(active->lines[line].flags & CE_LINE_ALLOCATED)) {
 			for (next = line + 1; next < active->lcnt; next++) {
 				if (active->lines[next].flags &
-				    CE_LINE_ALLOCATED)
+				    CE_LINE_ALLOCATED) {
+					ce_debug("line %zu breaks mmap chain",
+					    next);
 					break;
+				}
 
+				ce_debug("line %zu extends %zu - %zu '%.*s'",
+				    next, line, active->lines[next].length,
+				    (int)active->lines[next].length,
+				    (const char *)active->lines[next].data);
 				iov[elms].iov_len += active->lines[next].length;
 			}
 
 			line = next - 1;
 		}
+
+		ce_debug("elm %zu = %zu bytes, '%.*s'", elms,
+		    iov[elms].iov_len, (int)iov[elms].iov_len,
+		    (const char *)iov[elms].iov_base);
 
 		elms++;
 
