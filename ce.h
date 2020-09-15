@@ -257,6 +257,7 @@ void		ce_editor_init(void);
 void		ce_editor_loop(void);
 int		ce_editor_mode(void);
 void		ce_editor_dirty(void);
+int		ce_editor_pasting(void);
 int		ce_editor_word_byte(u_int8_t);
 int		ce_editor_word_separator(u_int8_t);
 void		ce_editor_message(const char *, ...);

@@ -1683,9 +1683,10 @@ buffer_line_insert_byte(struct cebuf *buf, struct celine *line, u_int8_t byte)
 		}
 	}
 
+	buf->flags |= CE_BUFFER_DIRTY;
+
 	ptr = line->data;
 	memmove(&ptr[buf->loff + 1], &ptr[buf->loff], line->length - buf->loff);
-
 	ptr[buf->loff] = byte;
 
 	line->length++;
@@ -1693,18 +1694,18 @@ buffer_line_insert_byte(struct cebuf *buf, struct celine *line, u_int8_t byte)
 
 	if (byte == '\n') {
 		ce_buffer_move_right();
-		buf->flags |= CE_BUFFER_DIRTY;
 		ce_editor_dirty();
 		return;
 	}
 
 	/* Erase the current line and rewrite it completely. */
-	ce_term_setpos(buf->cursor_line, TERM_CURSOR_MIN);
-	ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
-
-	ce_syntax_init();
-	ce_syntax_write(buf, line, line->length);
-	ce_syntax_finalize();
+	if (ce_editor_pasting() == 0) {
+		ce_term_setpos(buf->cursor_line, TERM_CURSOR_MIN);
+		ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
+		ce_syntax_init();
+		ce_syntax_write(buf, line, line->length);
+		ce_syntax_finalize();
+	}
 
 	/*
 	 * Mimic ce_buffer_move_right().
@@ -1714,9 +1715,9 @@ buffer_line_insert_byte(struct cebuf *buf, struct celine *line, u_int8_t byte)
 	ce_buffer_constrain_cursor_column(buf);
 
 	cursor_column = buf->column;
-	ce_term_setpos(buf->cursor_line, active->column);
 
-	buf->flags |= CE_BUFFER_DIRTY;
+	if (ce_editor_pasting() == 0)
+		ce_term_setpos(buf->cursor_line, active->column);
 
 	/* If we overflow terminal width, just redraw completely. */
 	if (buffer_line_span(line) > 1)

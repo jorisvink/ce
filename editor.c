@@ -169,6 +169,7 @@ static struct {
 
 static int			quit = 0;
 static int			dirty = 1;
+static int			pasting = 0;
 static volatile sig_atomic_t	sig_recv = -1;
 static int			normalcmd = -1;
 static char			*search = NULL;
@@ -357,6 +358,11 @@ ce_editor_word_separator(u_int8_t byte)
 	return (0);
 }
 
+int
+ce_editor_pasting(void)
+{
+	return (pasting);
+}
 
 static void
 editor_signal(int sig)
@@ -1070,8 +1076,12 @@ editor_cmd_paste(void)
 	ce_buffer_input(buf, '\n');
 	ce_buffer_move_up();
 
+	pasting = 1;
+
 	for (idx = 0; idx < pbuffer->length - 1; idx++)
 		ce_buffer_input(buf, ptr[idx]);
+
+	pasting = 0;
 
 	ce_editor_dirty();
 	ce_buffer_jump_left();
