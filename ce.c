@@ -54,8 +54,6 @@ main(int argc, char *argv[])
 
 	while ((ch = getopt(argc, argv, "elv")) != -1) {
 		switch (ch) {
-		case 'e':
-			break;
 		case 'd':
 			debug = 1;
 			break;
@@ -67,8 +65,6 @@ main(int argc, char *argv[])
 		case 'v':
 			printf("coma editor 0.2\n");
 			exit(0);
-		case 't':
-			break;
 		}
 	}
 
