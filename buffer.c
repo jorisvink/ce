@@ -805,13 +805,6 @@ ce_buffer_delete_lines(struct cebuf *buf, size_t start, size_t end, int rev)
 			else
 				buf->line = TERM_CURSOR_MIN;
 		}
-	} else {
-		buf->line--;
-	}
-
-	if (end >= buf->lcnt) {
-		buf->top = 0;
-		buf->line = buf->lcnt;
 	}
 
 	if (buf->line == 0)
@@ -1027,10 +1020,6 @@ ce_buffer_move_up(void)
 void
 ce_buffer_page_up(void)
 {
-	size_t			index;
-	struct celine		*line;
-	u_int16_t		curline, lines, height;
-
 	if (active->lcnt < ce_term_height() - 2)
 		return;
 
@@ -1038,19 +1027,6 @@ ce_buffer_page_up(void)
 		active->top -= (ce_term_height() - 2) - 4;
 	else
 		active->top = 0;
-
-	curline = 1;
-	height = (ce_term_height() - 2) / 2;
-
-	for (index = active->top; curline < height; index++) {
-		if (index == active->lcnt - 1)
-			break;
-
-		line = &active->lines[index];
-		lines = buffer_line_span(line);
-
-		curline += lines;
-	}
 
 	active->line = ce_term_height() / 2;
 
@@ -1064,7 +1040,7 @@ ce_buffer_move_down(void)
 {
 	struct celine	*line;
 	int		scroll;
-	size_t		index, next, current, upper, lower, lines, diff;
+	size_t		index, next;
 
 	if (active->lcnt == 0)
 		return;
@@ -1074,10 +1050,6 @@ ce_buffer_move_down(void)
 		    __func__, active->cursor_line, ce_term_height() - 2);
 	}
 
-	diff = 0;
-	lines = 0;
-	lower = 0;
-	upper = 0;
 	scroll = 0;
 
 	line = ce_buffer_line_current(active);
@@ -1086,51 +1058,16 @@ ce_buffer_move_down(void)
 	if (index == active->lcnt - 1)
 		return;
 
-	current = buffer_line_span(line);
-
-	if (current > ce_term_height() - 2)
-		scroll = 1;
-
 	if (active->cursor_line == ce_term_height() - 2)
 		scroll = 1;
 
 	if (scroll) {
 		active->top += ce_term_height() / 2;
 		active->line = ce_term_height() / 2;
-		if (index < active->lcnt - 1) {
-			line = &active->lines[active->top];
-			upper = buffer_line_span(line);
-		}
 	} else {
 		next = active->line + 1;
 		if (next <= active->lcnt)
 			active->line = next;
-	}
-
-	if (current < ce_term_height() - 2) {
-		lines = 0;
-		index = active->top;
-
-		while (lines < ce_term_height() - 2 &&
-		    index < active->lcnt - 1) {
-			line = &active->lines[index++];
-			lines += buffer_line_span(line);
-		}
-
-		if (index < active->lcnt - 1) {
-			line = &active->lines[index - 1];
-			lower = buffer_line_span(line);
-		}
-
-		if (upper < lower)
-			diff = lower - upper;
-		else
-			diff = 0;
-
-		if (diff > 0 && scroll) {
-			active->top += diff;
-			active->line -= diff;
-		}
 	}
 
 	buffer_update_cursor(active);
@@ -1145,9 +1082,7 @@ ce_buffer_move_down(void)
 void
 ce_buffer_page_down(void)
 {
-	struct celine		*line;
 	size_t			next, index;
-	u_int16_t		lines, curline, height;
 
 	if (active->lcnt < ce_term_height() - 2)
 		return;
@@ -1160,22 +1095,8 @@ ce_buffer_page_down(void)
 		active->line = TERM_CURSOR_MIN;
 	} else {
 		active->top += (ce_term_height() - 2) - 2;
+		active->line = ce_term_height() / 2;
 	}
-
-	curline = 1;
-	height = (ce_term_height() - 2) / 2;
-
-	for (index = active->top; curline < height; index++) {
-		if (index == active->lcnt - 1)
-			break;
-
-		line = &active->lines[index];
-		lines = buffer_line_span(line);
-
-		curline += lines;
-	}
-
-	active->line = ce_term_height() / 2;
 
 	buffer_update_cursor(active);
 

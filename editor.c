@@ -165,7 +165,6 @@ static struct {
 	int			act;
 	size_t			end;
 	size_t			start;
-	size_t			range;
 } range;
 
 static int			quit = 0;
