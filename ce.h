@@ -78,21 +78,21 @@
 #define CE_FILE_TYPE_JS			4
 #define CE_FILE_TYPE_SHELL		5
 
+#define CE_TAB_WIDTH_DEFAULT		8
+#define CE_TAB_EXPAND_DEFAULT		0
+
 /*
- * An operation that happened on a line.
+ * Configuration options.
  */
-struct ceop {
-	/* The operation command. */
-	u_int16_t		cmd;
+struct ceconf {
+	/* Tab width (default: 8). */
+	int		tab_width;
 
-	/* The length of the associated data. */
-	size_t			length;
-
-	/* Additional data for the operation. */
-	u_int8_t		data[4];
-
-	TAILQ_ENTRY(ceop)	list;
+	/* Tab expand (default: no). */
+	int		tab_expand;
 };
+
+extern struct ceconf		config;
 
 /*
  * Represents a single line in a file.

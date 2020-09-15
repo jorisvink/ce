@@ -688,8 +688,8 @@ ce_buffer_input(struct cebuf *buf, u_int8_t byte)
 		ce_buffer_insert_line(buf);
 		break;
 	case '\t':
-		if (buf->type == CE_FILE_TYPE_PYTHON) {
-			for (i = 0; i < 4; i++)
+		if (config.tab_expand) {
+			for (i = 0; i < config.tab_width; i++)
 				buffer_line_insert_byte(buf, line, ' ');
 		} else {
 			buffer_line_insert_byte(buf, line, byte);
@@ -1586,9 +1586,10 @@ buffer_line_data_to_columns(const void *data, size_t length)
 {
 	u_int16_t		cols;
 	const u_int8_t		*ptr;
-	size_t			idx, seqlen;
+	size_t			idx, seqlen, tw;
 
 	ptr = data;
+	tw = config.tab_width;
 	cols = TERM_CURSOR_MIN;
 
 	for (idx = 0; idx < length; idx++) {
@@ -1596,10 +1597,10 @@ buffer_line_data_to_columns(const void *data, size_t length)
 			break;
 
 		if (ptr[idx] == '\t') {
-			if ((cols % 8) == 0)
+			if ((cols % tw) == 0)
 				cols += 1;
 			else
-				cols += 8 - (cols % 8) + 1;
+				cols += tw - (cols % tw) + 1;
 		} else {
 			cols++;
 			if (ce_utf8_sequence(data, length, idx, &seqlen))
@@ -1613,14 +1614,15 @@ buffer_line_data_to_columns(const void *data, size_t length)
 static void
 buffer_line_column_to_data(struct cebuf *buf)
 {
-	size_t			idx;
 	u_int16_t		col;
 	const u_int8_t		*ptr;
 	struct celine		*line;
+	size_t			idx, tw;
 
 	line = ce_buffer_line_current(buf);
 
 	ptr = line->data;
+	tw = config.tab_width;
 	col = TERM_CURSOR_MIN;
 
 	for (idx = 0; idx < line->length; idx++) {
@@ -1628,10 +1630,10 @@ buffer_line_column_to_data(struct cebuf *buf)
 			break;
 
 		if (ptr[idx] == '\t') {
-			if ((col % 8) == 0)
+			if ((col % tw) == 0)
 				col += 1;
 			else
-				col += 8 - (col % 8) + 1;
+				col += tw - (col % tw) + 1;
 		} else {
 			col++;
 		}

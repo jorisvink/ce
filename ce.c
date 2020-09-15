@@ -39,6 +39,12 @@ static struct {
 
 static FILE	*fp = NULL;
 
+/* joris' config. */
+struct ceconf config = {
+	.tab_width = CE_TAB_WIDTH_DEFAULT,
+	.tab_expand = CE_TAB_EXPAND_DEFAULT,
+};
+
 int
 main(int argc, char *argv[])
 {
@@ -46,14 +52,23 @@ main(int argc, char *argv[])
 
 	debug = 0;
 
-	while ((ch = getopt(argc, argv, "dv")) != -1) {
+	while ((ch = getopt(argc, argv, "elv")) != -1) {
 		switch (ch) {
+		case 'e':
+			break;
 		case 'd':
 			debug = 1;
+			break;
+		case 'l':
+			/* lame mode. */
+			config.tab_width = 4;
+			config.tab_expand = 1;
 			break;
 		case 'v':
 			printf("coma editor 0.2\n");
 			exit(0);
+		case 't':
+			break;
 		}
 	}
 
@@ -99,6 +114,11 @@ ce_file_type_detect(struct cebuf *buf)
 
 		buf->type = file_types[idx].type;
 		break;
+	}
+
+	if (buf->type == CE_FILE_TYPE_PYTHON) {
+		config.tab_width = 4;
+		config.tab_expand = 1;
 	}
 
 	ce_debug("'%s' is type '%d'", buf->path, buf->type);
