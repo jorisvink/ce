@@ -1391,8 +1391,13 @@ ce_buffer_save_active(int force, const char *dstpath)
 		return (0);
 
 	if (stat(dstpath, &st) == -1) {
-		buffer_seterr("stat failed: %s", errno_s);
-		goto cleanup;
+		if (errno != ENOENT) {
+			buffer_seterr("stat failed: %s", errno_s);
+			goto cleanup;
+		}
+
+		/* Force save, file was probably new. */
+		force = 1;
 	}
 
 	if (st.st_mtime != active->mtime && force == 0) {
