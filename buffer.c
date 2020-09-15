@@ -1728,14 +1728,13 @@ static void
 buffer_line_erase_character(struct cebuf *buf, struct celine *line, int inplace)
 {
 	u_int8_t	*ptr;
-	size_t		seqlen, cur, span;
+	size_t		seqlen, cur, span, span_changed;
 
 	if (line->length == 0)
 		return;
 
-	span = buffer_line_span(line);
-
 	ptr = line->data;
+	span = buffer_line_span(line);
 
 	if (ce_utf8_sequence(line->data, line->length, buf->loff, &seqlen) == 0)
 		seqlen = 1;
@@ -1756,6 +1755,18 @@ buffer_line_erase_character(struct cebuf *buf, struct celine *line, int inplace)
 	}
 
 	line->length -= seqlen;
+	span_changed = span != buffer_line_span(line);
+
+	if (span == 1 && span_changed == 0) {
+		ce_term_setpos(buf->cursor_line, TERM_CURSOR_MIN);
+		ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
+
+		ce_syntax_init();
+		ce_syntax_write(buf, line, line->length);
+		ce_syntax_finalize();
+	} else {
+		ce_editor_dirty();
+	}
 
 	buf->column = buffer_line_data_to_columns(line->data, buf->loff);
 	cursor_column = buf->column;
@@ -1763,7 +1774,6 @@ buffer_line_erase_character(struct cebuf *buf, struct celine *line, int inplace)
 	ce_term_setpos(buf->cursor_line, buf->column);
 
 	buf->flags |= CE_BUFFER_DIRTY;
-	ce_editor_dirty();
 }
 
 static void
