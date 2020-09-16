@@ -766,6 +766,8 @@ direct:
 		case EDITOR_COMMAND_DELETE:
 			switch (key) {
 			case 's':
+				if (buf->lcnt == 0)
+					break;
 				range.act = EDITOR_COMMAND_DELETE;
 				range.start = ce_buffer_line_index(buf);
 				ce_editor_message("delete range start @ %zu",
@@ -788,6 +790,8 @@ direct:
 		case EDITOR_COMMAND_YANK:
 			switch (key) {
 			case 's':
+				if (buf->lcnt == 0)
+					break;
 				range.act = EDITOR_COMMAND_YANK;
 				range.start = ce_buffer_line_index(buf);
 				ce_editor_message("yank range start @ %zu",
