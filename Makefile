@@ -21,9 +21,8 @@ ifeq ("$(OSNAME)", "darwin")
 	OBJS+=$(OBJDIR)/macos.o
 	LDFLAGS+=-framework Foundation -framework Appkit
 else ifeq ("$(OSNAME)", "linux")
-        CFLAGS+=-D_GNU_SOURCE
+	CFLAGS+=-D_GNU_SOURCE
 endif
-
 
 all: $(BIN)
 
