@@ -1088,11 +1088,14 @@ ce_buffer_page_down(void)
 
 	index = next + (active->line - 1);
 	if (index >= active->lcnt) {
-		active->top = (active->lcnt - 1) - 15;
-		active->line = TERM_CURSOR_MIN;
+		ce_buffer_jump_down();
 	} else {
 		active->top += (ce_term_height() - 2) - 2;
-		active->line = ce_term_height() / 2;
+
+		if (index + ce_term_height() / 2 < active->lcnt - 1)
+			active->line = ce_term_height() / 2;
+		else
+			ce_buffer_jump_down();
 	}
 
 	buffer_update_cursor(active);
