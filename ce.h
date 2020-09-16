@@ -77,7 +77,7 @@
 #define CE_FILE_TYPE_DIFF		3
 #define CE_FILE_TYPE_JS			4
 #define CE_FILE_TYPE_SHELL		5
-#define CE_FILE_TYPE_JAVA               6
+#define CE_FILE_TYPE_JAVA		6
 
 #define CE_TAB_WIDTH_DEFAULT		8
 #define CE_TAB_EXPAND_DEFAULT		0

@@ -153,20 +153,24 @@ static const char *py_special[] = {
 };
 
 static const char *java_kw[] = {
-        "do", "if", "for", "new", "try", "goto", "this", "else", "case", 
-	"null", "enum", "break", "throw", "catch", "final", "class", "super", "while",
-        "switch", "assert", "throws", "return", "static", "native", "default", "package", 
-	"extends", "finally", "abstract", "continue", "strictfp", "volatile", "transient", 
-	"interface", "implements", "instanceof", "synchronized", "default"
+	"do", "if", "for", "new", "try", "goto", "this", "else", 
+	"case", "null", "enum", "break", "throw", "catch", "final", 
+	"class", "super", "while", "switch", "assert", "throws", 
+	"return", "static", "native", "default", "package", "extends", 
+	"finally", "abstract", "continue", "strictfp", "volatile", 
+	"transient", "interface", "implements", "instanceof", "default",
+	"synchronized", NULL
 };
 
 static const char *java_types[] = {
-        "int", "short", "long", "double", "char", "byte", "float", "boolean", "String", 
-	"void", "Void", "Integer", "Short", "Long", "Double", "Float", "Character", "Byte"
+	"int", "short", "long", "double", "char", "byte", "float", 
+	"boolean", "String", "void", "Void", "Integer", "Short", 
+	"Long", "Double", "Float", "Character", "Byte", NULL
 };
 
 static const char *java_special[] = {
-	"import", "public", "private", "static", "protected", "class"
+	"import", "public", "private", "static", "protected", "class", 
+	NULL
 };
 
 
@@ -964,13 +968,13 @@ syntax_write(struct state *state, size_t len)
 static void
 syntax_highlight_java(struct state *state)
 {
+	if (syntax_highlight_c_comment(state) == 0)
+		return;
+
 	if (syntax_highlight_numeric(state) == 0)
 		return;
 
 	if (syntax_highlight_string(state) == 0)
-		return;
-
-	if (syntax_highlight_c_comment(state) == 0)
 		return;
 
         if (syntax_highlight_python_decorator(state) == 0)
