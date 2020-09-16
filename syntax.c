@@ -153,23 +153,23 @@ static const char *py_special[] = {
 };
 
 static const char *java_kw[] = {
-	"do", "if", "for", "new", "try", "goto", "this", "else", 
-	"case", "null", "enum", "break", "throw", "catch", "final", 
-	"class", "super", "while", "switch", "assert", "throws", 
-	"return", "static", "native", "default", "package", "extends", 
-	"finally", "abstract", "continue", "strictfp", "volatile", 
+	"do", "if", "for", "new", "try", "goto", "this", "else",
+	"case", "null", "enum", "break", "throw", "catch", "final",
+	"class", "super", "while", "switch", "assert", "throws",
+	"return", "static", "native", "default", "package", "extends",
+	"finally", "abstract", "continue", "strictfp", "volatile",
 	"transient", "interface", "implements", "instanceof", "default",
 	"synchronized", NULL
 };
 
 static const char *java_types[] = {
-	"int", "short", "long", "double", "char", "byte", "float", 
-	"boolean", "String", "void", "Void", "Integer", "Short", 
+	"int", "short", "long", "double", "char", "byte", "float",
+	"boolean", "String", "void", "Void", "Integer", "Short",
 	"Long", "Double", "Float", "Character", "Byte", NULL
 };
 
 static const char *java_special[] = {
-	"import", "public", "private", "static", "protected", "class", 
+	"import", "public", "private", "static", "protected", "class",
 	NULL
 };
 
@@ -977,8 +977,8 @@ syntax_highlight_java(struct state *state)
 	if (syntax_highlight_string(state) == 0)
 		return;
 
-        if (syntax_highlight_python_decorator(state) == 0)
-	       return;
+	if (syntax_highlight_python_decorator(state) == 0)
+		return;
 
 	if (syntax_highlight_c_label(state) == 0)
 		return;
