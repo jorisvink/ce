@@ -1038,7 +1038,6 @@ ce_buffer_page_up(void)
 void
 ce_buffer_move_down(void)
 {
-	struct celine	*line;
 	int		scroll;
 	size_t		index, next;
 
@@ -1051,8 +1050,6 @@ ce_buffer_move_down(void)
 	}
 
 	scroll = 0;
-
-	line = ce_buffer_line_current(active);
 	index = ce_buffer_line_index(active);
 
 	if (index == active->lcnt - 1)
