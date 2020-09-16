@@ -11,22 +11,17 @@ SRC=	ce.c buffer.c editor.c syntax.c term.c utf8.c
 
 CFLAGS+=-Wall -Werror -Wstrict-prototypes -Wmissing-prototypes
 CFLAGS+=-Wmissing-declarations -Wshadow -Wpointer-arith -Wcast-qual
-
-OSNAME=$(shell uname -s | sed -e 's/[-_].*//g' | tr A-Z a-z)
-
-ifeq ($(OSNAME),linux)
-        CFLAGS+=-Wsign-compare -std=gnu99 -pedantic -ggdb -D _GNU_SOURCE
-else
-        CFLAGS+=-Wsign-compare -std=c99 -pedantic -ggdb
-endif
-
+CFLAGS+=-Wsign-compare -std=c99 -pedantic -ggdb
 CFLAGS+=-DPREFIX='"$(PREFIX)"' -fstack-protector-all
 
 OBJS=	$(SRC:%.c=$(OBJDIR)/%.o)
 
+OSNAME=$(shell uname -s | sed -e 's/[-_].*//g' | tr A-Z a-z)
 ifeq ("$(OSNAME)", "darwin")
 	OBJS+=$(OBJDIR)/macos.o
 	LDFLAGS+=-framework Foundation -framework Appkit
+else ifeq ("$(OSNAME)", "linux")
+        CFLAGS+=-D_GNU_SOURCE
 endif
 
 
