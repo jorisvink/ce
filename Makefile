@@ -20,6 +20,8 @@ OSNAME=$(shell uname -s | sed -e 's/[-_].*//g' | tr A-Z a-z)
 ifeq ("$(OSNAME)", "darwin")
 	OBJS+=$(OBJDIR)/macos.o
 	LDFLAGS+=-framework Foundation -framework Appkit
+else ifeq ("$(OSNAME)", "linux")
+        CFLAGS+=-D_GNU_SOURCE
 endif
 
 

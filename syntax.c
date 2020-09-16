@@ -78,6 +78,8 @@ static void	syntax_highlight_python(struct state *);
 static int	syntax_highlight_python_decorator(struct state *);
 static int	syntax_highlight_python_multiline_string(struct state *);
 
+static void	syntax_highlight_java(struct state *);
+
 static int	syntax_highlight_string(struct state *);
 static int	syntax_highlight_numeric(struct state *);
 static void	syntax_highlight_format_string(struct state *);
@@ -149,6 +151,28 @@ static const char *py_types[] = {
 static const char *py_special[] = {
 	"import", "from", NULL
 };
+
+static const char *java_kw[] = {
+	"do", "if", "for", "new", "try", "goto", "this", "else", 
+	"case", "null", "enum", "break", "throw", "catch", "final", 
+	"class", "super", "while", "switch", "assert", "throws", 
+	"return", "static", "native", "default", "package", "extends", 
+	"finally", "abstract", "continue", "strictfp", "volatile", 
+	"transient", "interface", "implements", "instanceof", "default",
+	"synchronized", NULL
+};
+
+static const char *java_types[] = {
+	"int", "short", "long", "double", "char", "byte", "float", 
+	"boolean", "String", "void", "Void", "Integer", "Short", 
+	"Long", "Double", "Float", "Character", "Byte", NULL
+};
+
+static const char *java_special[] = {
+	"import", "public", "private", "static", "protected", "class", 
+	NULL
+};
+
 
 static const char *js_kw[] = {
 	"break", "case", "catch", "continue", "debugger", "default",
@@ -260,6 +284,9 @@ ce_syntax_write(struct cebuf *buf, struct celine *line, size_t towrite)
 				break;
 			case CE_FILE_TYPE_SHELL:
 				syntax_highlight_shell(&syntax_state);
+				break;
+			case CE_FILE_TYPE_JAVA:
+				syntax_highlight_java(&syntax_state);
 				break;
 			default:
 				syntax_state_color_clear(&syntax_state);
@@ -937,3 +964,35 @@ syntax_write(struct state *state, size_t len)
 	ce_term_write(state->p, len);
 	state->off += len;
 }
+
+static void
+syntax_highlight_java(struct state *state)
+{
+	if (syntax_highlight_c_comment(state) == 0)
+		return;
+
+	if (syntax_highlight_numeric(state) == 0)
+		return;
+
+	if (syntax_highlight_string(state) == 0)
+		return;
+
+        if (syntax_highlight_python_decorator(state) == 0)
+	       return;
+
+	if (syntax_highlight_c_label(state) == 0)
+		return;
+
+	if (syntax_highlight_word(state, java_kw, TERM_COLOR_YELLOW) == 0)
+		return;
+
+	if (syntax_highlight_word(state, java_types, TERM_COLOR_CYAN) == 0)
+		return;
+
+	if (syntax_highlight_word(state, java_special, TERM_COLOR_MAGENTA) == 0)
+		return;
+
+	syntax_state_color_clear(state);
+	syntax_write(state, 1);
+}
+

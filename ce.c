@@ -34,6 +34,7 @@ static struct {
 	{ ".patch",	CE_FILE_TYPE_DIFF },
 	{ ".js",	CE_FILE_TYPE_JS },
 	{ ".sh",	CE_FILE_TYPE_SHELL },
+	{ ".java",	CE_FILE_TYPE_JAVA },
 	{ NULL,		0 },
 };
 
