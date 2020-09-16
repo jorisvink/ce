@@ -3,6 +3,9 @@ About
 
 ce is my minimalistic editor I use on a day-to-day basis.
 
+Is this editor for you? Definitely not, it is highly opinionated
+and tailored to my requirements.
+
 License
 -------
 Coma Editor is licensed under the ISC license.
@@ -82,6 +85,14 @@ ctrl-z       = suspend ce
 
 [num]b       = jump to previous word
 
+ds           = delete range start
+
+de           = delete range end (deletes between ds<=>de)
+
+cs           = yank range start (copy)
+
+ce           = yank range end (yanks between cs<=>ce)
+
 **insert mode key bindings**
 
 arrow keys   = navigate around
@@ -105,3 +116,10 @@ w            = write active buffer
 e            = open specified file
 
 bc           = close current buffer
+
+KNOWN ISSUES
+------------
+
+Center on cursor (shift-c) does not work very well
+on files with many multilines. Too bad, don't wrap
+80 columns :)

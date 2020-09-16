@@ -79,21 +79,21 @@
 #define CE_FILE_TYPE_SHELL		5
 #define CE_FILE_TYPE_JAVA               6
 
+#define CE_TAB_WIDTH_DEFAULT		8
+#define CE_TAB_EXPAND_DEFAULT		0
+
 /*
- * An operation that happened on a line.
+ * Configuration options.
  */
-struct ceop {
-	/* The operation command. */
-	u_int16_t		cmd;
+struct ceconf {
+	/* Tab width (default: 8). */
+	int		tab_width;
 
-	/* The length of the associated data. */
-	size_t			length;
-
-	/* Additional data for the operation. */
-	u_int8_t		data[4];
-
-	TAILQ_ENTRY(ceop)	list;
+	/* Tab expand (default: no). */
+	int		tab_expand;
 };
+
+extern struct ceconf		config;
 
 /*
  * Represents a single line in a file.
@@ -151,13 +151,16 @@ struct cebuf {
 	/* File mode. */
 	mode_t			mode;
 
+	/* Last mtime. */
+	time_t			mtime;
+
 	/* Name of the buffer. */
 	char			*name;
 
 	/* Current cursor line. */
 	size_t			cursor_line;
 
-	/* Current line / column offsets. */
+	/* Current line / column offsets (indexed from 1). */
 	size_t			line;
 	size_t			column;
 
@@ -165,13 +168,13 @@ struct cebuf {
 	size_t			orig_line;
 	size_t			orig_column;
 
-	/* The "top" of where to begin to render the lines. */
+	/* The "top" of where to begin to render the lines (0 based index). */
 	size_t			top;
 
-	/* The byte offset in the current line we're at. */
+	/* The byte offset in the current line we're at (0 based index). */
 	size_t			loff;
 
-	/* Number of lines in this buffer. */
+	/* Number of lines in this buffer (0 based index). */
 	size_t			lcnt;
 	struct celine		*lines;
 
@@ -255,10 +258,12 @@ void		ce_editor_init(void);
 void		ce_editor_loop(void);
 int		ce_editor_mode(void);
 void		ce_editor_dirty(void);
+int		ce_editor_pasting(void);
 int		ce_editor_word_byte(u_int8_t);
 int		ce_editor_word_separator(u_int8_t);
 void		ce_editor_message(const char *, ...);
 
+void		ce_editor_pbuffer_sync(void);
 void		ce_editor_pbuffer_reset(void);
 void		ce_editor_pbuffer_append(const void *, size_t);
 void		ce_editor_cmdline_append(const char *, ...)

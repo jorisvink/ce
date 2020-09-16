@@ -165,11 +165,11 @@ static struct {
 	int			act;
 	size_t			end;
 	size_t			start;
-	size_t			range;
 } range;
 
 static int			quit = 0;
 static int			dirty = 1;
+static int			pasting = 0;
 static volatile sig_atomic_t	sig_recv = -1;
 static int			normalcmd = -1;
 static char			*search = NULL;
@@ -307,6 +307,14 @@ ce_editor_pbuffer_append(const void *data, size_t len)
 	ce_buffer_append(pbuffer, data, len);
 }
 
+void
+ce_editor_pbuffer_sync(void)
+{
+#if defined(__APPLE__)
+	ce_macos_set_pasteboard_contents(pbuffer->data, pbuffer->length);
+#endif
+}
+
 int
 ce_editor_word_byte(u_int8_t byte)
 {
@@ -350,6 +358,11 @@ ce_editor_word_separator(u_int8_t byte)
 	return (0);
 }
 
+int
+ce_editor_pasting(void)
+{
+	return (pasting);
+}
 
 static void
 editor_signal(int sig)
@@ -753,6 +766,8 @@ direct:
 		case EDITOR_COMMAND_DELETE:
 			switch (key) {
 			case 's':
+				if (buf->lcnt == 0)
+					break;
 				range.act = EDITOR_COMMAND_DELETE;
 				range.start = ce_buffer_line_index(buf);
 				ce_editor_message("delete range start @ %zu",
@@ -775,6 +790,8 @@ direct:
 		case EDITOR_COMMAND_YANK:
 			switch (key) {
 			case 's':
+				if (buf->lcnt == 0)
+					break;
 				range.act = EDITOR_COMMAND_YANK;
 				range.start = ce_buffer_line_index(buf);
 				ce_editor_message("yank range start @ %zu",
@@ -832,13 +849,8 @@ editor_cmd_range(struct cebuf *buf,
 		end = range.end;
 	}
 
-	end += 1;
-	range.range = end - start;
-	if (range.range == 0)
-		return;
-
-	if (end >= buf->lcnt)
-		end = buf->lcnt;
+	if (end > buf->lcnt - 1)
+		end = buf->lcnt - 1;
 
 	if (start >= end)
 		return;
@@ -846,12 +858,9 @@ editor_cmd_range(struct cebuf *buf,
 	ce_editor_pbuffer_reset();
 
 	cb(buf, start, end, rev);
-
 	memset(&range, 0, sizeof(range));
 
-#if defined(__APPLE__)
-	ce_macos_set_pasteboard_contents(pbuffer->data, pbuffer->length);
-#endif
+	ce_editor_pbuffer_sync();
 }
 
 static void
@@ -862,8 +871,13 @@ editor_cmd_delete_lines(struct cebuf *buf, long end)
 	if (buf->lcnt == 0)
 		return;
 
+	end = end - 1;
+	ce_editor_pbuffer_reset();
+
 	start = ce_buffer_line_index(buf);
-	ce_buffer_delete_lines(buf, start, start + end, 0);
+	ce_buffer_delete_lines(buf, start, start + end, 1);
+
+	ce_editor_pbuffer_sync();
 }
 
 static void
@@ -900,13 +914,18 @@ editor_cmd_yank_lines(struct cebuf *buf, long num)
 {
 	size_t		index, end;
 
+	num--;
 	index = ce_buffer_line_index(buf);
 
 	end = index + num;
-	if (end >= buf->lcnt)
-		end = buf->lcnt;
+	if (end > buf->lcnt - 1)
+		end = buf->lcnt - 1;
+
+	ce_editor_pbuffer_reset();
 
 	editor_yank_lines(buf, index, end, 0);
+
+	ce_editor_pbuffer_sync();
 }
 
 static void
@@ -915,12 +934,12 @@ editor_yank_lines(struct cebuf *buf, size_t start, size_t end, int rev)
 	size_t		idx;
 	struct celine	*line;
 
-	for (idx = start; idx < end; idx++) {
+	for (idx = start; idx <= end; idx++) {
 		line = &buf->lines[idx];
 		ce_editor_pbuffer_append(line->data, line->length);
 	}
 
-	ce_editor_message("yanked %zu line(s)", end - start);
+	ce_editor_message("yanked %zu line(s)", (end - start) + 1);
 }
 
 static void
@@ -1061,9 +1080,14 @@ editor_cmd_paste(void)
 	ce_buffer_input(buf, '\n');
 	ce_buffer_move_up();
 
+	pasting = 1;
+
 	for (idx = 0; idx < pbuffer->length - 1; idx++)
 		ce_buffer_input(buf, ptr[idx]);
 
+	pasting = 0;
+
+	ce_editor_dirty();
 	ce_buffer_jump_left();
 	mode = CE_EDITOR_MODE_NORMAL;
 

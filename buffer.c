@@ -214,6 +214,7 @@ ce_buffer_file(const char *path)
 	buf->maxsz = (size_t)st.st_size;
 	buf->length = buf->maxsz;
 	buf->mode = st.st_mode;
+	buf->mtime = st.st_mtime;
 
 	if (buf->maxsz > 0) {
 		buf->data = mmap(NULL, buf->maxsz,
@@ -687,8 +688,8 @@ ce_buffer_input(struct cebuf *buf, u_int8_t byte)
 		ce_buffer_insert_line(buf);
 		break;
 	case '\t':
-		if (buf->type == CE_FILE_TYPE_PYTHON) {
-			for (i = 0; i < 4; i++)
+		if (config.tab_expand) {
+			for (i = 0; i < config.tab_width; i++)
 				buffer_line_insert_byte(buf, line, ' ');
 		} else {
 			buffer_line_insert_byte(buf, line, byte);
@@ -752,28 +753,31 @@ ce_buffer_delete_line(struct cebuf *buf)
 	if (buf->lcnt == 0)
 		return;
 
+	ce_editor_pbuffer_reset();
+
 	index = ce_buffer_line_index(buf);
-	ce_buffer_delete_lines(buf, index, index + 1, 0);
+	ce_buffer_delete_lines(buf, index, index, 0);
+
+	ce_editor_pbuffer_sync();
 }
 
 void
 ce_buffer_delete_lines(struct cebuf *buf, size_t start, size_t end, int rev)
 {
 	struct celine		*line;
-	size_t			index;
+	size_t			index, range;
 
 	if (start > end)
 		fatal("%s: start(%zu) > end(%zu)", __func__, start, end);
 
-	if (buf->lcnt == 0 || end > buf->lcnt || start == end)
-		return;
-
 	ce_debug("start: %zu, end: %zu (lcnt:%zu)",
 	    start, end, buf->lcnt);
 
-	ce_editor_pbuffer_reset();
+	if (buf->lcnt == 0 || end >= buf->lcnt)
+		return;
 
-	for (index = start; index < end; index++) {
+	range = (end - start) + 1;
+	for (index = start; index <= end; index++) {
 		line = &buf->lines[index];
 		ce_editor_pbuffer_append(line->data, line->length);
 
@@ -783,27 +787,28 @@ ce_buffer_delete_lines(struct cebuf *buf, size_t start, size_t end, int rev)
 		}
 	}
 
-	if (end < buf->lcnt) {
-		memmove(&buf->lines[start], &buf->lines[end],
-		    (buf->lcnt - end) * sizeof(struct celine));
+	if (end < buf->lcnt - 1) {
+		memmove(&buf->lines[start], &buf->lines[end + 1],
+		    (buf->lcnt - end - 1) * sizeof(struct celine));
 	}
 
-	buf->lcnt -= end - start;
+	buf->lcnt -= range;
 
 	if (rev == 0) {
-		if (buf->top > (end - start)) {
-			buf->top -= end - start - 1;
+		if (buf->top > range) {
+			buf->top -= range - 1;
 		} else {
 			buf->top = 0;
 
-			if (buf->line > (end - start))
-				buf->line -= end - start - 1;
+			if (buf->line > range)
+				buf->line -= range - 1;
 			else
 				buf->line = TERM_CURSOR_MIN;
 		}
-	} else {
-		buf->line--;
 	}
+
+	if (end >= buf->lcnt)
+		buf->line--;
 
 	if (buf->line == 0)
 		buf->line = TERM_CURSOR_MIN;
@@ -813,6 +818,9 @@ ce_buffer_delete_lines(struct cebuf *buf, size_t start, size_t end, int rev)
 		buf->column = TERM_CURSOR_MIN;
 		buf->loff = 0;
 		ce_buffer_line_alloc_empty(buf);
+	} else {
+		line = ce_buffer_line_current(buf);
+		buffer_line_allocate(buf, line);
 	}
 
 	buf->flags |= CE_BUFFER_DIRTY;
@@ -821,7 +829,7 @@ ce_buffer_delete_lines(struct cebuf *buf, size_t start, size_t end, int rev)
 
 	ce_editor_dirty();
 
-	ce_editor_message("deleted %zu line(s)", end - start);
+	ce_editor_message("deleted %zu line(s)", range);
 }
 
 void
@@ -955,18 +963,25 @@ ce_buffer_center(void)
 	adj = 0;
 	half = ce_term_height() / 2;
 
-	if (active->cursor_line < half && active->top > half) {
+	if (active->cursor_line < half) {
 		adj = 1;
-		active->top -= half - active->cursor_line;
-		active->line += half - active->cursor_line;
+		if (active->top > half) {
+			active->top -= half - active->cursor_line;
+			active->line = ce_term_height() / 2;
+			active->cursor_line = (ce_term_height() / 2);
+		} else {
+			active->line = active->top + active->line;
+			active->cursor_line = active->line;
+			active->top = 0;
+		}
 	} else if (active->cursor_line > half) {
 		adj = 1;
 		active->top += active->cursor_line - half;
-		active->line -= active->cursor_line - half;
+		active->line = ce_term_height() / 2;
+		active->cursor_line = (ce_term_height() / 2);
 	}
 
 	if (adj) {
-		active->cursor_line = (ce_term_height() / 2);
 		ce_term_setpos(active->cursor_line, active->column);
 		ce_editor_dirty();
 	}
@@ -989,8 +1004,8 @@ ce_buffer_move_up(void)
 		if (active->top >= ce_term_height() / 2) {
 			scroll = 1;
 			active->top -= ce_term_height() / 2;
-			active->line += ce_term_height() / 2;
-			active->cursor_line = (ce_term_height() / 2) + 1;
+			active->line = (ce_term_height() / 2);
+			active->cursor_line = (ce_term_height() / 2);
 		} else if (active->line > TERM_CURSOR_MIN) {
 			active->line--;
 		}
@@ -1008,10 +1023,6 @@ ce_buffer_move_up(void)
 void
 ce_buffer_page_up(void)
 {
-	size_t			index;
-	struct celine		*line;
-	u_int16_t		curline, lines, height;
-
 	if (active->lcnt < ce_term_height() - 2)
 		return;
 
@@ -1020,20 +1031,7 @@ ce_buffer_page_up(void)
 	else
 		active->top = 0;
 
-	curline = 1;
-	height = (ce_term_height() - 2) / 2;
-
-	for (index = active->top; curline < height; index++) {
-		if (index == active->lcnt - 1)
-			break;
-
-		line = &active->lines[index];
-		lines = buffer_line_span(line);
-
-		curline += lines;
-	}
-
-	active->line = index - (active->top - 1);
+	active->line = ce_term_height() / 2;
 
 	buffer_update_cursor(active);
 
@@ -1043,9 +1041,8 @@ ce_buffer_page_up(void)
 void
 ce_buffer_move_down(void)
 {
-	struct celine	*line;
 	int		scroll;
-	size_t		index, next, current, upper, lower, lines, diff;
+	size_t		index, next;
 
 	if (active->lcnt == 0)
 		return;
@@ -1055,64 +1052,22 @@ ce_buffer_move_down(void)
 		    __func__, active->cursor_line, ce_term_height() - 2);
 	}
 
-	diff = 0;
-	lines = 0;
-	lower = 0;
-	upper = 0;
 	scroll = 0;
-
-	line = ce_buffer_line_current(active);
 	index = ce_buffer_line_index(active);
 
 	if (index == active->lcnt - 1)
 		return;
-
-	current = buffer_line_span(line);
-
-	if (current > ce_term_height() - 2)
-		scroll = 1;
 
 	if (active->cursor_line == ce_term_height() - 2)
 		scroll = 1;
 
 	if (scroll) {
 		active->top += ce_term_height() / 2;
-		active->line -= ce_term_height() / 2;
-		active->cursor_line = (ce_term_height() / 2) - 1;
-		if (index < active->lcnt - 1) {
-			line = &active->lines[active->top];
-			upper = buffer_line_span(line);
-		}
+		active->line = ce_term_height() / 2;
 	} else {
 		next = active->line + 1;
 		if (next <= active->lcnt)
 			active->line = next;
-	}
-
-	if (current < ce_term_height() - 2) {
-		lines = 0;
-		index = active->top;
-
-		while (lines < ce_term_height() - 2 &&
-		    index < active->lcnt - 1) {
-			line = &active->lines[index++];
-			lines += buffer_line_span(line);
-		}
-
-		if (index < active->lcnt - 1) {
-			line = &active->lines[index - 1];
-			lower = buffer_line_span(line);
-		}
-
-		if (upper < lower)
-			diff = lower - upper;
-		else
-			diff = 0;
-
-		if (diff > 0 && scroll) {
-			active->top += diff;
-			active->line -= diff;
-		}
 	}
 
 	buffer_update_cursor(active);
@@ -1127,9 +1082,7 @@ ce_buffer_move_down(void)
 void
 ce_buffer_page_down(void)
 {
-	struct celine		*line;
 	size_t			next, index;
-	u_int16_t		lines, curline, height;
 
 	if (active->lcnt < ce_term_height() - 2)
 		return;
@@ -1138,26 +1091,15 @@ ce_buffer_page_down(void)
 
 	index = next + (active->line - 1);
 	if (index >= active->lcnt) {
-		active->top = (active->lcnt - 1) - 15;
-		active->line = TERM_CURSOR_MIN;
+		ce_buffer_jump_down();
 	} else {
 		active->top += (ce_term_height() - 2) - 2;
+
+		if (index + ce_term_height() / 2 < active->lcnt - 1)
+			active->line = ce_term_height() / 2;
+		else
+			ce_buffer_jump_down();
 	}
-
-	curline = 1;
-	height = (ce_term_height() - 2) / 2;
-
-	for (index = active->top; curline < height; index++) {
-		if (index == active->lcnt - 1)
-			break;
-
-		line = &active->lines[index];
-		lines = buffer_line_span(line);
-
-		curline += lines;
-	}
-
-	active->line = index - (active->top - 1);
 
 	buffer_update_cursor(active);
 
@@ -1303,6 +1245,7 @@ ce_buffer_line_alloc_empty(struct cebuf *buf)
 	}
 
 	buf->lcnt = 1;
+	free(buf->lines);
 
 	if ((buf->lines = calloc(1, sizeof(struct celine))) == NULL) {
 		fatal("%s: calloc(%zu): %s", __func__,
@@ -1345,6 +1288,7 @@ ce_buffer_constrain_cursor_column(struct cebuf *buf)
 int
 ce_buffer_save_active(int force, const char *dstpath)
 {
+	struct stat		st;
 	struct iovec		*iov;
 	const char		*file, *dir;
 	int			fd, len, ret;
@@ -1375,6 +1319,21 @@ ce_buffer_save_active(int force, const char *dstpath)
 
 	if (!(active->flags & CE_BUFFER_DIRTY) && force == 0)
 		return (0);
+
+	if (stat(dstpath, &st) == -1) {
+		if (errno != ENOENT) {
+			buffer_seterr("stat failed: %s", errno_s);
+			goto cleanup;
+		}
+
+		/* Force save, file was probably new. */
+		force = 1;
+	}
+
+	if (st.st_mtime != active->mtime && force == 0) {
+		buffer_seterr("underlying file has changed, use force");
+		goto cleanup;
+	}
 
 	if ((copy = strdup(dstpath)) == NULL)
 		fatal("%s: strdup failed %s", __func__, errno_s);
@@ -1419,17 +1378,32 @@ ce_buffer_save_active(int force, const char *dstpath)
 		iov[elms].iov_base = active->lines[line].data;
 		iov[elms].iov_len = active->lines[line].length;
 
+		ce_debug("line #%zu (%zu) (allocated:%d)",
+		    line, active->lines[line].length,
+		    active->lines[line].flags & CE_LINE_ALLOCATED);
+
 		if (!(active->lines[line].flags & CE_LINE_ALLOCATED)) {
 			for (next = line + 1; next < active->lcnt; next++) {
 				if (active->lines[next].flags &
-				    CE_LINE_ALLOCATED)
+				    CE_LINE_ALLOCATED) {
+					ce_debug("line %zu breaks mmap chain",
+					    next);
 					break;
+				}
 
+				ce_debug("line %zu extends %zu - %zu '%.*s'",
+				    next, line, active->lines[next].length,
+				    (int)active->lines[next].length,
+				    (const char *)active->lines[next].data);
 				iov[elms].iov_len += active->lines[next].length;
 			}
 
 			line = next - 1;
 		}
+
+		ce_debug("elm %zu = %zu bytes, '%.*s'", elms,
+		    iov[elms].iov_len, (int)iov[elms].iov_len,
+		    (const char *)iov[elms].iov_base);
 
 		elms++;
 
@@ -1482,7 +1456,13 @@ ce_buffer_save_active(int force, const char *dstpath)
 		goto cleanup;
 	}
 
+	if (stat(dstpath, &st) == -1) {
+		buffer_seterr("stat failed: %s", errno_s);
+		goto cleanup;
+	}
+
 	ret = 0;
+	active->mtime = st.st_mtime;
 	active->flags &= ~CE_BUFFER_DIRTY;
 	ce_editor_message("wrote %zu lines to %s", active->lcnt, dstpath);
 
@@ -1609,9 +1589,10 @@ buffer_line_data_to_columns(const void *data, size_t length)
 {
 	u_int16_t		cols;
 	const u_int8_t		*ptr;
-	size_t			idx, seqlen;
+	size_t			idx, seqlen, tw;
 
 	ptr = data;
+	tw = config.tab_width;
 	cols = TERM_CURSOR_MIN;
 
 	for (idx = 0; idx < length; idx++) {
@@ -1619,10 +1600,10 @@ buffer_line_data_to_columns(const void *data, size_t length)
 			break;
 
 		if (ptr[idx] == '\t') {
-			if ((cols % 8) == 0)
+			if ((cols % tw) == 0)
 				cols += 1;
 			else
-				cols += 8 - (cols % 8) + 1;
+				cols += tw - (cols % tw) + 1;
 		} else {
 			cols++;
 			if (ce_utf8_sequence(data, length, idx, &seqlen))
@@ -1636,14 +1617,15 @@ buffer_line_data_to_columns(const void *data, size_t length)
 static void
 buffer_line_column_to_data(struct cebuf *buf)
 {
-	size_t			idx;
 	u_int16_t		col;
 	const u_int8_t		*ptr;
 	struct celine		*line;
+	size_t			idx, tw;
 
 	line = ce_buffer_line_current(buf);
 
 	ptr = line->data;
+	tw = config.tab_width;
 	col = TERM_CURSOR_MIN;
 
 	for (idx = 0; idx < line->length; idx++) {
@@ -1651,10 +1633,10 @@ buffer_line_column_to_data(struct cebuf *buf)
 			break;
 
 		if (ptr[idx] == '\t') {
-			if ((col % 8) == 0)
+			if ((col % tw) == 0)
 				col += 1;
 			else
-				col += 8 - (col % 8) + 1;
+				col += tw - (col % tw) + 1;
 		} else {
 			col++;
 		}
@@ -1706,9 +1688,10 @@ buffer_line_insert_byte(struct cebuf *buf, struct celine *line, u_int8_t byte)
 		}
 	}
 
+	buf->flags |= CE_BUFFER_DIRTY;
+
 	ptr = line->data;
 	memmove(&ptr[buf->loff + 1], &ptr[buf->loff], line->length - buf->loff);
-
 	ptr[buf->loff] = byte;
 
 	line->length++;
@@ -1716,15 +1699,18 @@ buffer_line_insert_byte(struct cebuf *buf, struct celine *line, u_int8_t byte)
 
 	if (byte == '\n') {
 		ce_buffer_move_right();
-		buf->flags |= CE_BUFFER_DIRTY;
 		ce_editor_dirty();
 		return;
 	}
 
 	/* Erase the current line and rewrite it completely. */
-	ce_term_setpos(buf->cursor_line, TERM_CURSOR_MIN);
-	ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
-	ce_syntax_write(buf, line, line->length);
+	if (ce_editor_pasting() == 0) {
+		ce_term_setpos(buf->cursor_line, TERM_CURSOR_MIN);
+		ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
+		ce_syntax_init();
+		ce_syntax_write(buf, line, line->length);
+		ce_syntax_finalize();
+	}
 
 	/*
 	 * Mimic ce_buffer_move_right().
@@ -1734,23 +1720,26 @@ buffer_line_insert_byte(struct cebuf *buf, struct celine *line, u_int8_t byte)
 	ce_buffer_constrain_cursor_column(buf);
 
 	cursor_column = buf->column;
-	ce_term_setpos(buf->cursor_line, active->column);
 
-	buf->flags |= CE_BUFFER_DIRTY;
+	if (ce_editor_pasting() == 0)
+		ce_term_setpos(buf->cursor_line, active->column);
+
+	/* If we overflow terminal width, just redraw completely. */
+	if (buffer_line_span(line) > 1)
+		ce_editor_dirty();
 }
 
 static void
 buffer_line_erase_character(struct cebuf *buf, struct celine *line, int inplace)
 {
 	u_int8_t	*ptr;
-	int		update;
-	size_t		seqlen, cur;
+	size_t		seqlen, cur, span, span_changed;
 
 	if (line->length == 0)
 		return;
 
-	update = 0;
 	ptr = line->data;
+	span = buffer_line_span(line);
 
 	if (ce_utf8_sequence(line->data, line->length, buf->loff, &seqlen) == 0)
 		seqlen = 1;
@@ -1762,10 +1751,8 @@ buffer_line_erase_character(struct cebuf *buf, struct celine *line, int inplace)
 		    line->length - buf->loff - seqlen);
 		if (buf->loff >= seqlen && buf->loff + 1 == line->length - 1) {
 			buf->loff -= seqlen;
-			update = 1;
 		}
 	} else {
-		update = 1;
 		cur = buf->loff;
 		buffer_prev_character(buf, line);
 		memmove(&ptr[buf->loff], &ptr[cur], line->length - cur);
@@ -1773,18 +1760,25 @@ buffer_line_erase_character(struct cebuf *buf, struct celine *line, int inplace)
 	}
 
 	line->length -= seqlen;
+	span_changed = span != buffer_line_span(line);
 
-	if (update) {
-		buf->column =
-		    buffer_line_data_to_columns(line->data, buf->loff);
-		cursor_column = buf->column;
-		ce_buffer_line_columns(line);
-		ce_term_setpos(buf->cursor_line, buf->column);
+	if (span == 1 && span_changed == 0) {
+		ce_term_setpos(buf->cursor_line, TERM_CURSOR_MIN);
+		ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
+
+		ce_syntax_init();
+		ce_syntax_write(buf, line, line->length);
+		ce_syntax_finalize();
+	} else {
+		ce_editor_dirty();
 	}
 
-	/* XXX for now. */
+	buf->column = buffer_line_data_to_columns(line->data, buf->loff);
+	cursor_column = buf->column;
+	ce_buffer_line_columns(line);
+	ce_term_setpos(buf->cursor_line, buf->column);
+
 	buf->flags |= CE_BUFFER_DIRTY;
-	ce_editor_dirty();
 }
 
 static void

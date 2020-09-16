@@ -49,7 +49,6 @@ struct state {
 	int		inside_preproc;
 
 	int		color;
-
 	u_int32_t	flags;
 };
 
@@ -211,10 +210,11 @@ void
 ce_syntax_write(struct cebuf *buf, struct celine *line, size_t towrite)
 {
 	const u_int8_t		*p;
-	size_t			col, spaces, i;
+	size_t			col, spaces, i, tw;
 
 	col = 1;
 	p = line->data;
+	tw = config.tab_width;
 
 	syntax_state.off = 0;
 	syntax_state.keepcolor = 0;
@@ -243,10 +243,10 @@ ce_syntax_write(struct cebuf *buf, struct celine *line, size_t towrite)
 			syntax_state_term_bold(&syntax_state, 0);
 			syntax_state_color(&syntax_state, TERM_COLOR_BLUE);
 
-			if ((col % 8) == 0)
+			if ((col % tw) == 0)
 				spaces = 1;
 			else
-				spaces = 8 - (col % 8) + 1;
+				spaces = tw - (col % tw) + 1;
 
 			col += spaces;
 
