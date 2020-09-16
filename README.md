@@ -3,7 +3,7 @@ About
 
 ce is my minimalistic editor I use on a day-to-day basis.
 
-Is this editor you? Probably not, it is highly opinionated
+Is this editor for you? Definitely not, it is highly opinionated
 and tailored to my requirements.
 
 License
