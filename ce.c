@@ -52,7 +52,7 @@ main(int argc, char *argv[])
 
 	debug = 0;
 
-	while ((ch = getopt(argc, argv, "elv")) != -1) {
+	while ((ch = getopt(argc, argv, "delv")) != -1) {
 		switch (ch) {
 		case 'd':
 			debug = 1;
