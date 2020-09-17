@@ -793,7 +793,8 @@ direct:
 				ce_buffer_mark_set(buf, key);
 			break;
 		case EDITOR_COMMAND_MARK_JMP:
-			if (key >= CE_MARK_MIN && key <= CE_MARK_MAX)
+			if (key == CE_MARK_PREVIOUS ||
+			    (key >= CE_MARK_MIN && key <= CE_MARK_MAX))
 				ce_buffer_mark_jump(buf, key);
 			break;
 		case EDITOR_COMMAND_DELETE:
@@ -889,6 +890,7 @@ editor_cmd_range(struct cebuf *buf,
 		return;
 
 	ce_editor_pbuffer_reset();
+	ce_buffer_mark_last(buf, start);
 
 	cb(buf, start, end, rev);
 	memset(&range, 0, sizeof(range));
@@ -908,6 +910,8 @@ editor_cmd_delete_lines(struct cebuf *buf, long end)
 	ce_editor_pbuffer_reset();
 
 	start = ce_buffer_line_index(buf);
+
+	ce_buffer_mark_last(buf, start);
 	ce_buffer_delete_lines(buf, start, start + end, 1);
 
 	ce_editor_pbuffer_sync();
@@ -925,6 +929,7 @@ editor_cmd_delete_words(struct cebuf *buf, long num)
 		return;
 
 	line = ce_buffer_line_current(buf);
+	ce_buffer_mark_last(buf, ce_buffer_line_index(buf) + 1);
 
 	for (i = 0; i < num; i++) {
 		start = buf->loff;
@@ -949,6 +954,7 @@ editor_cmd_yank_lines(struct cebuf *buf, long num)
 
 	num--;
 	index = ce_buffer_line_index(buf);
+	ce_buffer_mark_last(buf, ce_buffer_line_index(buf) + 1);
 
 	end = index + num;
 	if (end > buf->lcnt - 1)
@@ -1106,7 +1112,7 @@ editor_cmd_paste(void)
 	buf = ce_buffer_active();
 	ptr = pbuffer->data;
 
-	mode = CE_EDITOR_MODE_INSERT;
+	editor_cmd_insert_mode();
 
 	ce_buffer_jump_left();
 	ce_buffer_move_down();
@@ -1132,7 +1138,10 @@ editor_cmd_paste(void)
 static void
 editor_cmd_insert_mode(void)
 {
+	struct cebuf		*buf = ce_buffer_active();
+
 	mode = CE_EDITOR_MODE_INSERT;
+	ce_buffer_mark_last(buf, ce_buffer_line_index(buf) + 1);
 }
 
 static void
@@ -1141,7 +1150,7 @@ editor_cmd_insert_mode_append(void)
 	struct cebuf		*buf = ce_buffer_active();
 
 	if (buf->lcnt == 0 || buf->line == buf->lcnt) {
-		mode = CE_EDITOR_MODE_INSERT;
+		editor_cmd_insert_mode();
 		ce_buffer_jump_right();
 		ce_buffer_input(buf, '\n');
 	} else {
@@ -1149,7 +1158,7 @@ editor_cmd_insert_mode_append(void)
 		ce_buffer_move_down();
 		ce_buffer_input(buf, '\n');
 		ce_buffer_move_up();
-		mode = CE_EDITOR_MODE_INSERT;
+		editor_cmd_insert_mode();
 	}
 }
 
@@ -1160,7 +1169,7 @@ editor_cmd_insert_mode_prepend(void)
 	ce_buffer_input(ce_buffer_active(), '\n');
 	ce_buffer_move_up();
 
-	mode = CE_EDITOR_MODE_INSERT;
+	editor_cmd_insert_mode();
 }
 
 static void

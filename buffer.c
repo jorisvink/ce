@@ -1522,17 +1522,36 @@ ce_buffer_mark_set(struct cebuf *buf, char mark)
 }
 
 void
+ce_buffer_mark_last(struct cebuf *buf, size_t line)
+{
+	buf->prevmark.set = 1;
+	buf->prevmark.line = line;
+}
+
+void
 ce_buffer_mark_jump(struct cebuf *buf, char mark)
 {
 	int		idx;
+	struct cemark	*mk;
+	size_t		lastline;
 
-	if (mark < CE_MARK_MIN || mark > CE_MARK_MAX)
+	if (mark != CE_MARK_PREVIOUS &&
+	    (mark < CE_MARK_MIN || mark > CE_MARK_MAX))
 		fatal("%s: invalid marker '0x%02x'", __func__, mark);
 
-	idx = mark - CE_MARK_OFFSET;
+	if (mark == CE_MARK_PREVIOUS) {
+		mk = &buf->prevmark;
+		ce_debug("prevmark: %d, line: %zu", mk->set, mk->line);
+	} else {
+		idx = mark - CE_MARK_OFFSET;
+		mk = &buf->markers[idx];
+	}
 
-	if (buf->markers[idx].set)
-		ce_buffer_jump_line(buf, buf->markers[idx].line);
+	if (mk->set) {
+		lastline = ce_buffer_line_index(buf) + 1;
+		ce_buffer_jump_line(buf, mk->line);
+		ce_buffer_mark_last(buf, lastline);
+	}
 }
 
 static struct cebuf *
