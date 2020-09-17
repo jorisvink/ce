@@ -39,6 +39,8 @@
 #define EDITOR_COMMAND_YANK		2
 #define EDITOR_COMMAND_WORD_NEXT	3
 #define EDITOR_COMMAND_WORD_PREV	4
+#define EDITOR_COMMAND_MARK_SET		5
+#define EDITOR_COMMAND_MARK_JMP		6
 
 #define KEY_MAP_LEN(x)		((sizeof(x) / sizeof(x[0])))
 
@@ -717,10 +719,14 @@ editor_normal_mode_command(char key)
 	struct cebuf		*buf;
 	int			reset, range_reset;
 
-	if (key >= '0' && key <= '9') {
-		mode = CE_EDITOR_MODE_NORMAL_CMD;
-		ce_buffer_append(cmdbuf, &key, sizeof(key));
-		return;
+	if (normalcmd == -1 ||
+	    (normalcmd != EDITOR_COMMAND_MARK_SET &&
+	    normalcmd != EDITOR_COMMAND_MARK_JMP)) {
+		if (key >= '0' && key <= '9') {
+			mode = CE_EDITOR_MODE_NORMAL_CMD;
+			ce_buffer_append(cmdbuf, &key, sizeof(key));
+			return;
+		}
 	}
 
 	reset = 0;
@@ -736,6 +742,12 @@ editor_normal_mode_command(char key)
 			goto direct;
 		case 'd':
 			normalcmd = EDITOR_COMMAND_DELETE;
+			break;
+		case 'm':
+			normalcmd = EDITOR_COMMAND_MARK_SET;
+			break;
+		case '\'':
+			normalcmd = EDITOR_COMMAND_MARK_JMP;
 			break;
 		case 'y':
 		case 'c':
@@ -763,6 +775,14 @@ direct:
 			num = 1;
 
 		switch (normalcmd) {
+		case EDITOR_COMMAND_MARK_SET:
+			if (key >= CE_MARK_MIN && key <= CE_MARK_MAX)
+				ce_buffer_mark_set(buf, key);
+			break;
+		case EDITOR_COMMAND_MARK_JMP:
+			if (key >= CE_MARK_MIN && key <= CE_MARK_MAX)
+				ce_buffer_mark_jump(buf, key);
+			break;
 		case EDITOR_COMMAND_DELETE:
 			switch (key) {
 			case 's':

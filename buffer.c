@@ -859,6 +859,7 @@ ce_buffer_jump_line(struct cebuf *buf, long linenr)
 		buf->line = (ce_term_height() - 2) / 2;
 	}
 
+	cursor_column = TERM_CURSOR_MIN;
 	buffer_update_cursor(buf);
 
 	/* XXX for now. */
@@ -1502,6 +1503,36 @@ ce_buffer_line_index(struct cebuf *buf)
 		fatal("%s: index %zu > lcnt %zu", __func__, index, buf->lcnt);
 
 	return (index);
+}
+
+void
+ce_buffer_mark_set(struct cebuf *buf, char mark)
+{
+	int		idx;
+
+	if (mark < CE_MARK_MIN || mark > CE_MARK_MAX)
+		fatal("%s: invalid marker '0x%02x'", __func__, mark);
+
+	idx = mark - CE_MARK_OFFSET;
+
+	buf->markers[idx].set = 1;
+	buf->markers[idx].line = ce_buffer_line_index(buf) + 1;
+
+	ce_editor_message("mark %c set", mark);
+}
+
+void
+ce_buffer_mark_jump(struct cebuf *buf, char mark)
+{
+	int		idx;
+
+	if (mark < CE_MARK_MIN || mark > CE_MARK_MAX)
+		fatal("%s: invalid marker '0x%02x'", __func__, mark);
+
+	idx = mark - CE_MARK_OFFSET;
+
+	if (buf->markers[idx].set)
+		ce_buffer_jump_line(buf, buf->markers[idx].line);
 }
 
 static struct cebuf *

@@ -121,6 +121,18 @@ struct celine {
 };
 
 /*
+ * A marker and its associated line in a cebuf.
+ */
+#define CE_MARK_MIN		'0'
+#define CE_MARK_MAX		'z'
+#define CE_MARK_OFFSET		CE_MARK_MIN
+
+struct cemark {
+	int			set;
+	size_t			line;
+};
+
+/*
  * A buffer from either a file or internal.
  */
 #define CE_BUFFER_DIRTY		0x0001
@@ -178,6 +190,9 @@ struct cebuf {
 	size_t			lcnt;
 	struct celine		*lines;
 
+	/* Markers (a-z). */
+	struct cemark		markers[CE_MARK_MAX];
+
 	/* Callback for special buffers (like cmdbuf). */
 	void			(*cb)(struct cebuf *, char);
 
@@ -202,6 +217,8 @@ void		ce_buffer_insert_line(struct cebuf *);
 void		ce_buffer_line_columns(struct celine *);
 void		ce_buffer_free_internal(struct cebuf *);
 int		ce_buffer_save_active(int, const char *);
+void		ce_buffer_mark_set(struct cebuf *, char);
+void		ce_buffer_mark_jump(struct cebuf *, char);
 void		ce_buffer_jump_line(struct cebuf *, long);
 void		ce_buffer_input(struct cebuf *, u_int8_t);
 void		ce_buffer_line_alloc_empty(struct cebuf *);
