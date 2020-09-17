@@ -515,6 +515,8 @@ editor_read(int fd, void *data, size_t len, int ms)
 static void
 editor_draw_status(void)
 {
+	const u_int8_t		*ptr;
+	size_t			cmdoff, width;
 	const char		*isdirty = "";
 	const char		*filemode = "";
 	const char		*modestr = NULL;
@@ -556,12 +558,23 @@ editor_draw_status(void)
 	    curbuf->name, isdirty, filemode, curbuf->top + curbuf->line,
 	    curbuf->loff, curbuf->column, curbuf->lcnt, modestr);
 
+	cmdoff = ce_term_width() * 0.75f;
+
 	ce_term_reset();
-	ce_term_setpos(ce_term_height(), ce_term_width() * 0.75f);
+	ce_term_setpos(ce_term_height(), cmdoff);
 	ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
 
-	if (mode == CE_EDITOR_MODE_NORMAL_CMD)
-		ce_term_write(cmdbuf->data, cmdbuf->length);
+	if (mode == CE_EDITOR_MODE_NORMAL_CMD) {
+		width = ce_term_width() - (cmdoff + 10);
+
+		if (cmdbuf->length > width)
+			cmdoff = cmdbuf->length - width - 1;
+		else
+			cmdoff = 0;
+
+		ptr = cmdbuf->data;
+		ce_term_write(&ptr[cmdoff], cmdbuf->length - cmdoff);
+	}
 
 	ce_term_writestr(TERM_SEQUENCE_CURSOR_RESTORE);
 }
@@ -756,7 +769,7 @@ editor_normal_mode_command(char key)
 		case 'w':
 			normalcmd = EDITOR_COMMAND_WORD_NEXT;
 			goto direct;
-		case EDITOR_KEY_ESC:
+		default:
 			reset = 1;
 			range_reset = 1;
 			break;
