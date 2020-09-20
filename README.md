@@ -93,6 +93,10 @@ cs           = yank range start (copy)
 
 ce           = yank range end (yanks between cs<=>ce)
 
+ai<char>     = alter inside string with given character (" or ').
+
+di<char>     = delete inside string with given character (" or ').
+
 **insert mode key bindings**
 
 arrow keys   = navigate around
