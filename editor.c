@@ -1151,7 +1151,9 @@ editor_cmd_insert_mode(void)
 	struct cebuf		*buf = ce_buffer_active();
 
 	mode = CE_EDITOR_MODE_INSERT;
-	ce_buffer_mark_last(buf, ce_buffer_line_index(buf) + 1);
+
+	if (buf->lcnt > 0)
+		ce_buffer_mark_last(buf, ce_buffer_line_index(buf) + 1);
 }
 
 static void
