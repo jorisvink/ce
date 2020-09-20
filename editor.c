@@ -41,6 +41,7 @@
 #define EDITOR_COMMAND_WORD_PREV	4
 #define EDITOR_COMMAND_MARK_SET		5
 #define EDITOR_COMMAND_MARK_JMP		6
+#define EDITOR_COMMAND_ALTER		7
 
 #define KEY_MAP_LEN(x)		((sizeof(x) / sizeof(x[0])))
 
@@ -77,6 +78,7 @@ static void	editor_cmd_normal_mode(void);
 static void	editor_cmd_range(struct cebuf *,
 		    void (*cb)(struct cebuf *, size_t, size_t, int));
 
+static void	editor_cmd_change_string(struct cebuf *);
 static void	editor_cmd_word_prev(struct cebuf *, long);
 static void	editor_cmd_word_next(struct cebuf *, long);
 static void	editor_cmd_yank_lines(struct cebuf *, long);
@@ -730,7 +732,7 @@ editor_normal_mode_command(char key)
 	long			num;
 	const char		*str;
 	struct cebuf		*buf;
-	int			reset, range_reset;
+	int			reset, range_reset, next_mode;
 
 	if (normalcmd == -1 ||
 	    (normalcmd != EDITOR_COMMAND_MARK_SET &&
@@ -745,11 +747,15 @@ editor_normal_mode_command(char key)
 	reset = 0;
 	range_reset = 0;
 	buf = ce_buffer_active();
+	next_mode = CE_EDITOR_MODE_NORMAL;
 
 	if (normalcmd == -1) {
 		ce_buffer_append(cmdbuf, &key, sizeof(key));
 
 		switch (key) {
+		case 'a':
+			normalcmd = EDITOR_COMMAND_ALTER;
+			break;
 		case 'b':
 			normalcmd = EDITOR_COMMAND_WORD_PREV;
 			goto direct;
@@ -797,8 +803,19 @@ direct:
 			    (key >= CE_MARK_MIN && key <= CE_MARK_MAX))
 				ce_buffer_mark_jump(buf, key);
 			break;
+		case EDITOR_COMMAND_ALTER:
+			switch (key) {
+			case 'i':
+				editor_cmd_change_string(buf);
+				next_mode = CE_EDITOR_MODE_INSERT;
+				break;
+			}
+			break;
 		case EDITOR_COMMAND_DELETE:
 			switch (key) {
+			case 'i':
+				editor_cmd_change_string(buf);
+				break;
 			case 's':
 				if (buf->lcnt == 0)
 					break;
@@ -857,7 +874,11 @@ direct:
 	if (reset) {
 		normalcmd = -1;
 		ce_buffer_reset(cmdbuf);
-		mode = CE_EDITOR_MODE_NORMAL;
+
+		if (next_mode == CE_EDITOR_MODE_INSERT)
+			editor_cmd_insert_mode();
+		else
+			mode = next_mode;
 	}
 
 	if (range_reset && range.act != 0) {
@@ -896,6 +917,25 @@ editor_cmd_range(struct cebuf *buf,
 	memset(&range, 0, sizeof(range));
 
 	ce_editor_pbuffer_sync();
+}
+
+static void
+editor_cmd_change_string(struct cebuf *buf)
+{
+	u_int8_t		key;
+
+	if (editor_read(STDIN_FILENO, &key, sizeof(key), -1) == 0)
+		return;
+
+	switch (key) {
+	case '\'':
+	case '"':
+		break;
+	default:
+		return;
+	}
+
+	ce_buffer_delete_inside_string(buf, key);
 }
 
 static void

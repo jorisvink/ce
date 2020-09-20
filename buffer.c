@@ -833,6 +833,59 @@ ce_buffer_delete_lines(struct cebuf *buf, size_t start, size_t end, int rev)
 }
 
 void
+ce_buffer_delete_inside_string(struct cebuf *buf, u_int8_t byte)
+{
+	ssize_t			idx;
+	u_int8_t		*ptr;
+	struct celine		*line;
+	size_t			start, end;
+
+	if (buf->lcnt == 0)
+		return;
+
+	line = ce_buffer_line_current(buf);
+	ptr = line->data;
+
+	for (idx = buf->loff; idx >= 0; idx--) {
+		if (ptr[idx] == byte)
+			break;
+	}
+
+	if (idx < 0)
+		return;
+
+	start = (size_t)idx + 1;
+
+	for (idx = buf->loff; (size_t)idx < line->length; idx++) {
+		if (ptr[idx] == byte)
+			break;
+	}
+
+	if (idx < 0)
+		return;
+
+	end = (size_t)idx;
+
+	if (start == end || start > end || ((end - 1) == start))
+		return;
+
+	buffer_line_allocate(buf, line);
+	ptr = line->data;
+	memmove(&ptr[start], &ptr[end], line->length - end);
+
+	line->length -= end - start;
+
+	buf->loff = start;
+	buf->column = buffer_line_data_to_columns(line->data, buf->loff);
+	cursor_column = buf->column;
+
+	ce_buffer_constrain_cursor_column(buf);
+	buffer_update_cursor(buf);
+
+	ce_editor_dirty();
+}
+
+void
 ce_buffer_jump_line(struct cebuf *buf, long linenr)
 {
 	size_t		line;
