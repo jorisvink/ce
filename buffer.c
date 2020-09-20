@@ -505,6 +505,9 @@ ce_buffer_word_next(struct cebuf *buf)
 	buf->column = buffer_line_data_to_columns(line->data, buf->loff);
 	cursor_column = buf->column;
 
+	ce_buffer_constrain_cursor_column(buf);
+	buffer_update_cursor(buf);
+
 	ce_term_setpos(buf->cursor_line, buf->column);
 }
 
