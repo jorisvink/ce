@@ -188,7 +188,7 @@ static const char *js_other[] = {
 static const char *sh_kw[] = {
 	"if", "fi", "while", "do", "exit", "return",
 	"shift", "case", "esac", "echo", "print", "set",
-	NULL
+	"then", NULL
 };
 
 static struct state	syntax_state = { 0 };
