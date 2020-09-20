@@ -1797,6 +1797,7 @@ buffer_line_erase_character(struct cebuf *buf, struct celine *line, int inplace)
 	if (inplace) {
 		if (ptr[buf->loff] == '\n')
 			return;
+		ce_editor_pbuffer_append(&ptr[buf->loff], 1);
 		memmove(&ptr[buf->loff], &ptr[buf->loff + seqlen],
 		    line->length - buf->loff - seqlen);
 		if (buf->loff >= seqlen && buf->loff + 1 == line->length - 1) {

@@ -931,6 +931,8 @@ editor_cmd_delete_words(struct cebuf *buf, long num)
 	line = ce_buffer_line_current(buf);
 	ce_buffer_mark_last(buf, ce_buffer_line_index(buf) + 1);
 
+	ce_editor_pbuffer_reset();
+
 	for (i = 0; i < num; i++) {
 		start = buf->loff;
 		ptr = line->data;
@@ -942,9 +944,12 @@ editor_cmd_delete_words(struct cebuf *buf, long num)
 
 		while (isspace(ptr[end]))
 			end++;
+
 		for (idx = 0; idx < end - start; idx++)
 			ce_buffer_delete_character();
 	}
+
+	ce_editor_pbuffer_sync();
 }
 
 static void
@@ -1114,10 +1119,12 @@ editor_cmd_paste(void)
 
 	editor_cmd_insert_mode();
 
-	ce_buffer_jump_left();
-	ce_buffer_move_down();
-	ce_buffer_input(buf, '\n');
-	ce_buffer_move_up();
+	if (ptr[pbuffer->length - 1] == '\n') {
+		ce_buffer_jump_left();
+		ce_buffer_move_down();
+		ce_buffer_input(buf, '\n');
+		ce_buffer_move_up();
+	}
 
 	pasting = 1;
 
@@ -1127,7 +1134,10 @@ editor_cmd_paste(void)
 	pasting = 0;
 
 	ce_editor_dirty();
-	ce_buffer_jump_left();
+
+	if (ptr[pbuffer->length - 1] == '\n')
+		ce_buffer_jump_left();
+
 	mode = CE_EDITOR_MODE_NORMAL;
 
 #if defined(__APPLE__)
