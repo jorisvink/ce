@@ -206,6 +206,11 @@ ce_buffer_file(const char *path)
 		goto cleanup;
 	}
 
+	if (!S_ISREG(st.st_mode)) {
+		buffer_seterr("%s: not a file", path);
+		goto cleanup;
+	}
+
 	if ((uintmax_t)st.st_size > SIZE_MAX) {
 		buffer_seterr("%s: too large", path);
 		goto cleanup;
