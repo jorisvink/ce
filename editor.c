@@ -537,14 +537,13 @@ editor_draw_status(void)
 	struct cebuf		*curbuf = ce_buffer_active();
 
 	switch (mode) {
-	case CE_EDITOR_MODE_NORMAL:
 	case CE_EDITOR_MODE_COMMAND:
+	case CE_EDITOR_MODE_SEARCH:
+		return;
+	case CE_EDITOR_MODE_NORMAL:
 	case CE_EDITOR_MODE_BUFLIST:
 	case CE_EDITOR_MODE_NORMAL_CMD:
 		modestr = "";
-		break;
-	case CE_EDITOR_MODE_SEARCH:
-		modestr = "- SEARCH -";
 		break;
 	case CE_EDITOR_MODE_INSERT:
 		modestr = "- INSERT -";
@@ -572,7 +571,7 @@ editor_draw_status(void)
 	if (slen == -1)
 		fatal("failed to create status line");
 
-	width = (ce_term_width() - 8)  - slen;
+	width = (ce_term_width() - 1) - slen;
 	if ((size_t)flen > width) {
 		cmdoff = flen - width;
 		fline[cmdoff] = '>';
@@ -581,16 +580,25 @@ editor_draw_status(void)
 	}
 
 	ce_term_writestr(TERM_SEQUENCE_CURSOR_SAVE);
-	ce_term_color(TERM_COLOR_WHITE + TERM_COLOR_BG);
-	ce_term_color(TERM_COLOR_BLACK + TERM_COLOR_FG);
-
 	ce_term_setpos(ce_term_height() - 1, TERM_CURSOR_MIN);
+
 	ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
+	ce_term_writestr(TERM_SEQUENCE_ATTR_BOLD);
+	ce_term_color(TERM_COLOR_WHITE + TERM_COLOR_FG);
+	ce_term_color(TERM_COLOR_BLACK + TERM_COLOR_BG);
+	ce_term_writestr(TERM_SEQUENCE_ATTR_REVERSE);
 	ce_term_writef("%s %s", &fline[cmdoff], sline);
+
+	if ((size_t)(slen + flen) < ce_term_width()) {
+		width = ce_term_width() - (slen + flen);
+		while (width > 1) {
+			ce_term_writestr(" ");
+			width--;
+		}
+	}
 
 	cmdoff = ce_term_width() * 0.75f;
 
-	ce_term_reset();
 	ce_term_setpos(ce_term_height(), cmdoff);
 	ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
 
