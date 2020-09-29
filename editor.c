@@ -565,7 +565,7 @@ editor_draw_status(void)
 		fatal("failed to create status file line");
 
 	slen = snprintf(sline, sizeof(sline),
-	    "[%s] [ %zu,%zu-%zu ] [%zu lines] %s", filemode,
+	    "[%s] %zu,%zu-%zu, %zu lines %s", filemode,
 	    curbuf->top + curbuf->line, curbuf->loff, curbuf->column,
 	    curbuf->lcnt, modestr);
 	if (slen == -1)
