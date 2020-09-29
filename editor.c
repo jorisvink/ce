@@ -553,14 +553,14 @@ editor_draw_status(void)
 	}
 
 	if (curbuf->flags & CE_BUFFER_DIRTY)
-		isdirty = "[+]";
+		isdirty = " [+]";
 
 	if (curbuf->flags & CE_BUFFER_RO)
 		filemode = "r-";
 	else
 		filemode = "rw";
 
-	flen = snprintf(fline, sizeof(fline), "%s %s", curbuf->name, isdirty);
+	flen = snprintf(fline, sizeof(fline), "%s%s", curbuf->name, isdirty);
 	if (flen == -1)
 		fatal("failed to create status file line");
 
