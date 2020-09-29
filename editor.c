@@ -285,14 +285,24 @@ void
 ce_editor_message(const char *fmt, ...)
 {
 	struct timespec		ts;
+	int			len;
 	va_list			args;
+	size_t			off, width;
 
 	free(msg.message);
 
 	va_start(args, fmt);
-	if (vasprintf(&msg.message, fmt, args) == -1)
+	if ((len = vasprintf(&msg.message, fmt, args)) == -1)
 		fatal("%s: vasprintf: %s", __func__, errno_s);
 	va_end(args);
+
+	width = ce_term_width() - 8;
+
+	if ((size_t)len > width) {
+		off = len - width;
+		memmove(&msg.message[0], &msg.message[off], (len - off) + 1);
+		msg.message[0] = '>';
+	}
 
 	(void)clock_gettime(CLOCK_MONOTONIC, &ts);
 
@@ -518,10 +528,12 @@ static void
 editor_draw_status(void)
 {
 	const u_int8_t		*ptr;
+	int			flen, slen;
 	size_t			cmdoff, width;
 	const char		*isdirty = "";
 	const char		*filemode = "";
 	const char		*modestr = NULL;
+	char			fline[1024], sline[128];
 	struct cebuf		*curbuf = ce_buffer_active();
 
 	switch (mode) {
@@ -549,16 +561,32 @@ editor_draw_status(void)
 	else
 		filemode = "rw";
 
-	ce_term_writestr(TERM_SEQUENCE_CURSOR_SAVE);
+	flen = snprintf(fline, sizeof(fline), "[%s%s]", curbuf->name, isdirty);
+	if (flen == -1)
+		fatal("failed to create status file line");
 
+	slen = snprintf(sline, sizeof(sline),
+	    "[%s] [ %zu,%zu-%zu ] [%zu lines] %s", filemode,
+	    curbuf->top + curbuf->line, curbuf->loff, curbuf->column,
+	    curbuf->lcnt, modestr);
+	if (slen == -1)
+		fatal("failed to create status line");
+
+	width = (ce_term_width() - 8)  - slen;
+	if ((size_t)flen > width) {
+		cmdoff = flen - width;
+		fline[cmdoff] = '>';
+	} else {
+		cmdoff = 0;
+	}
+
+	ce_term_writestr(TERM_SEQUENCE_CURSOR_SAVE);
 	ce_term_color(TERM_COLOR_WHITE + TERM_COLOR_BG);
 	ce_term_color(TERM_COLOR_BLACK + TERM_COLOR_FG);
 
 	ce_term_setpos(ce_term_height() - 1, TERM_CURSOR_MIN);
 	ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
-	ce_term_writef("[%s%s] [%s] [ %zu,%zu-%zu ] [%zu lines] %s",
-	    curbuf->name, isdirty, filemode, curbuf->top + curbuf->line,
-	    curbuf->loff, curbuf->column, curbuf->lcnt, modestr);
+	ce_term_writef("%s %s", &fline[cmdoff], sline);
 
 	cmdoff = ce_term_width() * 0.75f;
 

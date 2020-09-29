@@ -1526,7 +1526,7 @@ ce_buffer_save_active(int force, const char *dstpath)
 	ret = 0;
 	active->mtime = st.st_mtime;
 	active->flags &= ~CE_BUFFER_DIRTY;
-	ce_editor_message("wrote %zu lines to %s", active->lcnt, dstpath);
+	ce_editor_message("%s, wrote %zu lines", dstpath, active->lcnt);
 
 cleanup:
 	free(iov);
