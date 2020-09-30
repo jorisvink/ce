@@ -26,6 +26,9 @@
 
 #include "ce.h"
 
+#define CE_SPLASH_TEXT_1	"Coma Editor - by Joris Vink"
+#define CE_SPLASH_TEXT_2	"joris@coders.se"
+
 /* Show messages for 5 seconds. */
 #define EDITOR_MESSAGE_DELAY	5
 
@@ -173,6 +176,7 @@ static struct {
 
 static int			quit = 0;
 static int			dirty = 1;
+static int			splash = 0;
 static int			pasting = 0;
 static volatile sig_atomic_t	sig_recv = -1;
 static int			normalcmd = -1;
@@ -244,6 +248,19 @@ ce_editor_loop(void)
 			dirty = 0;
 		}
 
+		if (splash) {
+			ce_term_writestr(TERM_SEQUENCE_CURSOR_SAVE);
+			ce_term_setpos(ce_term_height() * 0.45,
+			    (ce_term_width() / 2) -
+			    (sizeof(CE_SPLASH_TEXT_1) - 1) / 2);
+			ce_term_writestr(CE_SPLASH_TEXT_1);
+			ce_term_setpos((ce_term_height() * 0.45) + 2,
+			    (ce_term_width() / 2) -
+			    (sizeof(CE_SPLASH_TEXT_2) - 1) / 2);
+			ce_term_writestr(CE_SPLASH_TEXT_2);
+			ce_term_writestr(TERM_SEQUENCE_CURSOR_RESTORE);
+		}
+
 		editor_draw_status();
 
 		if (msg.message) {
@@ -263,6 +280,11 @@ ce_editor_loop(void)
 		ce_term_flush();
 
 		editor_process_input();
+
+		if (splash) {
+			dirty = 1;
+			splash = 0;
+		}
 	}
 
 	free(search);
@@ -273,6 +295,12 @@ void
 ce_editor_dirty(void)
 {
 	dirty = 1;
+}
+
+void
+ce_editor_show_splash(void)
+{
+	splash = 1;
 }
 
 int

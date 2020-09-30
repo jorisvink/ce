@@ -104,8 +104,10 @@ ce_buffer_init(int argc, char **argv)
 			ce_editor_message("%s", ce_buffer_strerror());
 	}
 
-	if ((active = TAILQ_FIRST(&buffers)) == NULL)
+	if ((active = TAILQ_FIRST(&buffers)) == NULL) {
 		active = scratch;
+		ce_editor_show_splash();
+	}
 }
 
 void
@@ -433,6 +435,16 @@ ce_buffer_map(void)
 
 	ce_syntax_finalize();
 
+	ce_term_writestr(TERM_SEQUENCE_ATTR_BOLD);
+	ce_term_color(TERM_COLOR_BLUE + TERM_COLOR_FG);
+
+	while (line <= ce_term_height() - 2)  {
+		ce_term_setpos(line, TERM_CURSOR_MIN);
+		ce_term_writestr("~");
+		line++;
+	}
+
+	ce_term_reset();
 	ce_term_setpos(active->cursor_line, active->column);
 }
 
