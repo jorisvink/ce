@@ -1658,7 +1658,7 @@ buffer_alloc(int internal)
 static void
 buffer_populate_lines(struct cebuf *buf)
 {
-	size_t		idx, elm;
+	size_t		idx, elm, len;
 	char		*start, *data;
 
 	free(buf->lines);
@@ -1669,9 +1669,13 @@ buffer_populate_lines(struct cebuf *buf)
 	data = buf->data;
 	start = data;
 
+	len = 0;
+
 	for (idx = 0; idx < buf->length; idx++) {
-		if (data[idx] != '\n')
+		if (data[idx] != '\n') {
+			len++;
 			continue;
+		}
 
 		elm = buf->lcnt;
 		buffer_resize_lines(buf, buf->lcnt + 1);
@@ -1684,7 +1688,28 @@ buffer_populate_lines(struct cebuf *buf)
 
 		ce_buffer_line_columns(&buf->lines[elm]);
 
+		len = 0;
 		start = &data[idx + 1];
+	}
+
+	if (len > 0) {
+		elm = buf->lcnt;
+		buffer_resize_lines(buf, buf->lcnt + 1);
+		TAILQ_INIT(&buf->lines[elm].ops);
+
+		buf->lines[elm].flags = 0;
+		buf->lines[elm].data = start;
+		buf->lines[elm].length = len;
+		buf->lines[elm].maxsz = buf->lines[elm].length;
+
+		buffer_line_allocate(buf, &buf->lines[elm]);
+
+		start = buf->lines[elm].data;
+		len = buf->lines[elm].length;
+
+		start[len] = '\n';
+		buf->lines[elm].length++;
+		ce_buffer_line_columns(&buf->lines[elm]);
 	}
 }
 
