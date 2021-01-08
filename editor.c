@@ -32,6 +32,7 @@
 /* Show messages for 5 seconds. */
 #define EDITOR_MESSAGE_DELAY	5
 
+#define EDITOR_DELETE_WORD	0x17
 #define EDITOR_KEY_ESC		0x1b
 #define EDITOR_KEY_UP		0xfa
 #define EDITOR_KEY_DOWN		0xfb
@@ -68,6 +69,7 @@ static void	editor_cmd_quit(int);
 static void	editor_cmd_reset(void);
 static void	editor_cmd_suspend(void);
 static void	editor_cmd_paste(void);
+static void	editor_cmd_delete_word(void);
 static void	editor_cmd_search_next(void);
 static void	editor_cmd_search_prev(void);
 static void	editor_cmd_search_word(void);
@@ -136,6 +138,7 @@ static struct keymap insert_map[] = {
 	{ EDITOR_KEY_DOWN,	ce_buffer_move_down },
 	{ EDITOR_KEY_RIGHT,	ce_buffer_move_right },
 	{ EDITOR_KEY_LEFT,	ce_buffer_move_left },
+	{ EDITOR_DELETE_WORD,	editor_cmd_delete_word },
 
 	{ EDITOR_KEY_ESC,	editor_cmd_normal_mode },
 
@@ -360,17 +363,13 @@ ce_editor_pbuffer_sync(void)
 int
 ce_editor_word_byte(u_int8_t byte)
 {
-	if (isalnum(byte) || isxdigit(byte))
-		return (1);
+	if (isspace(byte))
+		return (0);
 
-	switch (byte) {
-	case '_':
-		return (1);
-	default:
-		break;
-	}
+	if (ce_editor_word_separator(byte))
+		return (0);
 
-	return (0);
+	return (1);
 }
 
 int
@@ -1148,6 +1147,46 @@ editor_cmd_buffer_list(void)
 	ce_buffer_jump_left();
 
 	mode = CE_EDITOR_MODE_BUFLIST;
+}
+
+static void
+editor_cmd_delete_word(void)
+{
+	const u_int8_t		*ptr;
+	struct cebuf		*buf;
+	struct celine		*line;
+	size_t			start, end, idx;
+
+	if (mode != CE_EDITOR_MODE_INSERT)
+		fatal("ce not in insert mode");
+
+	buf = ce_buffer_active();
+	if (buf->lcnt == 0 || buf->loff == 0)
+		return;
+
+	line = ce_buffer_line_current(buf);
+	ce_buffer_mark_last(buf, ce_buffer_line_index(buf) + 1);
+
+	ce_editor_pbuffer_reset();
+
+	end = buf->loff - 1;
+	ptr = line->data;
+
+	for (start = end; start > 0; start--) {
+		if (ce_editor_word_byte(ptr[start]) == 0)
+			break;
+	}
+
+	for (idx = 0; idx <= end - start; idx++)
+		ce_buffer_delete_character();
+
+	if (start == 0)
+		ce_buffer_delete_character();
+
+	ce_editor_pbuffer_sync();
+
+	if (start != 0)
+		ce_buffer_move_right();
 }
 
 static void
