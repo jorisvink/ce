@@ -557,6 +557,72 @@ ce_buffer_word_prev(struct cebuf *buf)
 	ce_term_setpos(buf->cursor_line, buf->column);
 }
 
+void
+ce_buffer_word_erase(struct cebuf *buf)
+{
+	u_int8_t		*ptr;
+	struct celine		*line;
+	size_t			start, idx, orig, chars;
+
+	if (buf->lcnt == 0 || buf->loff == 0)
+		return;
+
+	line = ce_buffer_line_current(buf);
+	ce_buffer_mark_last(buf, ce_buffer_line_index(buf) + 1);
+
+	ptr = line->data;
+	orig = buf->loff;
+
+	if (buf->loff > 0 && isspace(ptr[buf->loff - 1]))
+		buffer_prev_character(buf, line);
+
+	if (ce_editor_word_separator(ptr[buf->loff]) && buf->loff > 0)
+		buffer_prev_character(buf, line);
+
+	while ((ptr[buf->loff] == '\n' ||
+	    isspace(ptr[buf->loff])) && buf->loff > 0)
+		buffer_prev_character(buf, line);
+
+	while (buf->loff > 0) {
+		if (ce_editor_word_byte(ptr[buf->loff]) == 0)
+			break;
+		buf->loff--;
+	}
+
+	if (buf->loff != 0 || ce_editor_word_separator(ptr[buf->loff]))
+		buf->loff++;
+
+	chars = 0;
+	start = buf->loff;
+
+	while ((isspace(ptr[buf->loff]) ||
+	    ce_editor_word_byte(ptr[buf->loff])) && buf->loff < orig) {
+		chars++;
+		buffer_next_character(buf, line);
+	}
+
+	ce_editor_pbuffer_reset();
+	buffer_line_allocate(buf, line);
+
+	buf->loff = start;
+
+	ptr = line->data;
+	for (idx = 0; idx < chars; idx++)
+		buffer_line_erase_character(buf, line, 1);
+
+	ptr = line->data;
+	if (buf->loff == 0 && ptr[0] == ' ')
+		buffer_line_erase_character(buf, line, 1);
+
+	ce_editor_pbuffer_sync();
+
+	buf->loff = start;
+	buf->column = buffer_line_data_to_columns(line->data, buf->loff);
+	cursor_column = buf->column;
+
+	ce_term_setpos(buf->cursor_line, buf->column);
+}
+
 int
 ce_buffer_search(struct cebuf *buf, const char *needle, int which)
 {

@@ -216,6 +216,7 @@ void		ce_buffer_reset(struct cebuf *);
 void		ce_buffer_activate_index(size_t);
 void		ce_buffer_activate(struct cebuf *);
 size_t		ce_buffer_line_index(struct cebuf *);
+void		ce_buffer_word_erase(struct cebuf *);
 void		ce_buffer_delete_line(struct cebuf *);
 void		ce_buffer_insert_line(struct cebuf *);
 void		ce_buffer_insert_line(struct cebuf *);
