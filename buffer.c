@@ -487,36 +487,45 @@ ce_buffer_word_cursor(struct cebuf *buf, const u_int8_t **word, size_t *len)
 void
 ce_buffer_word_next(struct cebuf *buf)
 {
+	int			skip;
 	const u_int8_t		*ptr;
 	struct celine		*line;
-	size_t			idx, start;
 
 	if (buf->lcnt == 0)
 		return;
 
 	line = ce_buffer_line_current(buf);
-
 	ptr = line->data;
 
-	for (idx = buf->loff; idx < line->length; idx++) {
-		if (ce_editor_word_byte(ptr[idx]) == 0)
-			break;
+	switch (ptr[buf->loff]) {
+	case '"':
+	case '\'':
+	case '<':
+	case '>':
+	case '*':
+		skip = 1;
+		break;
+	default:
+		skip = 0;
+		break;
 	}
 
-	start = idx;
-	while (idx < line->length) {
-		if (ce_editor_word_byte(ptr[idx]) == 1)
-			break;
-		idx++;
+	if (buf->loff < line->length - 1 && skip) {
+		buffer_next_character(buf, line);
+		goto update;
 	}
 
-	if (idx == line->length && start != buf->loff)
-		idx = start;
+	while (buf->loff < line->length - 1 &&
+	    ce_editor_word_byte(ptr[buf->loff]))
+		buffer_next_character(buf, line);
 
-	buf->loff = idx;
+	while (buf->loff < line->length - 1 &&
+	    ce_editor_word_separator(ptr[buf->loff]))
+		buffer_next_character(buf, line);
+
+update:
 	buf->column = buffer_line_data_to_columns(line->data, buf->loff);
 	cursor_column = buf->column;
-
 	ce_buffer_constrain_cursor_column(buf);
 	buffer_update_cursor(buf);
 
@@ -526,7 +535,6 @@ ce_buffer_word_next(struct cebuf *buf)
 void
 ce_buffer_word_prev(struct cebuf *buf)
 {
-	size_t			idx;
 	const u_int8_t		*ptr;
 	struct celine		*line;
 
@@ -536,21 +544,23 @@ ce_buffer_word_prev(struct cebuf *buf)
 	line = ce_buffer_line_current(buf);
 	ptr = line->data;
 
-	for (idx = buf->loff - 1; idx > 0; idx--) {
-		if (ce_editor_word_byte(ptr[idx]) == 1)
+	while (buf->loff > 0 && isspace(ptr[buf->loff]))
+		buffer_prev_character(buf, line);
+
+	while (buf->loff > 0 && ce_editor_word_byte(ptr[buf->loff]))
+		buffer_prev_character(buf, line);
+
+	while (buf->loff > 0 && ce_editor_word_separator(ptr[buf->loff]))
+		buffer_prev_character(buf, line);
+
+	while (buf->loff > 0) {
+		if (ce_editor_word_byte(ptr[buf->loff]) == 0) {
+			buffer_next_character(buf, line);
 			break;
+		}
+		buffer_prev_character(buf, line);
 	}
 
-	while (idx > 0) {
-		if (ce_editor_word_byte(ptr[idx]) == 0)
-			break;
-		idx--;
-	}
-
-	if (idx != 0)
-		idx += 1;
-
-	buf->loff = idx;
 	buf->column = buffer_line_data_to_columns(line->data, buf->loff);
 	cursor_column = buf->column;
 
