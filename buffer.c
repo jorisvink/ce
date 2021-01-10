@@ -497,30 +497,20 @@ ce_buffer_word_next(struct cebuf *buf)
 	line = ce_buffer_line_current(buf);
 	ptr = line->data;
 
-	switch (ptr[buf->loff]) {
-	case '"':
-	case '\'':
-	case '<':
-	case '>':
-	case '*':
-		skip = 1;
-		break;
-	default:
-		skip = 0;
-		break;
-	}
+	if (buf->loff == line->length - 1)
+		return;
 
-	if (buf->loff < line->length - 1 && skip) {
-		buffer_next_character(buf, line);
+	skip = ce_editor_word_separator(ptr[buf->loff]);
+	buffer_next_character(buf, line);
+
+	if (skip && ce_editor_word_byte(ptr[buf->loff]))
 		goto update;
-	}
 
 	while (buf->loff < line->length - 1 &&
 	    ce_editor_word_byte(ptr[buf->loff]))
 		buffer_next_character(buf, line);
 
-	while (buf->loff < line->length - 1 &&
-	    ce_editor_word_separator(ptr[buf->loff]))
+	while (buf->loff < line->length - 1 && isspace(ptr[buf->loff]))
 		buffer_next_character(buf, line);
 
 update:
@@ -535,6 +525,7 @@ update:
 void
 ce_buffer_word_prev(struct cebuf *buf)
 {
+	int			skip;
 	const u_int8_t		*ptr;
 	struct celine		*line;
 
@@ -544,23 +535,19 @@ ce_buffer_word_prev(struct cebuf *buf)
 	line = ce_buffer_line_current(buf);
 	ptr = line->data;
 
+	buffer_prev_character(buf, line);
+	skip = ce_editor_word_separator(ptr[buf->loff]);
+
+	if (skip && !isspace(ptr[buf->loff]))
+		goto update;
+
 	while (buf->loff > 0 && isspace(ptr[buf->loff]))
 		buffer_prev_character(buf, line);
 
-	while (buf->loff > 0 && ce_editor_word_byte(ptr[buf->loff]))
+	while (buf->loff > 0 && ce_editor_word_byte(ptr[buf->loff - 1]))
 		buffer_prev_character(buf, line);
 
-	while (buf->loff > 0 && ce_editor_word_separator(ptr[buf->loff]))
-		buffer_prev_character(buf, line);
-
-	while (buf->loff > 0) {
-		if (ce_editor_word_byte(ptr[buf->loff]) == 0) {
-			buffer_next_character(buf, line);
-			break;
-		}
-		buffer_prev_character(buf, line);
-	}
-
+update:
 	buf->column = buffer_line_data_to_columns(line->data, buf->loff);
 	cursor_column = buf->column;
 

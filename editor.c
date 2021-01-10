@@ -375,8 +375,10 @@ ce_editor_word_byte(u_int8_t byte)
 int
 ce_editor_word_separator(u_int8_t byte)
 {
+	if (isspace(byte))
+		return (1);
+
 	switch (byte) {
-	case ' ':
 	case '(':
 	case ')':
 	case '{':
@@ -392,6 +394,10 @@ ce_editor_word_separator(u_int8_t byte)
 	case '*':
 	case '.':
 	case '@':
+	case '<':
+	case '>':
+	case '\'':
+	case '"':
 		return (1);
 	default:
 		break;
