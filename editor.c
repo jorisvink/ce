@@ -1030,34 +1030,12 @@ editor_cmd_delete_lines(struct cebuf *buf, long end)
 static void
 editor_cmd_delete_words(struct cebuf *buf, long num)
 {
-	long			i;
-	const u_int8_t		*ptr;
-	struct celine		*line;
-	size_t			start, end, idx;
-
-	if (buf->lcnt == 0)
-		return;
-
-	line = ce_buffer_line_current(buf);
-	ce_buffer_mark_last(buf, ce_buffer_line_index(buf) + 1);
+	long		i;
 
 	ce_editor_pbuffer_reset();
 
-	for (i = 0; i < num; i++) {
-		start = buf->loff;
-		ptr = line->data;
-
-		for (end = start; end < line->length; end++) {
-			if (ce_editor_word_byte(ptr[end]) == 0)
-				break;
-		}
-
-		while (isspace(ptr[end]))
-			end++;
-
-		for (idx = 0; idx < end - start; idx++)
-			ce_buffer_delete_character();
-	}
+	for (i = 0; i < num; i++)
+		ce_buffer_word_delete(buf);
 
 	ce_editor_pbuffer_sync();
 }

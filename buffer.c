@@ -554,6 +554,44 @@ update:
 }
 
 void
+ce_buffer_word_delete(struct cebuf *buf)
+{
+	u_int8_t		*ptr;
+	struct celine		*line;
+	size_t			start;
+
+	if (buf->lcnt == 0)
+		return;
+
+	line = ce_buffer_line_current(buf);
+	ce_buffer_mark_last(buf, ce_buffer_line_index(buf) + 1);
+
+	start = buf->loff;
+	ce_buffer_word_next(buf);
+
+	buffer_line_allocate(buf, line);
+	ptr = line->data;
+
+	if (buf->loff + 1 == line->length - 1)
+		buf->loff++;
+
+	ce_editor_pbuffer_append(&ptr[start], buf->loff - start);
+	memmove(&ptr[start], &ptr[buf->loff], line->length - buf->loff);
+
+	line->length -= buf->loff - start;
+	buf->loff = start;
+
+	buf->column = buffer_line_data_to_columns(line->data, buf->loff);
+	ce_buffer_line_columns(line);
+	ce_buffer_constrain_cursor_column(buf);
+	cursor_column = buf->column;
+	ce_term_setpos(buf->cursor_line, buf->column);
+
+	ce_editor_dirty();
+	buf->flags |= CE_BUFFER_DIRTY;
+}
+
+void
 ce_buffer_word_erase(struct cebuf *buf)
 {
 	u_int8_t		*ptr;
