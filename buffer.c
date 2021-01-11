@@ -1830,7 +1830,7 @@ buffer_line_column_to_data(struct cebuf *buf)
 	u_int16_t		col;
 	const u_int8_t		*ptr;
 	struct celine		*line;
-	size_t			idx, tw;
+	size_t			idx, tw, seqlen;
 
 	line = ce_buffer_line_current(buf);
 
@@ -1853,6 +1853,9 @@ buffer_line_column_to_data(struct cebuf *buf)
 
 		if (col >= buf->column)
 			break;
+
+		if (ce_utf8_sequence(line->data, line->length, idx, &seqlen))
+			idx += seqlen - 1;
 	}
 
 	buf->column = col;
