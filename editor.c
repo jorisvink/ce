@@ -398,6 +398,7 @@ ce_editor_word_separator(u_int8_t byte)
 	case '>':
 	case '\'':
 	case '"':
+	case '&':
 		return (1);
 	default:
 		break;
