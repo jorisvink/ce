@@ -1197,22 +1197,24 @@ editor_cmd_search_word(void)
 static void
 editor_cmd_paste(void)
 {
-	size_t			idx;
 	const u_int8_t		*ptr;
 	struct cebuf		*buf;
+	size_t			idx, len;
 #if defined(__APPLE__)
+	size_t			old_len;
 	u_int8_t		*pb, *old;
+#endif
+
+#if defined(__APPLE__)
+	ce_editor_pbuffer_reset();
+	old = pbuffer->data;
+	old_len = pbuffer->length;
+	ce_macos_get_pasteboard_contents(&pb, &pbuffer->length);
+	pbuffer->data = pb;
 #endif
 
 	if (pbuffer->length == 0)
 		return;
-
-#if defined(__APPLE__)
-	ce_editor_pbuffer_reset();
-	ce_macos_get_pasteboard_contents(&pb, &pbuffer->length);
-	old = pbuffer->data;
-	pbuffer->data = pb;
-#endif
 
 	buf = ce_buffer_active();
 	ptr = pbuffer->data;
@@ -1224,24 +1226,28 @@ editor_cmd_paste(void)
 		ce_buffer_move_down();
 		ce_buffer_input(buf, '\n');
 		ce_buffer_move_up();
+		len = pbuffer->length - 1;
+	} else {
+		len = pbuffer->length;
 	}
 
 	pasting = 1;
 
-	for (idx = 0; idx < pbuffer->length - 1; idx++)
+	for (idx = 0; idx < len; idx++)
 		ce_buffer_input(buf, ptr[idx]);
 
 	pasting = 0;
 
 	ce_editor_dirty();
 
-	if (ptr[pbuffer->length - 1] == '\n')
+	if (ptr[len] == '\n')
 		ce_buffer_jump_left();
 
 	mode = CE_EDITOR_MODE_NORMAL;
 
 #if defined(__APPLE__)
 	pbuffer->data = old;
+	pbuffer->length = old_len;
 #endif
 }
 

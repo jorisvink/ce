@@ -44,9 +44,11 @@ ce_macos_get_pasteboard_contents(u_int8_t **out, size_t *len)
 	res = [pb stringForType:NSPasteboardTypeString];
 	ptr = [res UTF8String];
 
-	slen = strlen(ptr) + 1;
+	slen = strlen(ptr);
 	if (slen > 1 && ptr[slen - 2] == '\n')
 		slen--;
+
+	ce_debug("obtained %zu bytes from macos pasteboard", slen);
 
 	if ((*out = calloc(1, slen)) == NULL)
 		fatal("%s: calloc(%zu): %s", __func__, slen, errno_s);
