@@ -74,6 +74,8 @@ static int	syntax_highlight_c_label(struct state *);
 static int	syntax_highlight_c_comment(struct state *);
 static int	syntax_highlight_c_preproc(struct state *);
 
+static void	syntax_highlight_swift(struct state *);
+
 static void	syntax_highlight_python(struct state *);
 static int	syntax_highlight_python_decorator(struct state *);
 static int	syntax_highlight_python_multiline_string(struct state *);
@@ -149,6 +151,28 @@ static const char *py_types[] = {
 
 static const char *py_special[] = {
 	"import", "from", NULL
+};
+
+static const char *swift_kw[] = {
+	"associatedtype", "class", "deinit", "enum", "extension",
+	"fileprivate", "func", "import", "init", "inout", "internal",
+	"let", "open", "operator", "private", "protocol", "public",
+	"rethrows", "static", "struct", "subscript", "typealias", "var",
+
+	"break", "case", "continue", "default", "defer", "do", "else",
+	"fallthrough", "for", "guard", "if", "in", "repeat", "return",
+	"switch", "where", "while",
+
+	"as", "Any", "catch", "false", "is", "nil", "super", "self",
+	"Self", "throw", "throws", "true", "try",
+
+	"_",
+
+	"#available", "#colorLiteral", "#column", "#else", "#elseif",
+	"#endif", "#error", "#file", "#fileID", "#fileLiteral", "#filePath",
+	"#function", "#if", "#imageLiteral", "#line", "#selector",
+	"#sourceLocation", "#warning",
+	NULL
 };
 
 static const char *java_kw[] = {
@@ -286,6 +310,9 @@ ce_syntax_write(struct cebuf *buf, struct celine *line, size_t towrite)
 				break;
 			case CE_FILE_TYPE_JAVA:
 				syntax_highlight_java(&syntax_state);
+				break;
+			case CE_FILE_TYPE_SWIFT:
+				syntax_highlight_swift(&syntax_state);
 				break;
 			default:
 				syntax_state_color_clear(&syntax_state);
@@ -995,3 +1022,24 @@ syntax_highlight_java(struct state *state)
 	syntax_write(state, 1);
 }
 
+static void
+syntax_highlight_swift(struct state *state)
+{
+	if (syntax_highlight_c_comment(state) == 0)
+		return;
+
+	if (syntax_highlight_word(state, swift_kw, TERM_COLOR_MAGENTA) == 0)
+		return;
+
+	if (syntax_highlight_numeric(state) == 0)
+		return;
+
+	if (syntax_highlight_string(state) == 0)
+		return;
+
+	if (syntax_highlight_python_decorator(state) == 0)
+		return;
+
+	syntax_state_color_clear(state);
+	syntax_write(state, 1);
+}

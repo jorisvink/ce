@@ -35,6 +35,7 @@ static struct {
 	{ ".js",	CE_FILE_TYPE_JS },
 	{ ".sh",	CE_FILE_TYPE_SHELL },
 	{ ".java",	CE_FILE_TYPE_JAVA },
+	{ ".swift",	CE_FILE_TYPE_SWIFT },
 	{ NULL,		0 },
 };
 
