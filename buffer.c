@@ -58,7 +58,7 @@ static void		buffer_populate_lines(struct cebuf *);
 static void		buffer_update_cursor_line(struct cebuf *);
 static void		buffer_line_column_to_data(struct cebuf *);
 static void		buffer_update_cursor_column(struct cebuf *);
-static u_int16_t	buffer_line_data_to_columns(const void *, size_t);
+static size_t		buffer_line_data_to_columns(const void *, size_t);
 static void		buffer_line_allocate(struct cebuf *, struct celine *);
 static void		buffer_line_erase_character(struct cebuf *,
 			    struct celine *, int);
@@ -1832,7 +1832,7 @@ buffer_line_span(struct celine *line)
 	return ((col / ce_term_width()) + 1);
 }
 
-static u_int16_t
+static size_t
 buffer_line_data_to_columns(const void *data, size_t length)
 {
 	u_int16_t		cols;
