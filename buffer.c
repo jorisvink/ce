@@ -54,7 +54,6 @@ static void		*buffer_search(struct cebuf *, int, const void *,
 
 static size_t		buffer_line_span(struct celine *);
 static void		buffer_update_cursor(struct cebuf *);
-static void		buffer_populate_lines(struct cebuf *);
 static void		buffer_update_cursor_line(struct cebuf *);
 static void		buffer_line_column_to_data(struct cebuf *);
 static void		buffer_update_cursor_column(struct cebuf *);
@@ -128,15 +127,21 @@ ce_buffer_strerror(void)
 	return (errstr);
 }
 
+void
+ce_buffer_setname(struct cebuf *buf, const char *name)
+{
+	free(buf->name);
+	if ((buf->name = strdup(name)) == NULL)
+		fatal("%s: strdup: %s", __func__, errno_s);
+}
+
 struct cebuf *
 ce_buffer_internal(const char *name)
 {
 	struct cebuf	*buf;
 
 	buf = buffer_alloc(1);
-
-	if ((buf->name = strdup(name)) == NULL)
-		fatal("%s: strdup: %s", __func__, errno_s);
+	ce_buffer_setname(buf, name);
 
 	if ((buf->data = calloc(1, 1024)) == NULL)
 		fatal("%s: calloc(%zu): %s", __func__, buf->maxsz, errno_s);
@@ -166,9 +171,7 @@ ce_buffer_file(const char *path)
 	}
 
 	buf = buffer_alloc(0);
-
-	if ((buf->name = strdup(path)) == NULL)
-		fatal("%s: strdup: %s", __func__, errno_s);
+	ce_buffer_setname(buf, path);
 
 	if ((buf->path = realpath(path, NULL)) == NULL) {
 		if (errno != ENOENT) {
@@ -237,8 +240,7 @@ ce_buffer_file(const char *path)
 
 finalize:
 	ce_file_type_detect(buf);
-
-	buffer_populate_lines(buf);
+	ce_buffer_populate_lines(buf);
 
 	ret = buf;
 	active = buf;
@@ -345,6 +347,7 @@ ce_buffer_free_internal(struct cebuf *buf)
 void
 ce_buffer_reset(struct cebuf *buf)
 {
+	buf->top = 0;
 	buf->length = 0;
 	buf->line = buf->orig_line;
 	buf->column = buf->orig_column;
@@ -777,7 +780,7 @@ ce_buffer_list(struct cebuf *output)
 		idx++;
 	}
 
-	buffer_populate_lines(output);
+	ce_buffer_populate_lines(output);
 }
 
 void
@@ -1178,6 +1181,11 @@ ce_buffer_move_up(void)
 			active->top -= ce_term_height() / 2;
 			active->line = (ce_term_height() / 2);
 			active->cursor_line = (ce_term_height() / 2);
+		} else if (active->top > 0) {
+			scroll = 1;
+			active->line = active->top;
+			active->cursor_line = active->top;
+			active->top = 0;
 		} else if (active->line > TERM_CURSOR_MIN) {
 			active->line--;
 		}
@@ -1723,36 +1731,8 @@ ce_buffer_mark_jump(struct cebuf *buf, char mark)
 	}
 }
 
-static struct cebuf *
-buffer_alloc(int internal)
-{
-	struct cebuf		*buf;
-
-	if ((buf = calloc(1, sizeof(*buf))) == NULL)
-		fatal("%s: calloc(%zu): %s", __func__, sizeof(*buf), errno_s);
-
-	if (internal == 0)
-		buf->prev = active;
-
-	buf->top = 0;
-	buf->internal = internal;
-	buf->orig_line = TERM_CURSOR_MIN;
-	buf->orig_column = TERM_CURSOR_MIN;
-
-	buf->line = buf->orig_line;
-	buf->column = buf->orig_column;
-	buf->cursor_line = buf->orig_line;
-
-	if (internal == 0)
-		TAILQ_INSERT_HEAD(&buffers, buf, list);
-	else
-		TAILQ_INSERT_HEAD(&internals, buf, list);
-
-	return (buf);
-}
-
-static void
-buffer_populate_lines(struct cebuf *buf)
+void
+ce_buffer_populate_lines(struct cebuf *buf)
 {
 	size_t		idx, elm, len;
 	char		*start, *data;
@@ -1805,6 +1785,34 @@ buffer_populate_lines(struct cebuf *buf)
 		buf->lines[elm].length++;
 		ce_buffer_line_columns(&buf->lines[elm]);
 	}
+}
+
+static struct cebuf *
+buffer_alloc(int internal)
+{
+	struct cebuf		*buf;
+
+	if ((buf = calloc(1, sizeof(*buf))) == NULL)
+		fatal("%s: calloc(%zu): %s", __func__, sizeof(*buf), errno_s);
+
+	if (internal == 0)
+		buf->prev = active;
+
+	buf->top = 0;
+	buf->internal = internal;
+	buf->orig_line = TERM_CURSOR_MIN;
+	buf->orig_column = TERM_CURSOR_MIN;
+
+	buf->line = buf->orig_line;
+	buf->column = buf->orig_column;
+	buf->cursor_line = buf->orig_line;
+
+	if (internal == 0)
+		TAILQ_INSERT_HEAD(&buffers, buf, list);
+	else
+		TAILQ_INSERT_HEAD(&internals, buf, list);
+
+	return (buf);
 }
 
 static size_t

@@ -74,6 +74,7 @@ static void	editor_cmd_search_next(void);
 static void	editor_cmd_search_prev(void);
 static void	editor_cmd_search_word(void);
 static void	editor_cmd_buffer_list(void);
+static void	editor_cmd_directory_list(void);
 
 static void	editor_cmd_open_file(const char *);
 
@@ -128,8 +129,9 @@ static struct keymap normal_map[] = {
 
 	{ ':',			editor_cmd_command_mode },
 	{ '/',			editor_cmd_search_mode },
-	{ 0x12,			editor_cmd_buffer_list },
 
+	{ 0x04,			editor_cmd_directory_list },
+	{ 0x12,			editor_cmd_buffer_list },
 	{ 0x1a,			editor_cmd_suspend },
 };
 
@@ -151,19 +153,23 @@ static struct keymap command_map[] = {
 static struct keymap buflist_map[] = {
 	{ 'k',			ce_buffer_move_up },
 	{ 'j',			ce_buffer_move_down },
+	{ 'G',			ce_buffer_jump_down },
+	{ 0x06,			ce_buffer_page_down },
+	{ 0x02,			ce_buffer_page_up },
+	{ '/',			editor_cmd_search_mode },
 	{ EDITOR_KEY_ESC,	editor_cmd_normal_mode },
 };
 
 static struct {
-	int			mode;
 	const struct keymap	*map;
 	size_t			maplen;
 } keymaps[] = {
-	{ CE_EDITOR_MODE_NORMAL, normal_map, KEY_MAP_LEN(normal_map) },
-	{ CE_EDITOR_MODE_INSERT, insert_map, KEY_MAP_LEN(insert_map) },
-	{ CE_EDITOR_MODE_COMMAND, command_map, KEY_MAP_LEN(command_map) },
-	{ CE_EDITOR_MODE_BUFLIST, buflist_map, KEY_MAP_LEN(buflist_map) },
-	{ CE_EDITOR_MODE_SEARCH, command_map, KEY_MAP_LEN(command_map) },
+	{ normal_map, KEY_MAP_LEN(normal_map) },
+	{ insert_map, KEY_MAP_LEN(insert_map) },
+	{ command_map, KEY_MAP_LEN(command_map) },
+	{ buflist_map, KEY_MAP_LEN(buflist_map) },
+	{ command_map, KEY_MAP_LEN(command_map) },
+	{ buflist_map, KEY_MAP_LEN(buflist_map) },
 };
 
 static struct {
@@ -188,6 +194,7 @@ static struct cebuf		*cmdbuf = NULL;
 static struct cebuf		*buflist = NULL;
 static struct cebuf		*pbuffer = NULL;
 static int			mode = CE_EDITOR_MODE_NORMAL;
+static int			lastmode = CE_EDITOR_MODE_NORMAL;
 
 void
 ce_editor_init(void)
@@ -213,7 +220,7 @@ ce_editor_loop(void)
 	cmdbuf->line = ce_term_height();
 	cmdbuf->orig_line = ce_term_height();
 
-	buflist = ce_buffer_internal("<buffers>");
+	buflist = ce_buffer_internal("<buflist>");
 	buflist->cb = editor_buflist_input;
 
 	while (!quit) {
@@ -458,6 +465,8 @@ editor_process_input(void)
 	if (editor_read(STDIN_FILENO, &key, sizeof(key), -1) == 0)
 		return;
 
+	ce_debug("key 0x%02x", key);
+
 	if (key == EDITOR_KEY_ESC)
 		key = editor_process_escape();
 
@@ -578,6 +587,7 @@ editor_draw_status(void)
 		return;
 	case CE_EDITOR_MODE_NORMAL:
 	case CE_EDITOR_MODE_BUFLIST:
+	case CE_EDITOR_MODE_DIRLIST:
 	case CE_EDITOR_MODE_NORMAL_CMD:
 		modestr = "";
 		break;
@@ -780,17 +790,35 @@ static void
 editor_buflist_input(struct cebuf *buf, char key)
 {
 	size_t		index;
+	const char	*path;
 
-	if (key >= '0' && key <= '9') {
-		ce_buffer_activate_index(key - '0');
-		mode = CE_EDITOR_MODE_NORMAL;
-		return;
+	if (mode == CE_EDITOR_MODE_BUFLIST) {
+		if (key >= '0' && key <= '9') {
+			ce_buffer_activate_index(key - '0');
+			lastmode = mode;
+			mode = CE_EDITOR_MODE_NORMAL;
+			return;
+		}
 	}
 
 	switch (key) {
 	case '\n':
 		index = buf->top + (buf->line - 1);
-		ce_buffer_activate_index(index);
+
+		switch (mode) {
+		case CE_EDITOR_MODE_BUFLIST:
+			ce_buffer_activate_index(index);
+			break;
+		case CE_EDITOR_MODE_DIRLIST:
+			ce_buffer_restore();
+			path = ce_dirlist_select(buf, index);
+			if (path != NULL)
+				editor_cmd_open_file(path);
+			ce_dirlist_close(buf);
+			break;
+		}
+
+		lastmode = mode;
 		mode = CE_EDITOR_MODE_NORMAL;
 		break;
 	default:
@@ -810,6 +838,7 @@ editor_normal_mode_command(char key)
 	    (normalcmd != EDITOR_COMMAND_MARK_SET &&
 	    normalcmd != EDITOR_COMMAND_MARK_JMP)) {
 		if (key >= '0' && key <= '9') {
+			lastmode = mode;
 			mode = CE_EDITOR_MODE_NORMAL_CMD;
 			ce_buffer_append(cmdbuf, &key, sizeof(key));
 			return;
@@ -940,17 +969,21 @@ direct:
 		}
 	}
 
-	if (normalcmd != -1)
+	if (normalcmd != -1) {
+		lastmode = mode;
 		mode = CE_EDITOR_MODE_NORMAL_CMD;
+	}
 
 	if (reset) {
 		normalcmd = -1;
 		ce_buffer_reset(cmdbuf);
 
-		if (next_mode == CE_EDITOR_MODE_INSERT)
+		if (next_mode == CE_EDITOR_MODE_INSERT) {
 			editor_cmd_insert_mode();
-		else
+		} else {
+			lastmode = mode;
 			mode = next_mode;
+		}
 	}
 
 	if (range_reset && range.act != 0) {
@@ -1129,11 +1162,26 @@ editor_cmd_suspend(void)
 static void
 editor_cmd_buffer_list(void)
 {
+	ce_buffer_setname(buflist, "<buffers>");
+
 	ce_buffer_list(buflist);
 	ce_buffer_activate(buflist);
 	ce_buffer_jump_left();
 
+	lastmode = mode;
 	mode = CE_EDITOR_MODE_BUFLIST;
+}
+
+static void
+editor_cmd_directory_list(void)
+{
+	ce_dirlist_current(buflist);
+
+	ce_buffer_activate(buflist);
+	ce_buffer_jump_left();
+
+	lastmode = mode;
+	mode = CE_EDITOR_MODE_DIRLIST;
 }
 
 static void
@@ -1243,6 +1291,7 @@ editor_cmd_paste(void)
 	if (ptr[len] == '\n')
 		ce_buffer_jump_left();
 
+	lastmode = mode;
 	mode = CE_EDITOR_MODE_NORMAL;
 
 #if defined(__APPLE__)
@@ -1256,6 +1305,7 @@ editor_cmd_insert_mode(void)
 {
 	struct cebuf		*buf = ce_buffer_active();
 
+	lastmode = mode;
 	mode = CE_EDITOR_MODE_INSERT;
 
 	if (buf->lcnt > 0)
@@ -1306,6 +1356,7 @@ editor_cmd_command_mode(void)
 
 	ce_buffer_activate(cmdbuf);
 
+	lastmode = mode;
 	mode = CE_EDITOR_MODE_COMMAND;
 }
 
@@ -1325,6 +1376,7 @@ editor_cmd_search_mode(void)
 
 	ce_buffer_activate(cmdbuf);
 
+	lastmode = mode;
 	mode = CE_EDITOR_MODE_SEARCH;
 }
 
@@ -1334,6 +1386,7 @@ editor_cmd_normal_mode(void)
 	struct cebuf	*buf = ce_buffer_active();
 
 	if (mode == CE_EDITOR_MODE_INSERT) {
+		lastmode = mode;
 		mode = CE_EDITOR_MODE_NORMAL;
 		if (buf->lcnt > 0) {
 			ce_buffer_constrain_cursor_column(buf);
@@ -1342,15 +1395,25 @@ editor_cmd_normal_mode(void)
 		return;
 	}
 
+	if (mode == CE_EDITOR_MODE_DIRLIST)
+		ce_dirlist_close(buflist);
+
 	if (mode == CE_EDITOR_MODE_COMMAND ||
 	    mode == CE_EDITOR_MODE_BUFLIST ||
+	    mode == CE_EDITOR_MODE_DIRLIST ||
 	    mode == CE_EDITOR_MODE_SEARCH)
 		ce_buffer_restore();
 
 	if (mode == CE_EDITOR_MODE_COMMAND || mode == CE_EDITOR_MODE_SEARCH)
 		editor_cmd_reset();
 
-	mode = CE_EDITOR_MODE_NORMAL;
+	if (lastmode == CE_EDITOR_MODE_BUFLIST ||
+	    lastmode == CE_EDITOR_MODE_DIRLIST) {
+		mode = lastmode;
+	} else {
+		lastmode = mode;
+		mode = CE_EDITOR_MODE_NORMAL;
+	}
 }
 
 static void

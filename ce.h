@@ -33,8 +33,9 @@
 #define CE_EDITOR_MODE_COMMAND		2
 #define CE_EDITOR_MODE_BUFLIST		3
 #define CE_EDITOR_MODE_SEARCH		4
-#define CE_EDITOR_MODE_NORMAL_CMD	5
-#define CE_EDITOR_MODE_MAX		6
+#define CE_EDITOR_MODE_DIRLIST		5
+#define CE_EDITOR_MODE_NORMAL_CMD	6
+#define CE_EDITOR_MODE_MAX		7
 
 #define TERM_COLOR_BLACK		0
 #define TERM_COLOR_RED			1
@@ -199,6 +200,9 @@ struct cebuf {
 	/* Callback for special buffers (like cmdbuf). */
 	void			(*cb)(struct cebuf *, char);
 
+	/* Internal buffer special backing data (for dirlist etc). */
+	void			*intdata;
+
 	TAILQ_ENTRY(cebuf)	list;
 };
 
@@ -221,6 +225,7 @@ void		ce_buffer_insert_line(struct cebuf *);
 void		ce_buffer_insert_line(struct cebuf *);
 void		ce_buffer_line_columns(struct celine *);
 void		ce_buffer_free_internal(struct cebuf *);
+void		ce_buffer_populate_lines(struct cebuf *);
 int		ce_buffer_save_active(int, const char *);
 void		ce_buffer_mark_set(struct cebuf *, char);
 void		ce_buffer_mark_jump(struct cebuf *, char);
@@ -228,6 +233,7 @@ void		ce_buffer_jump_line(struct cebuf *, long);
 void		ce_buffer_input(struct cebuf *, u_int8_t);
 void		ce_buffer_line_alloc_empty(struct cebuf *);
 void		ce_buffer_mark_last(struct cebuf *, size_t);
+void		ce_buffer_setname(struct cebuf *, const char *);
 void		ce_buffer_constrain_cursor_column(struct cebuf *);
 int		ce_buffer_search(struct cebuf *, const char *, int);
 void		ce_buffer_append(struct cebuf *, const void *, size_t);
@@ -277,6 +283,10 @@ void		ce_term_writestr(const char *);
 void		ce_term_write(const void *, size_t);
 void		ce_term_writef(const char *, ...)
 		    __attribute__((format (printf, 1, 2)));
+
+void		ce_dirlist_close(struct cebuf *);
+void		ce_dirlist_current(struct cebuf *);
+const char	*ce_dirlist_select(struct cebuf *, size_t);
 
 void		ce_editor_init(void);
 void		ce_editor_loop(void);
