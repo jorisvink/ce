@@ -786,6 +786,9 @@ syntax_highlight_js(struct state *state)
 	if (syntax_highlight_word(state, tags, TERM_COLOR_YELLOW) == 0)
 		return;
 
+	if (syntax_highlight_c_comment(state) == 0)
+		return;
+
 	if (syntax_highlight_numeric(state) == 0)
 		return;
 
