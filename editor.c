@@ -154,6 +154,8 @@ static struct keymap buflist_map[] = {
 	{ 'k',			ce_buffer_move_up },
 	{ 'j',			ce_buffer_move_down },
 	{ 'G',			ce_buffer_jump_down },
+	{ 'n',			editor_cmd_search_next },
+	{ 'N',			editor_cmd_search_prev },
 	{ 0x06,			ce_buffer_page_down },
 	{ 0x02,			ce_buffer_page_up },
 	{ '/',			editor_cmd_search_mode },
