@@ -75,6 +75,8 @@ O            = enter insert mode and add newline above cursor
 
 ctrl-r       = show list of buffers
 
+ctrl-d       = directory listing of directory of active buffer
+
 ctrl-z       = suspend ce
 
 [num]dd      = delete number of lines
@@ -112,6 +114,8 @@ j            = move down one row
 enter        = select buffer
 
 **command mode**
+
+l            = load directory listing
 
 q            = quit ce
 
