@@ -851,8 +851,6 @@ ce_buffer_insert_line(struct cebuf *buf)
 	index++;
 	line = &buf->lines[index];
 
-	TAILQ_INIT(&line->ops);
-
 	line->data = ptr;
 	line->maxsz = length;
 	line->length = length;
@@ -1426,8 +1424,6 @@ ce_buffer_line_alloc_empty(struct cebuf *buf)
 		    sizeof(struct celine), errno_s);
 	}
 
-	TAILQ_INIT(&buf->lines[0].ops);
-
 	buf->lines[0].flags = 0;
 	buf->lines[0].length = 1;
 	buf->lines[0].maxsz = buf->lines[0].length;
@@ -1779,7 +1775,6 @@ buffer_populate_lines(struct cebuf *buf)
 
 		elm = buf->lcnt;
 		buffer_resize_lines(buf, buf->lcnt + 1);
-		TAILQ_INIT(&buf->lines[elm].ops);
 
 		buf->lines[elm].flags = 0;
 		buf->lines[elm].data = start;
@@ -1795,7 +1790,6 @@ buffer_populate_lines(struct cebuf *buf)
 	if (len > 0) {
 		elm = buf->lcnt;
 		buffer_resize_lines(buf, buf->lcnt + 1);
-		TAILQ_INIT(&buf->lines[elm].ops);
 
 		buf->lines[elm].flags = 0;
 		buf->lines[elm].data = start;

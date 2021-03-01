@@ -117,9 +117,6 @@ struct celine {
 
 	/* Length of the line in columns. */
 	size_t			columns;
-
-	/* List of operations on this line. */
-	TAILQ_HEAD(, ceop)	ops;
 };
 
 /*
