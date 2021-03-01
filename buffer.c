@@ -158,22 +158,26 @@ ce_buffer_file(const char *path)
 {
 	int			fd;
 	struct stat		st;
+	char			*rp;
 	struct cebuf		*buf, *ret;
 
 	fd = -1;
 	ret = NULL;
 
-	TAILQ_FOREACH(buf, &buffers, list) {
-		if (!strcmp(buf->name, path)) {
-			active = buf;
-			return (buf);
+	if ((rp = realpath(path, NULL)) != NULL) {
+		TAILQ_FOREACH(buf, &buffers, list) {
+			if (!strcmp(buf->path, rp)) {
+				active = buf;
+				return (buf);
+			}
 		}
 	}
 
 	buf = buffer_alloc(0);
 	ce_buffer_setname(buf, path);
 
-	if ((buf->path = realpath(path, NULL)) == NULL) {
+	buf->path = rp;
+	if (buf->path == NULL) {
 		if (errno != ENOENT) {
 			buffer_seterr("%s: %s", path, errno_s);
 			goto cleanup;

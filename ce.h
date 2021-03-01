@@ -285,8 +285,8 @@ void		ce_term_writef(const char *, ...)
 		    __attribute__((format (printf, 1, 2)));
 
 void		ce_dirlist_close(struct cebuf *);
-void		ce_dirlist_current(struct cebuf *);
 const char	*ce_dirlist_select(struct cebuf *, size_t);
+void		ce_dirlist_path(struct cebuf *, const char *);
 
 void		ce_editor_init(void);
 void		ce_editor_loop(void);

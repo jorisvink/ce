@@ -14,9 +14,11 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <sys/param.h>
 #include <sys/types.h>
 
 #include <ctype.h>
+#include <libgen.h>
 #include <poll.h>
 #include <signal.h>
 #include <stdio.h>
@@ -74,7 +76,9 @@ static void	editor_cmd_search_next(void);
 static void	editor_cmd_search_prev(void);
 static void	editor_cmd_search_word(void);
 static void	editor_cmd_buffer_list(void);
+
 static void	editor_cmd_directory_list(void);
+static void	editor_directory_list(const char *);
 
 static void	editor_cmd_open_file(const char *);
 
@@ -709,6 +713,12 @@ editor_cmdbuf_input(struct cebuf *buf, char key)
 			if (strlen(cmd) > 3)
 				editor_cmd_open_file(&cmd[3]);
 			break;
+		case 'l':
+			if (strlen(cmd) > 3) {
+				editor_directory_list(&cmd[3]);
+				return;
+			}
+			break;
 		case 'b':
 			switch (cmd[2]) {
 			case 'c':
@@ -1177,7 +1187,40 @@ editor_cmd_buffer_list(void)
 static void
 editor_cmd_directory_list(void)
 {
-	ce_dirlist_current(buflist);
+	struct cebuf	*buf;
+	const char	*path;
+	char		*cp, *dname, pwd[PATH_MAX];
+
+	cp = NULL;
+	path = ".";
+	buf = ce_buffer_active();
+
+	if (buf->path != NULL) {
+		if ((cp = strdup(buf->path)) == NULL)
+			fatal("%s: strdup of '%s' failed", __func__, buf->path);
+
+		if ((dname = dirname(cp)) == NULL)
+			fatal("%s: dirname: %s", __func__, errno_s);
+
+		path = dname;
+
+		if (getcwd(pwd, sizeof(pwd)) == NULL)
+			fatal("%s: getcwd: %s", __func__, errno_s);
+
+		if (!strcmp(pwd, path))
+			path = ".";
+	}
+
+	editor_directory_list(path);
+
+	if (cp)
+		free(cp);
+}
+
+static void
+editor_directory_list(const char *path)
+{
+	ce_dirlist_path(buflist, path);
 
 	ce_buffer_activate(buflist);
 	ce_buffer_jump_left();
@@ -1455,3 +1498,4 @@ editor_cmd_open_file(const char *path)
 
 	ce_editor_dirty();
 }
+

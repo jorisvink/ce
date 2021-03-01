@@ -65,7 +65,7 @@ main(int argc, char *argv[])
 			config.tab_expand = 1;
 			break;
 		case 'v':
-			printf("coma editor 0.2\n");
+			printf("coma editor 0.3\n");
 			exit(0);
 		}
 	}

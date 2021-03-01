@@ -32,19 +32,19 @@ struct dentry {
 	LIST_ENTRY(dentry)	list;
 };
 
+union cp {
+	const char		*cp;
+	char			*p;
+};
+
 LIST_HEAD(dlist, dentry);
 
-static void	dirlist_display(struct cebuf *, char *);
+static void	dirlist_display(struct cebuf *, const char *);
 
 void
-ce_dirlist_current(struct cebuf *buf)
+ce_dirlist_path(struct cebuf *buf, const char *path)
 {
-	char		pwd[PATH_MAX];
-
-	if (getcwd(pwd, sizeof(pwd)) == NULL)
-		fatal("getcwd: %s", errno_s);
-
-	dirlist_display(buf, pwd);
+	dirlist_display(buf, path);
 }
 
 const char *
@@ -88,7 +88,7 @@ ce_dirlist_close(struct cebuf *buf)
 }
 
 static void
-dirlist_display(struct cebuf *buf, char *path)
+dirlist_display(struct cebuf *buf, const char *path)
 {
 	int			i;
 	FTS			*fts;
@@ -96,7 +96,8 @@ dirlist_display(struct cebuf *buf, char *path)
 	size_t			index;
 	struct dlist		*list;
 	struct dentry		*entry;
-	char			type, *pathv[] = { path, NULL };
+	union cp		cp = { .cp = path };
+	char			type, *pathv[] = { cp.p, NULL };
 
 	if (buf->intdata != NULL)
 		fatal("%s: intdata for '%s' not NULL", __func__, buf->name);
