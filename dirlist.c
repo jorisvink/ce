@@ -20,6 +20,7 @@
 #include <sys/stat.h>
 
 #include <fts.h>
+#include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -143,8 +144,8 @@ dirlist_display(struct cebuf *buf, const char *path)
 		for (i = 1; i < ent->fts_level; i++)
 			ce_buffer_appendf(buf, "  ");
 
-		ce_buffer_appendf(buf, "[%c] %s (%llu KB) (%d)\n", type,
-		    ent->fts_name, ent->fts_statp->st_size / 1024,
+		ce_buffer_appendf(buf, "[%c] %s (%jd KB) (%d)\n", type,
+		    ent->fts_name, (intmax_t)ent->fts_statp->st_size / 1024,
 		    ent->fts_info);
 
 		if ((entry = calloc(1, sizeof(*entry))) == NULL) {
