@@ -247,7 +247,7 @@ finalize:
 	ce_buffer_populate_lines(buf);
 
 	ret = buf;
-	active = buf;
+	ce_buffer_activate(buf);
 
 	buf = NULL;
 
@@ -414,27 +414,33 @@ ce_buffer_as_string(struct cebuf *buf)
 }
 
 void
-ce_buffer_map(void)
+ce_buffer_map(struct cebuf *which)
 {
+	struct cebuf	*buf;
 	size_t		idx, line, towrite;
 
-	if (active->data == NULL)
+	if (which == NULL)
+		buf = ce_buffer_active();
+	else
+		buf = which;
+
+	if (buf->data == NULL)
 		return;
 
 	ce_syntax_init();
 
-	line = active->orig_line;
-	ce_term_setpos(active->orig_line, active->orig_column);
+	line = buf->orig_line;
+	ce_term_setpos(buf->orig_line, buf->orig_column);
 
-	for (idx = active->top; idx < active->lcnt; idx++) {
+	for (idx = buf->top; idx < buf->lcnt; idx++) {
 		ce_term_setpos(line, TERM_CURSOR_MIN);
 
 		towrite = (ce_term_height() - 2 - (line - 1)) * ce_term_width();
-		if (towrite > active->lines[idx].length)
-			towrite = active->lines[idx].length;
+		if (towrite > buf->lines[idx].length)
+			towrite = buf->lines[idx].length;
 
-		ce_syntax_write(active, &active->lines[idx], towrite);
-		line += buffer_line_span(&active->lines[idx]);
+		ce_syntax_write(buf, &buf->lines[idx], towrite);
+		line += buffer_line_span(&buf->lines[idx]);
 
 		if (line > ce_term_height() - 2)
 			break;
@@ -452,7 +458,7 @@ ce_buffer_map(void)
 	}
 
 	ce_term_reset();
-	ce_term_setpos(active->cursor_line, active->column);
+	ce_term_setpos(buf->cursor_line, buf->column);
 }
 
 int

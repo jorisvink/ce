@@ -208,10 +208,10 @@ struct cebuf {
 
 TAILQ_HEAD(cebuflist, cebuf);
 
-void		ce_buffer_map(void);
 void		ce_buffer_cleanup(void);
 void		ce_buffer_restore(void);
 void		ce_buffer_init(int, char **);
+void		ce_buffer_map(struct cebuf *);
 void		ce_buffer_free(struct cebuf *);
 void		ce_buffer_list(struct cebuf *);
 void		ce_buffer_reset(struct cebuf *);
@@ -287,7 +287,9 @@ void		ce_term_writef(const char *, ...)
 void		ce_dirlist_close(struct cebuf *);
 const char	*ce_dirlist_select(struct cebuf *, size_t);
 void		ce_dirlist_path(struct cebuf *, const char *);
+void		ce_dirlist_narrow(struct cebuf *, const char *);
 
+void		ce_editor_tick(int);
 void		ce_editor_init(void);
 void		ce_editor_loop(void);
 int		ce_editor_mode(void);

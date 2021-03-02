@@ -23,14 +23,22 @@
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <regex.h>
 #include <unistd.h>
 
 #include "ce.h"
 
+#define DENTRY_FLAG_VISIBLE	0x0001
+
 struct dentry {
+	u_int16_t		flags;
+	u_int16_t		info;
+	int			level;
+	off_t			size;
 	size_t			index;
 	char			*path;
-	LIST_ENTRY(dentry)	list;
+	char			*name;
+	TAILQ_ENTRY(dentry)	list;
 };
 
 union cp {
@@ -38,14 +46,29 @@ union cp {
 	char			*p;
 };
 
-LIST_HEAD(dlist, dentry);
+TAILQ_HEAD(dlist, dentry);
 
-static void	dirlist_display(struct cebuf *, const char *);
+static void	dirlist_load(struct cebuf *, const char *);
+static void	dirlist_tobuf(struct cebuf *, const char *);
 
 void
 ce_dirlist_path(struct cebuf *buf, const char *path)
 {
-	dirlist_display(buf, path);
+	struct dlist		*list;
+
+	if (buf->intdata != NULL)
+		fatal("%s: intdata for '%s' not NULL", __func__, buf->name);
+
+	if ((list = calloc(1, sizeof(*list))) == NULL)
+		fatal("%s: calloc failed while allocating list", __func__);
+
+	TAILQ_INIT(list);
+
+	buf->intdata = list;
+	buf->flags |= CE_BUFFER_RO;
+
+	dirlist_load(buf, path);
+	dirlist_tobuf(buf, NULL);
 }
 
 const char *
@@ -59,7 +82,10 @@ ce_dirlist_select(struct cebuf *buf, size_t index)
 
 	list = buf->intdata;
 
-	LIST_FOREACH(entry, list, list) {
+	TAILQ_FOREACH(entry, list, list) {
+		if (!(entry->flags & DENTRY_FLAG_VISIBLE))
+			continue;
+
 		if (entry->index == index)
 			return (entry->path);
 	}
@@ -79,8 +105,8 @@ ce_dirlist_close(struct cebuf *buf)
 	list = buf->intdata;
 	buf->intdata = NULL;
 
-	while ((entry = LIST_FIRST(list)) != NULL) {
-		LIST_REMOVE(entry, list);
+	while ((entry = TAILQ_FIRST(list)) != NULL) {
+		TAILQ_REMOVE(list, entry, list);
 		free(entry->path);
 		free(entry);
 	}
@@ -88,20 +114,24 @@ ce_dirlist_close(struct cebuf *buf)
 	free(list);
 }
 
-static void
-dirlist_display(struct cebuf *buf, const char *path)
+void
+ce_dirlist_narrow(struct cebuf *buf, const char *pattern)
 {
-	int			i;
+	dirlist_tobuf(buf, pattern);
+}
+
+static void
+dirlist_load(struct cebuf *buf, const char *path)
+{
 	FTS			*fts;
 	FTSENT			*ent;
-	size_t			index;
 	struct dlist		*list;
 	struct dentry		*entry;
 	union cp		cp = { .cp = path };
-	char			type, *pathv[] = { cp.p, NULL };
+	char			*pathv[] = { cp.p, NULL };
 
-	if (buf->intdata != NULL)
-		fatal("%s: intdata for '%s' not NULL", __func__, buf->name);
+	if (buf->intdata == NULL)
+		fatal("%s: no dirlist attached to '%s'", __func__, buf->name);
 
 	fts = fts_open(pathv, FTS_PHYSICAL | FTS_NOCHDIR, NULL);
 	if (fts == NULL) {
@@ -109,20 +139,73 @@ dirlist_display(struct cebuf *buf, const char *path)
 		return;
 	}
 
-	if ((list = calloc(1, sizeof(*list))) == NULL)
-		fatal("%s: calloc failed while allocating list", __func__);
+	list = buf->intdata;
+
+	while ((ent = fts_read(fts)) != NULL) {
+		if ((entry = calloc(1, sizeof(*entry))) == NULL) {
+			fatal("%s: calloc failued while allocating entry",
+			    __func__);
+		}
+
+		entry->info = ent->fts_info;
+		entry->level = ent->fts_level;
+		entry->size = ent->fts_statp->st_size;
+
+		if ((entry->path = strdup(ent->fts_accpath)) == NULL) {
+			fatal("%s: strdup failed on '%s'", __func__,
+			    ent->fts_accpath);
+		}
+
+		if ((entry->name = strdup(ent->fts_name)) == NULL) {
+			fatal("%s: strdup failed on '%s'", __func__,
+			    ent->fts_name);
+		}
+
+		TAILQ_INSERT_TAIL(list, entry, list);
+	}
+
+	fts_close(fts);
+
+	ce_editor_message("loaded directory '%s'", path);
+}
+
+static void
+dirlist_tobuf(struct cebuf *buf, const char *file)
+{
+	const char		*d;
+	off_t			sz;
+	char			type;
+	size_t			index;
+	regex_t			regex;
+	struct dlist		*list;
+	struct dentry		*entry;
+	int			i, len, show;
+	char			pattern[PATH_MAX];
+
+	if (buf->intdata == NULL)
+		fatal("%s: no dirlist attached to '%s'", __func__, buf->name);
+
+	if (file != NULL) {
+		len = snprintf(pattern, sizeof(pattern), "^.*%s.*$", file);
+		if (len == -1 || (size_t)len >= sizeof(pattern)) {
+			fatal("%s: failed to construct pattern '%s'",
+			    __func__, file);
+		}
+
+		if (regcomp(&regex, pattern, REG_EXTENDED | REG_NOSUB)) {
+			fatal("%s: failed to compile pattern '%s'",
+			    __func__, pattern);
+		}
+	}
 
 	index = 0;
-	LIST_INIT(list);
-
-	buf->intdata = list;
-	buf->flags |= CE_BUFFER_RO;
+	list = buf->intdata;
 
 	ce_buffer_reset(buf);
 	ce_buffer_setname(buf, "<directory list>");
 
-	while ((ent = fts_read(fts)) != NULL) {
-		switch (ent->fts_info) {
+	TAILQ_FOREACH(entry, list, list) {
+		switch (entry->info) {
 		case FTS_DNR:
 		case FTS_DP:
 			continue;
@@ -141,30 +224,43 @@ dirlist_display(struct cebuf *buf, const char *path)
 			break;
 		}
 
-		for (i = 1; i < ent->fts_level; i++)
-			ce_buffer_appendf(buf, "  ");
+		show = 0;
 
-		ce_buffer_appendf(buf, "[%c] %s (%jd KB) (%d)\n", type,
-		    ent->fts_name, (intmax_t)ent->fts_statp->st_size / 1024,
-		    ent->fts_info);
+		if (file != NULL) {
+			if (!regexec(&regex, entry->path, 0, NULL, 0))
+				show = 1;
+		} else {
+			show = 1;
+		}
 
-		if ((entry = calloc(1, sizeof(*entry))) == NULL) {
-			fatal("%s: calloc failued while allocating entry",
-			    __func__);
+		if (show == 0) {
+			entry->flags = 0;
+			continue;
 		}
 
 		entry->index = index++;
+		entry->flags = DENTRY_FLAG_VISIBLE;
 
-		if ((entry->path = strdup(ent->fts_accpath)) == NULL) {
-			fatal("%s: strdup failed on '%s'", __func__,
-			    ent->fts_accpath);
+		if (file == NULL) {
+			for (i = 1; i < entry->level; i++)
+				ce_buffer_appendf(buf, "  ");
 		}
 
-		LIST_INSERT_HEAD(list, entry, list);
+		if (entry->size < 1024) {
+			d = "B";
+			sz = entry->size;
+		} else {
+			d = "KB";
+			sz = entry->size / 1024;
+		}
+
+		ce_buffer_appendf(buf, "[%c] %s (%jd %s) (%d)\n", type,
+		    entry->path, (intmax_t)sz, d, entry->info);
 	}
 
-	fts_close(fts);
-	ce_buffer_populate_lines(buf);
+	if (file != NULL)
+		regfree(&regex);
 
-	ce_editor_message("loaded directory '%s'", path);
+	ce_buffer_populate_lines(buf);
+	ce_editor_dirty();
 }

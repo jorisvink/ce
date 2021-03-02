@@ -59,7 +59,7 @@ struct keymap {
 static void	editor_signal(int);
 static void	editor_resume(void);
 static void	editor_signal_setup(void);
-static void	editor_process_input(void);
+static void	editor_process_input(int);
 static u_int8_t	editor_process_escape(void);
 static int	editor_allowed_command_key(char);
 static ssize_t	editor_read(int, void *, size_t, int);
@@ -78,6 +78,7 @@ static void	editor_cmd_search_word(void);
 static void	editor_cmd_buffer_list(void);
 
 static void	editor_cmd_directory_list(void);
+static void	editor_cmd_directory_list_pwd(void);
 static void	editor_directory_list(const char *);
 
 static void	editor_cmd_open_file(const char *);
@@ -135,6 +136,8 @@ static struct keymap normal_map[] = {
 	{ '/',			editor_cmd_search_mode },
 
 	{ 0x04,			editor_cmd_directory_list },
+	{ 0x07,			editor_cmd_directory_list_pwd },
+
 	{ 0x12,			editor_cmd_buffer_list },
 	{ 0x1a,			editor_cmd_suspend },
 };
@@ -214,8 +217,6 @@ ce_editor_init(void)
 void
 ce_editor_loop(void)
 {
-	struct timespec		ts;
-
 	pbuffer = ce_buffer_internal("<pb>");
 	ce_buffer_reset(pbuffer);
 
@@ -229,82 +230,96 @@ ce_editor_loop(void)
 	buflist = ce_buffer_internal("<buflist>");
 	buflist->cb = editor_buflist_input;
 
-	while (!quit) {
-		(void)clock_gettime(CLOCK_MONOTONIC, &ts);
-
-		if (sig_recv != -1) {
-			switch (sig_recv) {
-			case SIGQUIT:
-			case SIGTERM:
-				quit = 1;
-				continue;
-			case SIGCONT:
-				dirty = 1;
-				editor_resume();
-				break;
-			case SIGWINCH:
-				dirty = 1;
-				ce_term_restore();
-				ce_term_setup();
-
-				cmdbuf->line = ce_term_height();
-				cmdbuf->orig_line = ce_term_height();
-				break;
-			}
-			sig_recv = -1;
-		}
-
-		if (ce_buffer_active() == cmdbuf)
-			ce_buffer_map();
-
-		if (dirty) {
-			if (ce_buffer_active() != cmdbuf)
-				ce_term_writestr(TERM_SEQUENCE_CLEAR_ONLY);
-			ce_buffer_map();
-			dirty = 0;
-		}
-
-		if (splash) {
-			ce_term_writestr(TERM_SEQUENCE_CURSOR_SAVE);
-			ce_term_setpos(ce_term_height() * 0.45,
-			    (ce_term_width() / 2) -
-			    (sizeof(CE_SPLASH_TEXT_1) - 1) / 2);
-			ce_term_writestr(CE_SPLASH_TEXT_1);
-			ce_term_setpos((ce_term_height() * 0.45) + 2,
-			    (ce_term_width() / 2) -
-			    (sizeof(CE_SPLASH_TEXT_2) - 1) / 2);
-			ce_term_writestr(CE_SPLASH_TEXT_2);
-			ce_term_writestr(TERM_SEQUENCE_CURSOR_RESTORE);
-		}
-
-		editor_draw_status();
-
-		if (msg.message) {
-			if ((ts.tv_sec - msg.when) >= EDITOR_MESSAGE_DELAY) {
-				free(msg.message);
-				msg.message = NULL;
-			}
-
-			ce_term_writestr(TERM_SEQUENCE_CURSOR_SAVE);
-			ce_term_setpos(ce_term_height(), TERM_CURSOR_MIN);
-			ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
-			if (msg.message)
-				ce_term_writestr(msg.message);
-			ce_term_writestr(TERM_SEQUENCE_CURSOR_RESTORE);
-		}
-
-		ce_term_flush();
-
-		editor_process_input();
-
-		if (splash) {
-			dirty = 1;
-			splash = 0;
-		}
-	}
+	while (!quit)
+		ce_editor_tick(-1);
 
 	free(search);
 	free(msg.message);
+}
+
+void
+ce_editor_tick(int delay)
+{
+	struct timespec		ts;
+
+	(void)clock_gettime(CLOCK_MONOTONIC, &ts);
+
+	if (sig_recv != -1) {
+		switch (sig_recv) {
+		case SIGQUIT:
+		case SIGTERM:
+			quit = 1;
+			return;
+		case SIGCONT:
+			dirty = 1;
+			editor_resume();
+			break;
+		case SIGWINCH:
+			dirty = 1;
+			ce_term_restore();
+			ce_term_setup();
+
+			cmdbuf->line = ce_term_height();
+			cmdbuf->orig_line = ce_term_height();
+			break;
+		}
+		sig_recv = -1;
+	}
+
+	if (dirty) {
+		if (mode == CE_EDITOR_MODE_SEARCH &&
+		    (lastmode == CE_EDITOR_MODE_DIRLIST ||
+		    lastmode == CE_EDITOR_MODE_BUFLIST)) {
+			ce_term_writestr(TERM_SEQUENCE_CLEAR_ONLY);
+			ce_buffer_map(buflist);
+		} else if (ce_buffer_active() != cmdbuf) {
+			ce_term_writestr(TERM_SEQUENCE_CLEAR_ONLY);
+			ce_buffer_map(NULL);
+		}
+
+		dirty = 0;
+	}
+
+	if (ce_buffer_active() == cmdbuf)
+		ce_buffer_map(NULL);
+
+	if (splash) {
+		ce_term_writestr(TERM_SEQUENCE_CURSOR_SAVE);
+		ce_term_setpos(ce_term_height() * 0.45,
+		    (ce_term_width() / 2) -
+		    (sizeof(CE_SPLASH_TEXT_1) - 1) / 2);
+		ce_term_writestr(CE_SPLASH_TEXT_1);
+		ce_term_setpos((ce_term_height() * 0.45) + 2,
+		    (ce_term_width() / 2) -
+		    (sizeof(CE_SPLASH_TEXT_2) - 1) / 2);
+		ce_term_writestr(CE_SPLASH_TEXT_2);
+		ce_term_writestr(TERM_SEQUENCE_CURSOR_RESTORE);
+	}
+
+	editor_draw_status();
+
+	if (msg.message) {
+		if ((ts.tv_sec - msg.when) >= EDITOR_MESSAGE_DELAY) {
+			free(msg.message);
+			msg.message = NULL;
+		}
+
+		ce_term_writestr(TERM_SEQUENCE_CURSOR_SAVE);
+		ce_term_setpos(ce_term_height(), TERM_CURSOR_MIN);
+		ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
+		if (msg.message)
+			ce_term_writestr(msg.message);
+		ce_term_writestr(TERM_SEQUENCE_CURSOR_RESTORE);
+	}
+
+	ce_term_flush();
+
+	editor_process_input(delay);
+
+	if (splash) {
+		dirty = 1;
+		splash = 0;
+	}
 }
 
 void
@@ -460,7 +475,7 @@ editor_signal_setup(void)
 }
 
 static void
-editor_process_input(void)
+editor_process_input(int delay)
 {
 	size_t			idx;
 	u_int8_t		key;
@@ -469,10 +484,10 @@ editor_process_input(void)
 	if (mode >= CE_EDITOR_MODE_MAX)
 		fatal("%s: mode %d invalid", __func__, mode);
 
-	if (editor_read(STDIN_FILENO, &key, sizeof(key), -1) == 0)
+	if (editor_read(STDIN_FILENO, &key, sizeof(key), delay) == 0)
 		return;
 
-	ce_debug("key 0x%02x", key);
+	ce_debug("0x%02x", key);
 
 	if (key == EDITOR_KEY_ESC)
 		key = editor_process_escape();
@@ -591,6 +606,12 @@ editor_draw_status(void)
 	switch (mode) {
 	case CE_EDITOR_MODE_COMMAND:
 	case CE_EDITOR_MODE_SEARCH:
+		if (lastmode == CE_EDITOR_MODE_DIRLIST ||
+		    lastmode == CE_EDITOR_MODE_BUFLIST) {
+			modestr = "";
+			curbuf = buflist;
+			break;
+		}
 		return;
 	case CE_EDITOR_MODE_NORMAL:
 	case CE_EDITOR_MODE_BUFLIST:
@@ -779,6 +800,9 @@ editor_cmdbuf_search(struct cebuf *buf, char key)
 	case '\b':
 	case 0x7f:
 		if (buf->length <= 1) {
+			if (mode == CE_EDITOR_MODE_SEARCH &&
+			    lastmode == CE_EDITOR_MODE_DIRLIST)
+				ce_dirlist_narrow(buflist, NULL);
 			editor_cmd_normal_mode();
 			break;
 		}
@@ -786,11 +810,25 @@ editor_cmdbuf_search(struct cebuf *buf, char key)
 		buf->column--;
 		ce_term_setpos(buf->orig_line, TERM_CURSOR_MIN);
 		ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
+
+		if (mode == CE_EDITOR_MODE_SEARCH &&
+		    lastmode == CE_EDITOR_MODE_DIRLIST) {
+			cmd = ce_buffer_as_string(buf);
+			ce_dirlist_narrow(buflist, &cmd[1]);
+			buf->length--;
+		}
 		break;
 	default:
 		if (isprint((unsigned char)key)) {
 			ce_buffer_append(buf, &key, sizeof(key));
 			buf->column++;
+		}
+
+		if (mode == CE_EDITOR_MODE_SEARCH &&
+		    lastmode == CE_EDITOR_MODE_DIRLIST) {
+			cmd = ce_buffer_as_string(buf);
+			ce_dirlist_narrow(buflist, &cmd[1]);
+			buf->length--;
 		}
 		break;
 	}
@@ -1186,6 +1224,12 @@ editor_cmd_buffer_list(void)
 }
 
 static void
+editor_cmd_directory_list_pwd(void)
+{
+	editor_directory_list(".");
+}
+
+static void
 editor_cmd_directory_list(void)
 {
 	struct cebuf	*buf;
@@ -1453,8 +1497,8 @@ editor_cmd_normal_mode(void)
 	if (mode == CE_EDITOR_MODE_COMMAND || mode == CE_EDITOR_MODE_SEARCH)
 		editor_cmd_reset();
 
-	if (lastmode == CE_EDITOR_MODE_BUFLIST ||
-	    lastmode == CE_EDITOR_MODE_DIRLIST) {
+	if (mode != lastmode && (lastmode == CE_EDITOR_MODE_BUFLIST ||
+	    lastmode == CE_EDITOR_MODE_DIRLIST)) {
 		mode = lastmode;
 	} else {
 		lastmode = mode;
@@ -1496,6 +1540,9 @@ editor_cmd_open_file(const char *path)
 		ce_editor_message("%s", ce_buffer_strerror());
 		return;
 	}
+
+	free(msg.message);
+	msg.message = NULL;
 
 	ce_editor_dirty();
 }
