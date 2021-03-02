@@ -108,6 +108,7 @@ ce_dirlist_close(struct cebuf *buf)
 	while ((entry = TAILQ_FIRST(list)) != NULL) {
 		TAILQ_REMOVE(list, entry, list);
 		free(entry->path);
+		free(entry->name);
 		free(entry);
 	}
 
