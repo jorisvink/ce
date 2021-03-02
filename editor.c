@@ -608,7 +608,7 @@ editor_draw_status(void)
 	case CE_EDITOR_MODE_SEARCH:
 		if (lastmode == CE_EDITOR_MODE_DIRLIST ||
 		    lastmode == CE_EDITOR_MODE_BUFLIST) {
-			modestr = "";
+			modestr = "- SEARCH -";
 			curbuf = buflist;
 			break;
 		}
@@ -657,8 +657,7 @@ editor_draw_status(void)
 	ce_term_setpos(ce_term_height() - 1, TERM_CURSOR_MIN);
 
 	ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
-	ce_term_writestr(TERM_SEQUENCE_ATTR_BOLD);
-	ce_term_color(TERM_COLOR_WHITE + TERM_COLOR_FG);
+	ce_term_color(TERM_COLOR_CYAN + TERM_COLOR_FG);
 	ce_term_color(TERM_COLOR_BLACK + TERM_COLOR_BG);
 	ce_term_writestr(TERM_SEQUENCE_ATTR_REVERSE);
 	ce_term_writef("%s %s", &fline[cmdoff], sline);
@@ -673,6 +672,7 @@ editor_draw_status(void)
 
 	cmdoff = ce_term_width() * 0.75f;
 
+	ce_term_reset();
 	ce_term_setpos(ce_term_height(), cmdoff);
 	ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
 
