@@ -77,6 +77,8 @@ ctrl-r       = show list of buffers
 
 ctrl-d       = directory listing of directory of active buffer
 
+ctrl-g       = directory listing of current working directory
+
 ctrl-z       = suspend ce
 
 [num]dd      = delete number of lines
