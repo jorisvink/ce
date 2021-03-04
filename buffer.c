@@ -682,6 +682,9 @@ ce_buffer_search(struct cebuf *buf, const char *needle, int which)
 	len = strlen(needle);
 	dir = BUFFER_SEARCH_FORWARD;
 
+	if (buf->lcnt == 0)
+		return (0);
+
 	index = ce_buffer_line_index(buf);
 
 	switch (which) {
