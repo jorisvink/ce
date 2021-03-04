@@ -637,9 +637,19 @@ editor_draw_status(void)
 	else
 		filemode = "rw";
 
-	pc = ((curbuf->top + curbuf->line) / (float)curbuf->lcnt) * 100;
-	llen = snprintf(lline, sizeof(lline), "%zuL [%zu%%]",
-	    curbuf->lcnt, pc);
+	if (curbuf->top == 0) {
+		llen = snprintf(lline, sizeof(lline), "%zuL [Top]",
+		    curbuf->lcnt);
+	} else if (curbuf->lcnt - (curbuf->top + curbuf->line) <
+	    ((ce_term_height() - 2) / 2)) {
+		llen = snprintf(lline, sizeof(lline), "%zuL [Bot]",
+		    curbuf->lcnt);
+	} else {
+		pc = ((curbuf->top + curbuf->line) / (float)curbuf->lcnt) * 100;
+		llen = snprintf(lline, sizeof(lline), "%zuL [%zu%%]",
+		    curbuf->lcnt, pc);
+	}
+
 	if (llen == -1 || (size_t)llen >= sizeof(lline))
 		fatal("failed to create status percent line");
 
