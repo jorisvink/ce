@@ -33,9 +33,10 @@ struct state {
 	size_t		off;
 	size_t		avail;
 
-	int		vis;
 	int		bold;
 	int		dirty;
+	int		highlight;
+	int		selection;
 
 	int		keepcolor;
 	int		diffcolor;
@@ -48,16 +49,23 @@ struct state {
 	size_t		ppwlen;
 	int		inside_preproc;
 
+	struct cebuf	*buf;
+	size_t		index;
+
 	int		color;
 	u_int32_t	flags;
 };
 
 static void	syntax_write(struct state *, size_t);
+static void	syntax_term_write(struct state *, const void *, size_t, int);
 
 static int	syntax_escaped_quote(struct state *);
 static int	syntax_is_word(struct state *, size_t);
 
+static void	syntax_state_selection(struct state *);
+
 static void	syntax_state_term_reset(struct state *);
+static void	syntax_state_term_highlight(struct state *);
 static void	syntax_state_term_bold(struct state *, int);
 
 static void	syntax_state_color(struct state *, int);
@@ -224,7 +232,7 @@ ce_syntax_init(void)
 
 	syntax_state.color = -1;
 
-	ce_term_reset();
+	ce_term_attr_off();
 }
 
 void
@@ -234,7 +242,8 @@ ce_syntax_finalize(void)
 }
 
 void
-ce_syntax_write(struct cebuf *buf, struct celine *line, size_t towrite)
+ce_syntax_write(struct cebuf *buf, struct celine *line, size_t index,
+    size_t towrite)
 {
 	const u_int8_t		*p;
 	size_t			col, spaces, i, tw;
@@ -244,7 +253,10 @@ ce_syntax_write(struct cebuf *buf, struct celine *line, size_t towrite)
 	tw = config.tab_width;
 
 	syntax_state.off = 0;
+	syntax_state.buf = buf;
+	syntax_state.index = index;
 	syntax_state.keepcolor = 0;
+	syntax_state.selection = 0;
 	syntax_state.diffcolor = -1;
 	syntax_state.avail = towrite;
 
@@ -260,7 +272,7 @@ ce_syntax_write(struct cebuf *buf, struct celine *line, size_t towrite)
 		syntax_state.inside_preproc = 0;
 		if (syntax_state.inside_string == 0)
 			syntax_state_color_clear(&syntax_state);
-		ce_term_write(p, 1);
+		syntax_term_write(&syntax_state, p, 1, 0);
 		return;
 	}
 
@@ -277,9 +289,9 @@ ce_syntax_write(struct cebuf *buf, struct celine *line, size_t towrite)
 
 			col += spaces;
 
-			ce_term_write(">", 1);
+			syntax_term_write(&syntax_state, ">", 1, 0);
 			for (i = 1; i < spaces; i++)
-				ce_term_write(".", 1);
+				syntax_term_write(&syntax_state, ".", 1, 0);
 
 			syntax_state.off++;
 
@@ -327,14 +339,67 @@ ce_syntax_write(struct cebuf *buf, struct celine *line, size_t towrite)
 }
 
 static void
+syntax_state_selection(struct state *state)
+{
+	int		prev;
+
+	prev = state->selection;
+	state->selection = 0;
+
+	if (ce_editor_mode() != CE_EDITOR_MODE_SELECT)
+		goto out;
+
+	if (state->buf->selstart.line == state->buf->selend.line &&
+	    state->index == state->buf->selstart.line) {
+		if (state->off >= state->buf->selstart.off &&
+		    state->off <= state->buf->selend.off)
+			state->selection = 1;
+		goto out;
+	}
+
+	if (state->index > state->buf->selstart.line &&
+	    state->index < state->buf->selend.line) {
+		state->selection = 1;
+		goto out;
+	}
+
+	if (state->index == state->buf->selstart.line) {
+		if (state->off >= state->buf->selstart.off)
+			state->selection = 1;
+		goto out;
+	}
+
+	if (state->index == state->buf->selend.line) {
+		if (state->off < state->buf->selend.off)
+			state->selection = 1;
+		goto out;
+	}
+
+out:
+	if (prev != state->selection)
+		state->dirty = 1;
+
+	if (state->selection)
+		syntax_state_term_highlight(state);
+	else if (state->highlight)
+		syntax_state_term_reset(state);
+}
+
+static void
 syntax_state_term_reset(struct state *state)
 {
 	if (state->dirty) {
-		ce_term_reset();
+		ce_term_attr_off();
 
 		state->bold = 0;
 		state->dirty = 0;
 		state->color = -1;
+		state->highlight = 0;
+
+		if (state->selection) {
+			state->highlight = 1;
+			ce_term_color(TERM_COLOR_CYAN + TERM_COLOR_BG);
+		}
 	}
 }
 
@@ -352,10 +417,20 @@ syntax_state_term_bold(struct state *state, int onoff)
 				syntax_state_color(state, color);
 		} else {
 			state->dirty = 1;
-			ce_term_writestr(TERM_SEQUENCE_ATTR_BOLD);
+			ce_term_attr_bold();
 		}
 
 		state->bold = onoff;
+	}
+}
+
+static void
+syntax_state_term_highlight(struct state *state)
+{
+	if (state->highlight == 0) {
+		state->dirty = 1;
+		state->highlight = 1;
+		ce_term_color(TERM_COLOR_CYAN + TERM_COLOR_BG);
 	}
 }
 
@@ -385,8 +460,7 @@ syntax_highlight_format_string(struct state *state)
 {
 	size_t		idx;
 
-	syntax_state_color(state, TERM_COLOR_BLACK);
-	syntax_state_term_bold(state, 1);
+	syntax_state_color(state, TERM_COLOR_MAGENTA);
 	syntax_write(state, 1);
 
 	for (idx = 1; idx < state->len; idx++) {
@@ -408,21 +482,16 @@ syntax_highlight_format_string(struct state *state)
 		case 's':
 		case '*':
 		case '.':
-			ce_term_write(&state->p[idx], 1);
-			state->off++;
+			syntax_term_write(state, &state->p[idx], 1, 1);
 			break;
 		default:
 			if (isdigit(state->p[idx])) {
-				ce_term_write(&state->p[idx], 1);
-				state->off++;
+				syntax_term_write(state, &state->p[idx], 1, 1);
 			} else {
-				syntax_state_term_bold(state, 0);
 				return;
 			}
 		}
 	}
-
-	syntax_state_term_bold(state, 0);
 }
 
 static int
@@ -532,8 +601,7 @@ syntax_highlight_c(struct state *state)
 
 	if (state->p[0] == ' ' && state->p[1] == '\n') {
 		syntax_state_color(state, TERM_COLOR_BLUE);
-		ce_term_write(".", 1);
-		syntax_state.off++;
+		syntax_term_write(state, ".", 1, 1);
 	} else {
 		syntax_state_color_clear(state);
 		syntax_write(state, 1);
@@ -916,10 +984,9 @@ syntax_highlight_word(struct state *state, const char *words[], int color)
 
 		syntax_state_term_bold(&syntax_state, 1);
 		syntax_state_color(state, color);
-		ce_term_writestr(words[i]);
+		syntax_term_write(state, words[i], len, 1);
 		syntax_state_term_bold(&syntax_state, 0);
 
-		state->off = state->off + len;
 		return (0);
 	}
 
@@ -932,7 +999,7 @@ syntax_highlight_pound_comment(struct state *state)
 	if (state->inside_comment == 0) {
 		if (state->p[0] == '#') {
 			state->inside_comment = 1;
-			ce_term_writestr(TERM_SEQUENCE_ATTR_BOLD);
+			ce_term_attr_bold();
 			syntax_state_color(state, TERM_COLOR_BLACK);
 			syntax_write(state, 1);
 			state->flags |= SYNTAX_CLEAR_COMMENT;
@@ -998,8 +1065,27 @@ syntax_write(struct state *state, size_t len)
 		    __func__, len, state->len);
 	}
 
-	ce_term_write(state->p, len);
-	state->off += len;
+	syntax_term_write(state, state->p, len, 1);
+}
+
+static void
+syntax_term_write(struct state *state, const void *data, size_t len, int count)
+{
+	size_t		off;
+	const u_int8_t	*ptr;
+
+	off = 0;
+	ptr = data;
+
+	while (off != len) {
+		syntax_state_selection(state);
+		ce_term_write(&ptr[off], 1);
+
+		if (count)
+			state->off++;
+
+		off++;
+	}
 }
 
 static void

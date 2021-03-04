@@ -414,15 +414,9 @@ ce_buffer_as_string(struct cebuf *buf)
 }
 
 void
-ce_buffer_map(struct cebuf *which)
+ce_buffer_map(struct cebuf *buf)
 {
-	struct cebuf	*buf;
 	size_t		idx, line, towrite;
-
-	if (which == NULL)
-		buf = ce_buffer_active();
-	else
-		buf = which;
 
 	if (buf->data == NULL)
 		return;
@@ -439,7 +433,7 @@ ce_buffer_map(struct cebuf *which)
 		if (towrite > buf->lines[idx].length)
 			towrite = buf->lines[idx].length;
 
-		ce_syntax_write(buf, &buf->lines[idx], towrite);
+		ce_syntax_write(buf, &buf->lines[idx], idx, towrite);
 		line += buffer_line_span(&buf->lines[idx]);
 
 		if (line > ce_term_height() - 2)
@@ -457,7 +451,7 @@ ce_buffer_map(struct cebuf *which)
 		line++;
 	}
 
-	ce_term_reset();
+	ce_term_attr_off();
 	ce_term_setpos(buf->cursor_line, buf->column);
 }
 
@@ -1974,7 +1968,7 @@ buffer_line_insert_byte(struct cebuf *buf, struct celine *line, u_int8_t byte)
 		ce_term_setpos(buf->cursor_line, TERM_CURSOR_MIN);
 		ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
 		ce_syntax_init();
-		ce_syntax_write(buf, line, line->length);
+		ce_syntax_write(buf, line, 0, line->length);
 		ce_syntax_finalize();
 	}
 
@@ -2034,7 +2028,7 @@ buffer_line_erase_character(struct cebuf *buf, struct celine *line, int inplace)
 		ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
 
 		ce_syntax_init();
-		ce_syntax_write(buf, line, line->length);
+		ce_syntax_write(buf, line, 0, line->length);
 		ce_syntax_finalize();
 	} else {
 		ce_editor_dirty();

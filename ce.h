@@ -34,8 +34,9 @@
 #define CE_EDITOR_MODE_BUFLIST		3
 #define CE_EDITOR_MODE_SEARCH		4
 #define CE_EDITOR_MODE_DIRLIST		5
-#define CE_EDITOR_MODE_NORMAL_CMD	6
-#define CE_EDITOR_MODE_MAX		7
+#define CE_EDITOR_MODE_SELECT		6
+#define CE_EDITOR_MODE_NORMAL_CMD	7
+#define CE_EDITOR_MODE_MAX		8
 
 #define TERM_COLOR_BLACK		0
 #define TERM_COLOR_RED			1
@@ -63,12 +64,11 @@
 #define TERM_SEQUENCE_CURSOR_RESTORE	"\0338"
 #define TERM_SEQUENCE_LINE_ERASE	TERM_ESCAPE "K"
 
+#define TERM_SEQUENCE_ATTR_OFF		TERM_ESCAPE "m"
 #define TERM_SEQUENCE_ATTR_BOLD		TERM_ESCAPE "1m"
 #define TERM_SEQUENCE_ATTR_REVERSE	TERM_ESCAPE "7m"
 #define TERM_SEQUENCE_FMT_SET_COLOR	TERM_ESCAPE "%dm"
 #define TERM_SEQUENCE_FMT_SET_CURSOR	TERM_ESCAPE "%zu;%zuH"
-
-#define TERM_SEQUENCE_RESET		TERM_ESCAPE "m"
 
 #define TERM_SEQUENCE_ALTERNATE_ON	TERM_ESCAPE "?1049h"
 #define TERM_SEQUENCE_ALTERNATE_OFF	TERM_ESCAPE "?1049l"
@@ -129,8 +129,14 @@ struct celine {
 #define CE_MARK_PREVIOUS	'\''
 
 struct cemark {
+	/* If this mark has valid data. */
 	int			set;
+
+	/* Line this mark is at. */
 	size_t			line;
+
+	/* Offset into the line (for select). */
+	size_t			off;
 };
 
 /*
@@ -196,6 +202,11 @@ struct cebuf {
 
 	/* Special marker (previous). */
 	struct cemark		prevmark;
+
+	/* Special market for selection. */
+	struct cemark		selend;
+	struct cemark		selmark;
+	struct cemark		selstart;
 
 	/* Callback for special buffers (like cmdbuf). */
 	void			(*cb)(struct cebuf *, char);
@@ -274,7 +285,6 @@ size_t		ce_term_height(void);
 
 void		ce_term_color(int);
 void		ce_term_setup(void);
-void		ce_term_reset(void);
 void		ce_term_flush(void);
 void		ce_term_discard(void);
 void		ce_term_restore(void);
@@ -283,6 +293,10 @@ void		ce_term_writestr(const char *);
 void		ce_term_write(const void *, size_t);
 void		ce_term_writef(const char *, ...)
 		    __attribute__((format (printf, 1, 2)));
+
+void		ce_term_attr_off(void);
+void		ce_term_attr_bold(void);
+void		ce_term_attr_reverse(void);
 
 void		ce_dirlist_close(struct cebuf *);
 const char	*ce_dirlist_select(struct cebuf *, size_t);
@@ -314,7 +328,8 @@ int		ce_utf8_sequence(const void *, size_t, size_t, size_t *);
 
 void		ce_syntax_init(void);
 void		ce_syntax_finalize(void);
-void		ce_syntax_write(struct cebuf *, struct celine *, size_t);
+void		ce_syntax_write(struct cebuf *, struct celine *,
+		    size_t, size_t);
 
 void		ce_file_type_detect(struct cebuf *);
 

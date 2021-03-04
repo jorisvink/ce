@@ -72,7 +72,7 @@ ce_term_setup(void)
 	can_restore = 1;
 
 	ce_term_writestr(TERM_SEQUENCE_ALTERNATE_ON);
-	ce_term_writestr(TERM_SEQUENCE_RESET);
+	ce_term_writestr(TERM_SEQUENCE_ATTR_OFF);
 	ce_term_writestr(TERM_SEQUENCE_CLEAR);
 }
 
@@ -136,9 +136,21 @@ ce_term_color(int color)
 }
 
 void
-ce_term_reset(void)
+ce_term_attr_off(void)
 {
-	ce_term_writestr(TERM_SEQUENCE_RESET);
+	ce_term_writestr(TERM_SEQUENCE_ATTR_OFF);
+}
+
+void
+ce_term_attr_reverse(void)
+{
+	ce_term_writestr(TERM_SEQUENCE_ATTR_REVERSE);
+}
+
+void
+ce_term_attr_bold(void)
+{
+	ce_term_writestr(TERM_SEQUENCE_ATTR_BOLD);
 }
 
 void

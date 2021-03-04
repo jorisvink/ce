@@ -96,6 +96,8 @@ static void	editor_cmd_yank_lines(struct cebuf *, long);
 static void	editor_cmd_delete_words(struct cebuf *, long);
 static void	editor_cmd_delete_lines(struct cebuf *, long);
 
+static void	editor_cmd_select_mode(void);
+
 static void	editor_cmd_insert_mode(void);
 static void	editor_cmd_insert_mode_append(void);
 static void	editor_cmd_insert_mode_prepend(void);
@@ -131,6 +133,8 @@ static struct keymap normal_map[] = {
 	{ 'i',			editor_cmd_insert_mode },
 	{ 'o',			editor_cmd_insert_mode_append },
 	{ 'O',			editor_cmd_insert_mode_prepend },
+
+	{ 's',			editor_cmd_select_mode },
 
 	{ ':',			editor_cmd_command_mode },
 	{ '/',			editor_cmd_search_mode },
@@ -169,6 +173,22 @@ static struct keymap buflist_map[] = {
 	{ EDITOR_KEY_ESC,	editor_cmd_normal_mode },
 };
 
+static struct keymap select_map[] = {
+	{ 'k',			ce_buffer_move_up },
+	{ 'j',			ce_buffer_move_down },
+	{ 'l',			ce_buffer_move_right },
+	{ 'h',			ce_buffer_move_left },
+	{ 'C',			ce_buffer_center },
+	{ '$',			ce_buffer_jump_right },
+	{ '0',			ce_buffer_jump_left },
+	{ 'G',			ce_buffer_jump_down },
+	{ 'J',			ce_buffer_join_line },
+	{ 0x06,			ce_buffer_page_down },
+	{ 0x02,			ce_buffer_page_up },
+	{ '/',			editor_cmd_search_mode },
+	{ EDITOR_KEY_ESC,	editor_cmd_normal_mode },
+};
+
 static struct {
 	const struct keymap	*map;
 	size_t			maplen;
@@ -179,6 +199,7 @@ static struct {
 	{ buflist_map, KEY_MAP_LEN(buflist_map) },
 	{ command_map, KEY_MAP_LEN(command_map) },
 	{ buflist_map, KEY_MAP_LEN(buflist_map) },
+	{ select_map, KEY_MAP_LEN(select_map) },
 };
 
 static struct {
@@ -241,6 +262,8 @@ void
 ce_editor_tick(int delay)
 {
 	struct timespec		ts;
+	struct cemark		tmp;
+	struct cebuf		*buf;
 
 	(void)clock_gettime(CLOCK_MONOTONIC, &ts);
 
@@ -266,22 +289,47 @@ ce_editor_tick(int delay)
 		sig_recv = -1;
 	}
 
+	buf = ce_buffer_active();
+
+	if (mode == CE_EDITOR_MODE_SELECT) {
+		tmp.line = ce_buffer_line_index(buf);
+		tmp.off = buf->loff;
+		tmp.set = 1;
+
+		if (tmp.line < buf->selmark.line) {
+			buf->selend = buf->selmark;
+			buf->selstart = tmp;
+		} else {
+			if (buf->selstart.line != buf->selmark.line &&
+			    buf->selstart.off != buf->selmark.off)
+				buf->selstart = buf->selmark;
+			buf->selend = tmp;
+		}
+
+		ce_debug("selection from %zu.%zu -> %zu.%zu",
+		    buf->selstart.line, buf->selstart.off,
+		    buf->selend.line, buf->selend.off);
+
+		/* for now XXX */
+		dirty = 1;
+	}
+
 	if (dirty) {
 		if (mode == CE_EDITOR_MODE_SEARCH &&
 		    (lastmode == CE_EDITOR_MODE_DIRLIST ||
 		    lastmode == CE_EDITOR_MODE_BUFLIST)) {
 			ce_term_writestr(TERM_SEQUENCE_CLEAR_ONLY);
 			ce_buffer_map(buflist);
-		} else if (ce_buffer_active() != cmdbuf) {
+		} else if (buf != cmdbuf) {
 			ce_term_writestr(TERM_SEQUENCE_CLEAR_ONLY);
-			ce_buffer_map(NULL);
+			ce_buffer_map(buf);
 		}
 
 		dirty = 0;
 	}
 
-	if (ce_buffer_active() == cmdbuf)
-		ce_buffer_map(NULL);
+	if (buf == cmdbuf)
+		ce_buffer_map(buf);
 
 	if (splash) {
 		ce_term_writestr(TERM_SEQUENCE_CURSOR_SAVE);
@@ -313,7 +361,6 @@ ce_editor_tick(int delay)
 	}
 
 	ce_term_flush();
-
 	editor_process_input(delay);
 
 	if (splash) {
@@ -504,8 +551,11 @@ editor_process_input(int delay)
 		}
 	}
 
-	if (mode == CE_EDITOR_MODE_NORMAL) {
+	switch (mode) {
+	case CE_EDITOR_MODE_NORMAL:
 		editor_normal_mode_command(key);
+		return;
+	case CE_EDITOR_MODE_SELECT:
 		return;
 	}
 
@@ -622,6 +672,9 @@ editor_draw_status(void)
 	case CE_EDITOR_MODE_NORMAL_CMD:
 		modestr = "";
 		break;
+	case CE_EDITOR_MODE_SELECT:
+		modestr = "- SELECT -";
+		break;
 	case CE_EDITOR_MODE_INSERT:
 		modestr = "- INSERT -";
 		break;
@@ -657,10 +710,21 @@ editor_draw_status(void)
 	if (flen == -1)
 		fatal("failed to create status file line");
 
-	slen = snprintf(sline, sizeof(sline),
-	    "[%s] %zu,%zu-%zu %s", filemode,
-	    curbuf->top + curbuf->line, curbuf->loff, curbuf->column, modestr);
-	if (slen == -1)
+	if (mode == CE_EDITOR_MODE_SELECT) {
+		slen = snprintf(sline, sizeof(sline),
+		    "[%s] %zu,%zu-%zu %s %zu.%zu <> %zu.%zu", filemode,
+		    curbuf->top + curbuf->line, curbuf->loff,
+		    curbuf->column, modestr,
+		    curbuf->selstart.line, curbuf->selstart.off,
+		    curbuf->selend.line, curbuf->selend.off);
+	} else {
+		slen = snprintf(sline, sizeof(sline),
+		    "[%s] %zu,%zu-%zu %s", filemode,
+		    curbuf->top + curbuf->line, curbuf->loff,
+		    curbuf->column, modestr);
+	}
+
+	if (slen == -1 || (size_t)slen >= sizeof(sline))
 		fatal("failed to create status line");
 
 	width = (ce_term_width() - 1) - slen - llen;
@@ -693,7 +757,7 @@ editor_draw_status(void)
 
 	cmdoff = ce_term_width() * 0.75f;
 
-	ce_term_reset();
+	ce_term_attr_off();
 	ce_term_setpos(ce_term_height(), cmdoff);
 	ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
 
@@ -1412,6 +1476,22 @@ editor_cmd_paste(void)
 }
 
 static void
+editor_cmd_select_mode(void)
+{
+	struct cebuf		*buf = ce_buffer_active();
+
+	lastmode = mode;
+	mode = CE_EDITOR_MODE_SELECT;
+
+	buf->selstart.set = 1;
+	buf->selstart.off = buf->loff;
+	buf->selstart.line = ce_buffer_line_index(buf);
+
+	buf->selend = buf->selstart;
+	buf->selmark = buf->selstart;
+}
+
+static void
 editor_cmd_insert_mode(void)
 {
 	struct cebuf		*buf = ce_buffer_active();
@@ -1508,6 +1588,9 @@ editor_cmd_normal_mode(void)
 
 	if (mode == CE_EDITOR_MODE_DIRLIST)
 		ce_dirlist_close(buflist);
+
+	if (mode == CE_EDITOR_MODE_SELECT)
+		ce_editor_dirty();
 
 	if (mode == CE_EDITOR_MODE_COMMAND ||
 	    mode == CE_EDITOR_MODE_BUFLIST ||
