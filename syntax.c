@@ -607,14 +607,14 @@ syntax_highlight_c_preproc(struct state *state)
 		if (!strncmp(w, "#include", state->ppwlen)) {
 			if (state->p[0] == '<') {
 				syntax_highlight_span(state,
-				    '<', '>', TERM_COLOR_BLACK);
+				    '<', '>', TERM_COLOR_RED);
 				return (0);
 			}
 		}
 
 		if (state->p[0] == '"') {
 			syntax_highlight_span(state,
-			    '"', '"', TERM_COLOR_BLACK);
+			    '"', '"', TERM_COLOR_RED);
 			return (0);
 		}
 
