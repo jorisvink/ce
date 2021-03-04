@@ -299,6 +299,14 @@ ce_editor_tick(int delay)
 		if (tmp.line < buf->selmark.line) {
 			buf->selend = buf->selmark;
 			buf->selstart = tmp;
+		} else if (tmp.line == buf->selmark.line) {
+			if (tmp.off <= buf->selmark.off) {
+				buf->selstart.off = tmp.off;
+				buf->selend = buf->selmark;
+			} else {
+				buf->selend.off = tmp.off;
+				buf->selstart = buf->selmark;
+			}
 		} else {
 			if (buf->selstart.line != buf->selmark.line &&
 			    buf->selstart.off != buf->selmark.off)
