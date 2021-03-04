@@ -595,13 +595,16 @@ static void
 editor_draw_status(void)
 {
 	const u_int8_t		*ptr;
-	int			flen, slen;
-	size_t			cmdoff, width;
-	const char		*isdirty = "";
-	const char		*filemode = "";
-	const char		*modestr = NULL;
-	char			fline[1024], sline[128];
-	struct cebuf		*curbuf = ce_buffer_active();
+	struct cebuf		*curbuf;
+	int			flen, slen, llen;
+	size_t			cmdoff, width, pc;
+	const char		*isdirty, *filemode, *modestr;
+	char			fline[1024], sline[128], lline[128];
+
+	isdirty = "";
+	filemode = "";
+	modestr = NULL;
+	curbuf = ce_buffer_active();
 
 	switch (mode) {
 	case CE_EDITOR_MODE_COMMAND:
@@ -634,18 +637,23 @@ editor_draw_status(void)
 	else
 		filemode = "rw";
 
+	pc = ((curbuf->top + curbuf->line) / (float)curbuf->lcnt) * 100;
+	llen = snprintf(lline, sizeof(lline), "%zuL [%zu%%]",
+	    curbuf->lcnt, pc);
+	if (llen == -1 || (size_t)llen >= sizeof(lline))
+		fatal("failed to create status percent line");
+
 	flen = snprintf(fline, sizeof(fline), "%s%s", curbuf->name, isdirty);
 	if (flen == -1)
 		fatal("failed to create status file line");
 
 	slen = snprintf(sline, sizeof(sline),
-	    "[%s] %zu,%zu-%zu, %zu lines %s", filemode,
-	    curbuf->top + curbuf->line, curbuf->loff, curbuf->column,
-	    curbuf->lcnt, modestr);
+	    "[%s] %zu,%zu-%zu %s", filemode,
+	    curbuf->top + curbuf->line, curbuf->loff, curbuf->column, modestr);
 	if (slen == -1)
 		fatal("failed to create status line");
 
-	width = (ce_term_width() - 1) - slen;
+	width = (ce_term_width() - 1) - slen - llen;
 	if ((size_t)flen > width) {
 		cmdoff = flen - width;
 		fline[cmdoff] = '>';
@@ -662,13 +670,16 @@ editor_draw_status(void)
 	ce_term_writestr(TERM_SEQUENCE_ATTR_REVERSE);
 	ce_term_writef("%s %s", &fline[cmdoff], sline);
 
-	if ((size_t)(slen + flen) < ce_term_width()) {
-		width = ce_term_width() - (slen + flen);
+	if ((size_t)(slen + flen) < (ce_term_width() - llen)) {
+		width = (ce_term_width() - llen) - (slen + flen);
 		while (width > 1) {
 			ce_term_writestr(" ");
 			width--;
 		}
 	}
+
+	ce_term_setpos(ce_term_height() - 1, ce_term_width() - llen + 1);
+	ce_term_writef("%s", lline);
 
 	cmdoff = ce_term_width() * 0.75f;
 
