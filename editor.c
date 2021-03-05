@@ -293,30 +293,30 @@ ce_editor_tick(int delay)
 
 	if (mode == CE_EDITOR_MODE_SELECT) {
 		tmp.line = ce_buffer_line_index(buf);
-		tmp.off = buf->loff;
+		tmp.col = buf->column;
 		tmp.set = 1;
 
 		if (tmp.line < buf->selmark.line) {
 			buf->selend = buf->selmark;
 			buf->selstart = tmp;
 		} else if (tmp.line == buf->selmark.line) {
-			if (tmp.off <= buf->selmark.off) {
-				buf->selstart.off = tmp.off;
+			if (tmp.col <= buf->selmark.col) {
+				buf->selstart.col = tmp.col;
 				buf->selend = buf->selmark;
 			} else {
-				buf->selend.off = tmp.off;
+				buf->selend.col = tmp.col;
 				buf->selstart = buf->selmark;
 			}
 		} else {
 			if (buf->selstart.line != buf->selmark.line &&
-			    buf->selstart.off != buf->selmark.off)
+			    buf->selstart.col != buf->selmark.col)
 				buf->selstart = buf->selmark;
 			buf->selend = tmp;
 		}
 
 		ce_debug("selection from %zu.%zu -> %zu.%zu",
-		    buf->selstart.line, buf->selstart.off,
-		    buf->selend.line, buf->selend.off);
+		    buf->selstart.line, buf->selstart.col,
+		    buf->selend.line, buf->selend.col);
 
 		/* for now XXX */
 		dirty = 1;
@@ -723,8 +723,8 @@ editor_draw_status(void)
 		    "[%s] %zu,%zu-%zu %s %zu.%zu <> %zu.%zu", filemode,
 		    curbuf->top + curbuf->line, curbuf->loff,
 		    curbuf->column, modestr,
-		    curbuf->selstart.line, curbuf->selstart.off,
-		    curbuf->selend.line, curbuf->selend.off);
+		    curbuf->selstart.line, curbuf->selstart.col,
+		    curbuf->selend.line, curbuf->selend.col);
 	} else {
 		slen = snprintf(sline, sizeof(sline),
 		    "[%s] %zu,%zu-%zu %s", filemode,
@@ -1492,7 +1492,7 @@ editor_cmd_select_mode(void)
 	mode = CE_EDITOR_MODE_SELECT;
 
 	buf->selstart.set = 1;
-	buf->selstart.off = buf->loff;
+	buf->selstart.col = buf->column;
 	buf->selstart.line = ce_buffer_line_index(buf);
 
 	buf->selend = buf->selstart;

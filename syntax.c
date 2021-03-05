@@ -21,6 +21,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "ce.h"
 
@@ -31,6 +32,7 @@ struct state {
 
 	size_t		len;
 	size_t		off;
+	size_t		col;
 	size_t		avail;
 
 	int		bold;
@@ -246,17 +248,16 @@ ce_syntax_write(struct cebuf *buf, struct celine *line, size_t index,
     size_t towrite)
 {
 	const u_int8_t		*p;
-	size_t			col, spaces, i, tw;
+	size_t			spaces, i, tw;
 
-	col = 1;
 	p = line->data;
 	tw = config.tab_width;
 
+	syntax_state.col = 1;
 	syntax_state.off = 0;
 	syntax_state.buf = buf;
 	syntax_state.index = index;
 	syntax_state.keepcolor = 0;
-	syntax_state.selection = 0;
 	syntax_state.diffcolor = -1;
 	syntax_state.avail = towrite;
 
@@ -282,13 +283,12 @@ ce_syntax_write(struct cebuf *buf, struct celine *line, size_t index,
 			syntax_state_term_bold(&syntax_state, 0);
 			syntax_state_color(&syntax_state, TERM_COLOR_WHITE);
 
-			if ((col % tw) == 0)
+			if ((syntax_state.col % tw) == 0)
 				spaces = 1;
 			else
-				spaces = tw - (col % tw) + 1;
+				spaces = tw - (syntax_state.col % tw) + 1;
 
-			col += spaces;
-
+			syntax_state.col += spaces;
 			syntax_term_write(&syntax_state, ">", 1, 0);
 			for (i = 1; i < spaces; i++)
 				syntax_term_write(&syntax_state, ".", 1, 0);
@@ -332,7 +332,6 @@ ce_syntax_write(struct cebuf *buf, struct celine *line, size_t index,
 				break;
 			}
 
-			col += syntax_state.off - spaces;
 			break;
 		}
 	}
@@ -341,7 +340,7 @@ ce_syntax_write(struct cebuf *buf, struct celine *line, size_t index,
 static void
 syntax_state_selection(struct state *state)
 {
-	int		prev;
+	int		prev, color, bold;
 
 	prev = state->selection;
 	state->selection = 0;
@@ -351,8 +350,8 @@ syntax_state_selection(struct state *state)
 
 	if (state->buf->selstart.line == state->buf->selend.line &&
 	    state->index == state->buf->selstart.line) {
-		if (state->off >= state->buf->selstart.off &&
-		    state->off <= state->buf->selend.off)
+		if (state->col >= state->buf->selstart.col &&
+		    state->col <= state->buf->selend.col)
 			state->selection = 1;
 		goto out;
 	}
@@ -364,13 +363,13 @@ syntax_state_selection(struct state *state)
 	}
 
 	if (state->index == state->buf->selstart.line) {
-		if (state->off >= state->buf->selstart.off)
+		if (state->col >= state->buf->selstart.col)
 			state->selection = 1;
 		goto out;
 	}
 
 	if (state->index == state->buf->selend.line) {
-		if (state->off < state->buf->selend.off)
+		if (state->col <= state->buf->selend.col)
 			state->selection = 1;
 		goto out;
 	}
@@ -379,10 +378,18 @@ out:
 	if (prev != state->selection)
 		state->dirty = 1;
 
-	if (state->selection)
+	if (state->selection) {
 		syntax_state_term_highlight(state);
-	else if (state->highlight)
+	} else if (state->highlight) {
+		bold = state->bold;
+		color = state->color;
 		syntax_state_term_reset(state);
+
+		if (bold)
+			syntax_state_term_bold(state, 1);
+		if (color != -1)
+			syntax_state_color(state, color);
+	}
 }
 
 static void
@@ -1060,31 +1067,45 @@ syntax_is_word(struct state *state, size_t hlen)
 static void
 syntax_write(struct state *state, size_t len)
 {
+	size_t		seqlen;
+
 	if (len > state->len) {
 		fatal("%s: invalid write %zu > %zu",
 		    __func__, len, state->len);
 	}
 
-	syntax_term_write(state, state->p, len, 1);
+	if (len == 1) {
+		if (ce_utf8_sequence(state->p, state->len, 0, &seqlen) == 0)
+			seqlen = 1;
+	} else {
+		seqlen = len;
+	}
+
+	syntax_term_write(state, state->p, seqlen, 1);
 }
 
 static void
 syntax_term_write(struct state *state, const void *data, size_t len, int count)
 {
-	size_t		off;
-	const u_int8_t	*ptr;
+	const u_int8_t		*ptr;
+	size_t			off, seqlen;
 
 	off = 0;
 	ptr = data;
 
 	while (off != len) {
 		syntax_state_selection(state);
-		ce_term_write(&ptr[off], 1);
 
-		if (count)
-			state->off++;
+		if (ce_utf8_sequence(ptr, len, off, &seqlen) == 0)
+			seqlen = 1;
 
-		off++;
+		ce_term_write(&ptr[off], seqlen);
+		off += seqlen;
+
+		if (count) {
+			state->col++;
+			state->off += seqlen;
+		}
 	}
 }
 

@@ -135,8 +135,8 @@ struct cemark {
 	/* Line this mark is at. */
 	size_t			line;
 
-	/* Offset into the line (for select). */
-	size_t			off;
+	/* Line column (for select). */
+	size_t			col;
 };
 
 /*
