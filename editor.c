@@ -723,8 +723,8 @@ editor_draw_status(void)
 		    "[%s] %zu,%zu-%zu %s %zu.%zu <> %zu.%zu", filemode,
 		    curbuf->top + curbuf->line, curbuf->loff,
 		    curbuf->column, modestr,
-		    curbuf->selstart.line, curbuf->selstart.col,
-		    curbuf->selend.line, curbuf->selend.col);
+		    curbuf->selstart.line + 1, curbuf->selstart.col,
+		    curbuf->selend.line + 1, curbuf->selend.col);
 	} else {
 		slen = snprintf(sline, sizeof(sline),
 		    "[%s] %zu,%zu-%zu %s", filemode,
