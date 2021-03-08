@@ -1128,6 +1128,9 @@ editor_cmd_select_yank_delete(int del)
 	killed = 0;
 	linenr = buf->selstart.line;
 
+	if (linenr > 0)
+		ce_buffer_line_allocate(buf, &buf->lines[linenr - 1]);
+
 	for (idx = buf->selstart.line; idx <= buf->selend.line; idx++) {
 		line = &buf->lines[linenr];
 		ce_buffer_line_allocate(buf, line);
@@ -1204,6 +1207,8 @@ editor_cmd_select_yank_delete(int del)
 
 		linenr++;
 	}
+
+	buf->flags |= CE_BUFFER_DIRTY;
 
 	ce_editor_pbuffer_sync();
 	ce_buffer_jump_line(buf, buf->selmark.line + 1, buf->selmark.col);
