@@ -91,14 +91,6 @@ ctrl-z       = suspend ce
 
 [num]b       = jump to previous word
 
-ds           = delete range start
-
-de           = delete range end (deletes between ds<=>de)
-
-cs           = yank range start (copy)
-
-ce           = yank range end (yanks between cs<=>ce)
-
 ai<char>     = alter inside string with given character (" or ').
 
 di<char>     = delete inside string with given character (" or ').
