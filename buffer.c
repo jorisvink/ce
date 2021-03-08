@@ -58,7 +58,6 @@ static void		buffer_update_cursor_line(struct cebuf *);
 static void		buffer_line_column_to_data(struct cebuf *);
 static void		buffer_update_cursor_column(struct cebuf *);
 static size_t		buffer_line_data_to_columns(const void *, size_t);
-static void		buffer_line_allocate(struct cebuf *, struct celine *);
 static void		buffer_line_erase_character(struct cebuf *,
 			    struct celine *, int);
 static void		buffer_line_insert_byte(struct cebuf *,
@@ -95,7 +94,7 @@ ce_buffer_init(int argc, char **argv)
 			if (errno != 0 || *ep != '\0')
 				fatal("%s is a bad line number", argv[i]);
 
-			ce_buffer_jump_line(last, linenr);
+			ce_buffer_jump_line(last, linenr, 0);
 			continue;
 		}
 
@@ -576,7 +575,7 @@ ce_buffer_word_delete(struct cebuf *buf)
 	start = buf->loff;
 	ce_buffer_word_next(buf);
 
-	buffer_line_allocate(buf, line);
+	ce_buffer_line_allocate(buf, line);
 	ptr = line->data;
 
 	if (buf->loff + 1 == line->length - 1)
@@ -643,7 +642,7 @@ ce_buffer_word_erase(struct cebuf *buf)
 	}
 
 	ce_editor_pbuffer_reset();
-	buffer_line_allocate(buf, line);
+	ce_buffer_line_allocate(buf, line);
 
 	buf->loff = start;
 
@@ -805,7 +804,7 @@ ce_buffer_input(struct cebuf *buf, u_int8_t byte)
 		ce_buffer_line_alloc_empty(buf);
 
 	line = ce_buffer_line_current(buf);
-	buffer_line_allocate(buf, line);
+	ce_buffer_line_allocate(buf, line);
 
 	switch (byte) {
 	case '\b':
@@ -874,23 +873,26 @@ ce_buffer_insert_line(struct cebuf *buf)
 }
 
 void
-ce_buffer_delete_line(struct cebuf *buf)
+ce_buffer_delete_line(struct cebuf *buf, int isjoin)
 {
 	size_t			index;
 
 	if (buf->lcnt == 0)
 		return;
 
-	ce_editor_pbuffer_reset();
+	if (!isjoin)
+		ce_editor_pbuffer_reset();
 
 	index = ce_buffer_line_index(buf);
-	ce_buffer_delete_lines(buf, index, index, 0);
+	ce_buffer_delete_lines(buf, index, index, 0, isjoin);
 
-	ce_editor_pbuffer_sync();
+	if (!isjoin)
+		ce_editor_pbuffer_sync();
 }
 
 void
-ce_buffer_delete_lines(struct cebuf *buf, size_t start, size_t end, int rev)
+ce_buffer_delete_lines(struct cebuf *buf, size_t start, size_t end, int rev,
+    int isjoin)
 {
 	struct celine		*line;
 	size_t			index, range;
@@ -898,16 +900,14 @@ ce_buffer_delete_lines(struct cebuf *buf, size_t start, size_t end, int rev)
 	if (start > end)
 		fatal("%s: start(%zu) > end(%zu)", __func__, start, end);
 
-	ce_debug("start: %zu, end: %zu (lcnt:%zu)",
-	    start, end, buf->lcnt);
-
 	if (buf->lcnt == 0 || end >= buf->lcnt)
 		return;
 
 	range = (end - start) + 1;
 	for (index = start; index <= end; index++) {
 		line = &buf->lines[index];
-		ce_editor_pbuffer_append(line->data, line->length);
+		if (!isjoin)
+			ce_editor_pbuffer_append(line->data, line->length);
 
 		if (line->flags & CE_LINE_ALLOCATED) {
 			free(line->data);
@@ -948,7 +948,7 @@ ce_buffer_delete_lines(struct cebuf *buf, size_t start, size_t end, int rev)
 		ce_buffer_line_alloc_empty(buf);
 	} else {
 		line = ce_buffer_line_current(buf);
-		buffer_line_allocate(buf, line);
+		ce_buffer_line_allocate(buf, line);
 	}
 
 	buf->flags |= CE_BUFFER_DIRTY;
@@ -997,7 +997,7 @@ ce_buffer_delete_inside_string(struct cebuf *buf, u_int8_t byte)
 	if (start == end || start > end || ((end - 1) == start))
 		return;
 
-	buffer_line_allocate(buf, line);
+	ce_buffer_line_allocate(buf, line);
 	ptr = line->data;
 	memmove(&ptr[start], &ptr[end], line->length - end);
 
@@ -1014,7 +1014,7 @@ ce_buffer_delete_inside_string(struct cebuf *buf, u_int8_t byte)
 }
 
 void
-ce_buffer_jump_line(struct cebuf *buf, long linenr)
+ce_buffer_jump_line(struct cebuf *buf, long linenr, size_t column)
 {
 	size_t		line;
 
@@ -1032,15 +1032,22 @@ ce_buffer_jump_line(struct cebuf *buf, long linenr)
 	if (line == 0)
 		line = TERM_CURSOR_MIN;
 
-	if (line < ce_term_height() - 2) {
-		buf->top = 0;
-		buf->line = line;
+	if (line > buf->top && line < (buf->top + ce_term_height() - 2)) {
+		buf->line = line - buf->top;
 	} else {
-		buf->top = line - ((ce_term_height() - 2) / 2);
-		buf->line = (ce_term_height() - 2) / 2;
+		if (line < ce_term_height() - 2) {
+			buf->top = 0;
+			buf->line = line;
+		} else {
+			buf->top = line - ((ce_term_height() - 2) / 2);
+			buf->line = (ce_term_height() - 2) / 2;
+		}
 	}
 
-	cursor_column = TERM_CURSOR_MIN;
+	buf->column = column;
+	cursor_column = column;
+	ce_buffer_constrain_cursor_column(buf);
+
 	buffer_update_cursor(buf);
 
 	/* XXX for now. */
@@ -1075,7 +1082,7 @@ ce_buffer_join_line(void)
 	if (*p == '\n' || tojoin == 0)
 		return;
 
-	buffer_line_allocate(active, line);
+	ce_buffer_line_allocate(active, line);
 	len = line->length + (tojoin - 1) + 1;
 
 	if ((line->data = realloc(line->data, len)) == NULL)
@@ -1086,11 +1093,12 @@ ce_buffer_join_line(void)
 	ptr[line->length - 1] = ' ';
 	memcpy(&ptr[line->length], p, tojoin);
 
+	line->maxsz = len;
 	line->length = len;
 	line->columns = buffer_line_data_to_columns(line->data, line->length);
 
 	ce_buffer_move_down();
-	ce_buffer_delete_line(active);
+	ce_buffer_delete_line(active, 1);
 	ce_buffer_move_up();
 
 	active->loff = off;
@@ -1121,7 +1129,7 @@ ce_buffer_delete_character(void)
 
 	active->flags |= CE_BUFFER_DIRTY;
 
-	buffer_line_allocate(active, line);
+	ce_buffer_line_allocate(active, line);
 	buffer_line_erase_character(active, line, 1);
 
 	if (line->length > 0) {
@@ -1377,7 +1385,7 @@ ce_buffer_jump_right(void)
 void
 ce_buffer_jump_down(void)
 {
-	ce_buffer_jump_line(active, active->lcnt);
+	ce_buffer_jump_line(active, active->lcnt, 0);
 }
 
 void
@@ -1733,7 +1741,7 @@ ce_buffer_mark_jump(struct cebuf *buf, char mark)
 
 	if (mk->set) {
 		lastline = ce_buffer_line_index(buf) + 1;
-		ce_buffer_jump_line(buf, mk->line);
+		ce_buffer_jump_line(buf, mk->line, 0);
 		ce_buffer_mark_last(buf, lastline);
 	}
 }
@@ -1783,7 +1791,7 @@ ce_buffer_populate_lines(struct cebuf *buf)
 		buf->lines[elm].length = len;
 		buf->lines[elm].maxsz = buf->lines[elm].length;
 
-		buffer_line_allocate(buf, &buf->lines[elm]);
+		ce_buffer_line_allocate(buf, &buf->lines[elm]);
 
 		start = buf->lines[elm].data;
 		len = buf->lines[elm].length;
@@ -1791,6 +1799,26 @@ ce_buffer_populate_lines(struct cebuf *buf)
 		start[len] = '\n';
 		buf->lines[elm].length++;
 		ce_buffer_line_columns(&buf->lines[elm]);
+	}
+}
+
+void
+ce_buffer_line_allocate(struct cebuf *buf, struct celine *line)
+{
+	u_int8_t	*ptr;
+
+	if (!(line->flags & CE_LINE_ALLOCATED)) {
+		line->maxsz = line->length + 32;
+		if ((ptr = calloc(1, line->maxsz)) == NULL) {
+			fatal("%s: calloc(%zu): %s", __func__, line->length,
+			    errno_s);
+		}
+
+		memcpy(ptr, line->data, line->length);
+
+		/* We don't leak data as it points to inside buf->data. */
+		line->data = ptr;
+		line->flags |= CE_LINE_ALLOCATED;
 	}
 }
 
@@ -1916,31 +1944,11 @@ buffer_line_column_to_data(struct cebuf *buf)
 }
 
 static void
-buffer_line_allocate(struct cebuf *buf, struct celine *line)
-{
-	u_int8_t	*ptr;
-
-	if (!(line->flags & CE_LINE_ALLOCATED)) {
-		line->maxsz = line->length + 32;
-		if ((ptr = calloc(1, line->maxsz)) == NULL) {
-			fatal("%s: calloc(%zu): %s", __func__, line->length,
-			    errno_s);
-		}
-
-		memcpy(ptr, line->data, line->length);
-
-		/* We don't leak data as it points to inside buf->data. */
-		line->data = ptr;
-		line->flags |= CE_LINE_ALLOCATED;
-	}
-}
-
-static void
 buffer_line_insert_byte(struct cebuf *buf, struct celine *line, u_int8_t byte)
 {
 	u_int8_t	*ptr;
 
-	if (line->length + 1 > line->maxsz) {
+	if (line->length + 1 >= line->maxsz) {
 		line->maxsz = line->length + 32;
 		if ((line->data = realloc(line->data, line->maxsz)) == NULL) {
 			fatal("%s: realloc(%zu): %s", __func__,
@@ -1951,7 +1959,8 @@ buffer_line_insert_byte(struct cebuf *buf, struct celine *line, u_int8_t byte)
 	buf->flags |= CE_BUFFER_DIRTY;
 
 	ptr = line->data;
-	memmove(&ptr[buf->loff + 1], &ptr[buf->loff], line->length - buf->loff);
+	memmove(&ptr[buf->loff + 1], &ptr[buf->loff],
+	    line->length - (buf->loff - 1));
 	ptr[buf->loff] = byte;
 
 	line->length++;
@@ -2133,7 +2142,7 @@ buffer_prev_character(struct cebuf *buf, struct celine *line)
 				valid = 1;
 		}
 	}
- 
+
 	if (valid == 0)
 		buf->loff = off;
 }

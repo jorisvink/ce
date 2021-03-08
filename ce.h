@@ -137,6 +137,9 @@ struct cemark {
 
 	/* Line column (for select). */
 	size_t			col;
+
+	/* Offset in line (for select). */
+	size_t			off;
 };
 
 /*
@@ -231,7 +234,6 @@ void		ce_buffer_activate(struct cebuf *);
 size_t		ce_buffer_line_index(struct cebuf *);
 void		ce_buffer_word_erase(struct cebuf *);
 void		ce_buffer_word_delete(struct cebuf *);
-void		ce_buffer_delete_line(struct cebuf *);
 void		ce_buffer_insert_line(struct cebuf *);
 void		ce_buffer_insert_line(struct cebuf *);
 void		ce_buffer_line_columns(struct celine *);
@@ -240,16 +242,19 @@ void		ce_buffer_populate_lines(struct cebuf *);
 int		ce_buffer_save_active(int, const char *);
 void		ce_buffer_mark_set(struct cebuf *, char);
 void		ce_buffer_mark_jump(struct cebuf *, char);
-void		ce_buffer_jump_line(struct cebuf *, long);
 void		ce_buffer_input(struct cebuf *, u_int8_t);
 void		ce_buffer_line_alloc_empty(struct cebuf *);
+void		ce_buffer_delete_line(struct cebuf *, int);
 void		ce_buffer_mark_last(struct cebuf *, size_t);
 void		ce_buffer_setname(struct cebuf *, const char *);
+void		ce_buffer_jump_line(struct cebuf *, long, size_t);
 void		ce_buffer_constrain_cursor_column(struct cebuf *);
 int		ce_buffer_search(struct cebuf *, const char *, int);
 void		ce_buffer_append(struct cebuf *, const void *, size_t);
+void		ce_buffer_line_allocate(struct cebuf *, struct celine *);
 void		ce_buffer_delete_inside_string(struct cebuf *, u_int8_t);
-void		ce_buffer_delete_lines(struct cebuf *, size_t, size_t, int);
+void		ce_buffer_delete_lines(struct cebuf *, size_t,
+		    size_t, int, int);
 void		ce_buffer_appendf(struct cebuf *, const char *, ...)
 		    __attribute__((format (printf, 2, 3)));
 
