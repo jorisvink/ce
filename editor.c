@@ -1278,6 +1278,9 @@ editor_cmd_yank_lines(struct cebuf *buf, long num)
 {
 	size_t		index, end;
 
+	if (buf->lcnt == 0)
+		return;
+
 	num--;
 	index = ce_buffer_line_index(buf);
 	ce_buffer_mark_last(buf, ce_buffer_line_index(buf) + 1);
@@ -1562,6 +1565,9 @@ static void
 editor_cmd_select_mode(void)
 {
 	struct cebuf		*buf = ce_buffer_active();
+
+	if (buf->lcnt == 0)
+		return;
 
 	lastmode = mode;
 	mode = CE_EDITOR_MODE_SELECT;
