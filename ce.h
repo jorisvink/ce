@@ -191,7 +191,9 @@ struct cebuf {
 	size_t			line;
 	size_t			column;
 
-	/* Origin line and column. */
+	/* Size and starting position. */
+	size_t			width;
+	size_t			height;
 	size_t			orig_line;
 	size_t			orig_column;
 
