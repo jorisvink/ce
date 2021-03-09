@@ -15,6 +15,7 @@
  */
 
 #include <sys/param.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 
 #include <ctype.h>
@@ -78,7 +79,6 @@ static void	editor_cmd_search_word(void);
 static void	editor_cmd_buffer_list(void);
 
 static void	editor_cmd_directory_list(void);
-static void	editor_cmd_directory_list_pwd(void);
 static void	editor_directory_list(const char *);
 
 static void	editor_cmd_open_file(const char *);
@@ -107,6 +107,7 @@ static void	editor_normal_mode_command(char key);
 static void	editor_cmdbuf_input(struct cebuf *, char);
 static void	editor_cmdbuf_search(struct cebuf *, char);
 static void	editor_buflist_input(struct cebuf *, char);
+static void	editor_dirlist_input(struct cebuf *, char);
 
 static struct keymap normal_map[] = {
 	{ 'k',			ce_buffer_move_up },
@@ -140,7 +141,6 @@ static struct keymap normal_map[] = {
 	{ '/',			editor_cmd_search_mode },
 
 	{ 0x04,			editor_cmd_directory_list },
-	{ 0x07,			editor_cmd_directory_list_pwd },
 
 	{ 0x12,			editor_cmd_buffer_list },
 	{ 0x1a,			editor_cmd_suspend },
@@ -198,7 +198,6 @@ static struct {
 	{ command_map, KEY_MAP_LEN(command_map) },
 	{ buflist_map, KEY_MAP_LEN(buflist_map) },
 	{ command_map, KEY_MAP_LEN(command_map) },
-	{ buflist_map, KEY_MAP_LEN(buflist_map) },
 	{ select_map, KEY_MAP_LEN(select_map) },
 };
 
@@ -217,6 +216,7 @@ static char			*search = NULL;
 static struct cebuf		*cmdbuf = NULL;
 static struct cebuf		*buflist = NULL;
 static struct cebuf		*pbuffer = NULL;
+static char			*workdir = NULL;
 static int			mode = CE_EDITOR_MODE_NORMAL;
 static int			lastmode = CE_EDITOR_MODE_NORMAL;
 
@@ -316,10 +316,9 @@ ce_editor_tick(int delay)
 
 	if (dirty) {
 		if (mode == CE_EDITOR_MODE_SEARCH &&
-		    (lastmode == CE_EDITOR_MODE_DIRLIST ||
-		    lastmode == CE_EDITOR_MODE_BUFLIST)) {
+		    buf->prev->buftype == CE_BUF_TYPE_DIRLIST) {
 			ce_term_writestr(TERM_SEQUENCE_CLEAR_ONLY);
-			ce_buffer_map(buflist);
+			ce_buffer_map(buf->prev);
 		} else if (buf != cmdbuf) {
 			ce_term_writestr(TERM_SEQUENCE_CLEAR_ONLY);
 			ce_buffer_map(buf);
@@ -490,6 +489,29 @@ ce_editor_pasting(void)
 	return (pasting);
 }
 
+void
+ce_editor_chdir(const char *path)
+{
+	if (workdir != NULL) {
+		if (!strcmp(path, workdir))
+			return;
+
+		free(workdir);
+		workdir = NULL;
+	}
+
+	if ((workdir = strdup(path)) == NULL)
+		fatal("%s: strdup: %s", __func__, errno_s);
+
+	if (chdir(workdir) == -1) {
+		ce_editor_message("chdir %s: %s", workdir, errno_s);
+		free(workdir);
+		workdir = NULL;
+	} else {
+		ce_debug("changed to '%s'", path);
+	}
+}
+
 static void
 editor_signal(int sig)
 {
@@ -551,8 +573,11 @@ editor_process_input(int delay)
 
 	switch (mode) {
 	case CE_EDITOR_MODE_NORMAL:
-		editor_normal_mode_command(key);
-		return;
+		if (curbuf->buftype == CE_BUF_TYPE_DEFAULT) {
+			editor_normal_mode_command(key);
+			return;
+		}
+		break;
 	case CE_EDITOR_MODE_SELECT:
 		editor_select_mode_command(key);
 		return;
@@ -656,18 +681,12 @@ editor_draw_status(void)
 	curbuf = ce_buffer_active();
 
 	switch (mode) {
-	case CE_EDITOR_MODE_COMMAND:
 	case CE_EDITOR_MODE_SEARCH:
-		if (lastmode == CE_EDITOR_MODE_DIRLIST ||
-		    lastmode == CE_EDITOR_MODE_BUFLIST) {
-			modestr = "- SEARCH -";
-			curbuf = buflist;
-			break;
-		}
-		return;
+		modestr = "- SEARCH -";
+		break;
 	case CE_EDITOR_MODE_NORMAL:
+	case CE_EDITOR_MODE_COMMAND:
 	case CE_EDITOR_MODE_BUFLIST:
-	case CE_EDITOR_MODE_DIRLIST:
 	case CE_EDITOR_MODE_NORMAL_CMD:
 		modestr = "";
 		break;
@@ -821,10 +840,8 @@ editor_cmdbuf_input(struct cebuf *buf, char key)
 				editor_cmd_open_file(&cmd[3]);
 			break;
 		case 'l':
-			if (strlen(cmd) > 3) {
+			if (strlen(cmd) > 3)
 				editor_directory_list(&cmd[3]);
-				return;
-			}
 			break;
 		case 'b':
 			switch (cmd[2]) {
@@ -876,8 +893,8 @@ editor_cmdbuf_search(struct cebuf *buf, char key)
 			free(search);
 			if ((search = strdup(cmd + 1)) == NULL)
 				fatal("%s: strdup: %s", __func__, errno_s);
-			ce_buffer_search(ce_buffer_active(), search,
-			    CE_BUFFER_SEARCH_NORMAL);
+			ce_buffer_search(buf->prev,
+			    search, CE_BUFFER_SEARCH_NORMAL);
 		}
 		ce_buffer_activate(buf);
 		editor_cmd_normal_mode();
@@ -886,8 +903,8 @@ editor_cmdbuf_search(struct cebuf *buf, char key)
 	case 0x7f:
 		if (buf->length <= 1) {
 			if (mode == CE_EDITOR_MODE_SEARCH &&
-			    lastmode == CE_EDITOR_MODE_DIRLIST)
-				ce_dirlist_narrow(buflist, NULL);
+			    buf->prev->buftype == CE_BUF_TYPE_DIRLIST)
+				ce_dirlist_narrow(buf->prev, NULL);
 			editor_cmd_normal_mode();
 			break;
 		}
@@ -897,9 +914,9 @@ editor_cmdbuf_search(struct cebuf *buf, char key)
 		ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
 
 		if (mode == CE_EDITOR_MODE_SEARCH &&
-		    lastmode == CE_EDITOR_MODE_DIRLIST) {
+		    buf->prev->buftype == CE_BUF_TYPE_DIRLIST) {
 			cmd = ce_buffer_as_string(buf);
-			ce_dirlist_narrow(buflist, &cmd[1]);
+			ce_dirlist_narrow(buf->prev, &cmd[1]);
 			buf->length--;
 		}
 		break;
@@ -909,11 +926,16 @@ editor_cmdbuf_search(struct cebuf *buf, char key)
 			buf->column++;
 		}
 
-		if (mode == CE_EDITOR_MODE_SEARCH &&
-		    lastmode == CE_EDITOR_MODE_DIRLIST) {
-			cmd = ce_buffer_as_string(buf);
-			ce_dirlist_narrow(buflist, &cmd[1]);
-			buf->length--;
+		if (mode == CE_EDITOR_MODE_SEARCH) {
+			switch (buf->prev->buftype) {
+			case CE_BUF_TYPE_DIRLIST:
+				cmd = ce_buffer_as_string(buf);
+				ce_dirlist_narrow(buf->prev, &cmd[1]);
+				buf->length--;
+				break;
+			default:
+				break;
+			}
 		}
 		break;
 	}
@@ -926,7 +948,6 @@ static void
 editor_buflist_input(struct cebuf *buf, char key)
 {
 	size_t		index;
-	const char	*path;
 
 	if (mode == CE_EDITOR_MODE_BUFLIST) {
 		if (key >= '0' && key <= '9') {
@@ -944,13 +965,6 @@ editor_buflist_input(struct cebuf *buf, char key)
 		switch (mode) {
 		case CE_EDITOR_MODE_BUFLIST:
 			ce_buffer_activate_index(index);
-			break;
-		case CE_EDITOR_MODE_DIRLIST:
-			ce_buffer_restore();
-			path = ce_dirlist_select(buf, index);
-			if (path != NULL)
-				editor_cmd_open_file(path);
-			ce_dirlist_close(buf);
 			break;
 		}
 
@@ -1208,7 +1222,8 @@ editor_cmd_select_yank_delete(int del)
 		linenr++;
 	}
 
-	buf->flags |= CE_BUFFER_DIRTY;
+	if (del)
+		buf->flags |= CE_BUFFER_DIRTY;
 
 	ce_editor_pbuffer_sync();
 	ce_buffer_jump_line(buf, buf->selmark.line + 1, buf->selmark.col);
@@ -1277,9 +1292,6 @@ static void
 editor_cmd_yank_lines(struct cebuf *buf, long num)
 {
 	size_t		index, end;
-
-	if (buf->lcnt == 0)
-		return;
 
 	num--;
 	index = ce_buffer_line_index(buf);
@@ -1374,21 +1386,22 @@ editor_cmd_buffer_list(void)
 }
 
 static void
-editor_cmd_directory_list_pwd(void)
-{
-	editor_directory_list(".");
-}
-
-static void
 editor_cmd_directory_list(void)
 {
 	struct cebuf	*buf;
 	const char	*path;
-	char		*cp, *dname, pwd[PATH_MAX];
+	char		*rp, *cp, *dname, pwd[PATH_MAX];
 
 	cp = NULL;
-	path = ".";
 	buf = ce_buffer_active();
+
+	if (buf->buftype == CE_BUF_TYPE_DIRLIST) {
+		ce_dirlist_rescan(buf);
+		return;
+	}
+
+	if (getcwd(pwd, sizeof(pwd)) == NULL)
+		fatal("%s: getcwd: %s", __func__, errno_s);
 
 	if (buf->path != NULL) {
 		if ((cp = strdup(buf->path)) == NULL)
@@ -1399,11 +1412,15 @@ editor_cmd_directory_list(void)
 
 		path = dname;
 
-		if (getcwd(pwd, sizeof(pwd)) == NULL)
-			fatal("%s: getcwd: %s", __func__, errno_s);
+		if ((rp = realpath(path, NULL)) == NULL) {
+			ce_editor_message("realpath: %s: %s", path, errno_s);
+			free(cp);
+			return;
+		}
 
-		if (!strcmp(pwd, path))
-			path = ".";
+		path = rp;
+	} else {
+		path = pwd;
 	}
 
 	editor_directory_list(path);
@@ -1415,13 +1432,45 @@ editor_cmd_directory_list(void)
 static void
 editor_directory_list(const char *path)
 {
-	ce_dirlist_path(buflist, path);
+	struct cebuf	*buf;
 
-	ce_buffer_activate(buflist);
-	ce_buffer_jump_left();
+	if ((buf = ce_buffer_dirlist(path)) != NULL)
+		buf->cb = editor_dirlist_input;
+	else
+		ce_editor_message("failed to open dirlist for %s", path);
+}
 
-	lastmode = mode;
-	mode = CE_EDITOR_MODE_DIRLIST;
+static void
+editor_dirlist_input(struct cebuf *buf, char key)
+{
+	struct stat	st;
+	size_t		index;
+	const char	*path;
+
+	switch (key) {
+	case '\n':
+		index = buf->top + (buf->line - 1);
+		path = ce_dirlist_select(buf, index);
+		if (path != NULL) {
+			if (lstat(path, &st) == -1) {
+				ce_editor_message("failed to open '%s': %s",
+				    path, errno_s);
+				break;
+			}
+
+			if (S_ISREG(st.st_mode)) {
+				editor_cmd_open_file(path);
+				ce_dirlist_narrow(buf, NULL);
+			} else if (S_ISDIR(st.st_mode)) {
+				editor_directory_list(path);
+				ce_dirlist_narrow(buf, NULL);
+			} else {
+				ce_editor_message("not opening '%s': unknown",
+				    path);
+			}
+		}
+		break;
+	}
 }
 
 static void
@@ -1431,7 +1480,6 @@ editor_cmd_word_erase(void)
 		fatal("ce not in insert mode");
 
 	ce_buffer_word_erase(ce_buffer_active());
-
 }
 
 static void
@@ -1676,15 +1724,11 @@ editor_cmd_normal_mode(void)
 		return;
 	}
 
-	if (mode == CE_EDITOR_MODE_DIRLIST)
-		ce_dirlist_close(buflist);
-
 	if (mode == CE_EDITOR_MODE_SELECT)
 		ce_editor_dirty();
 
 	if (mode == CE_EDITOR_MODE_COMMAND ||
 	    mode == CE_EDITOR_MODE_BUFLIST ||
-	    mode == CE_EDITOR_MODE_DIRLIST ||
 	    mode == CE_EDITOR_MODE_SEARCH)
 		ce_buffer_restore();
 
@@ -1693,7 +1737,6 @@ editor_cmd_normal_mode(void)
 
 	if (mode != lastmode &&
 	    (lastmode == CE_EDITOR_MODE_BUFLIST ||
-	    lastmode == CE_EDITOR_MODE_DIRLIST ||
 	    lastmode == CE_EDITOR_MODE_SELECT)) {
 		mode = lastmode;
 	} else {

@@ -38,8 +38,6 @@
 #define BUFFER_SEARCH_FORWARD		1
 #define BUFFER_SEARCH_REVERSE		2
 
-static struct cebuf	*buffer_alloc(int);
-
 static void		buffer_grow(struct cebuf *, size_t);
 static void		buffer_resize_lines(struct cebuf *, size_t);
 static void		buffer_next_character(struct cebuf *, struct celine *);
@@ -139,7 +137,7 @@ ce_buffer_internal(const char *name)
 {
 	struct cebuf	*buf;
 
-	buf = buffer_alloc(1);
+	buf = ce_buffer_alloc(1);
 	ce_buffer_setname(buf, name);
 
 	if ((buf->data = calloc(1, 1024)) == NULL)
@@ -148,6 +146,42 @@ ce_buffer_internal(const char *name)
 	buf->maxsz = 1024;
 
 	ce_buffer_line_alloc_empty(buf);
+
+	return (buf);
+}
+
+struct cebuf *
+ce_buffer_dirlist(const char *path)
+{
+	char		*rp;
+	struct cebuf	*buf;
+
+	if ((rp = realpath(path, NULL)) == NULL) {
+		ce_editor_message("cannot dirlist '%s': %s", path, errno_s);
+		return (NULL);
+	}
+
+	TAILQ_FOREACH(buf, &buffers, list) {
+		if (buf->buftype != CE_BUF_TYPE_DIRLIST)
+			continue;
+
+		if (!strcmp(buf->path, rp)) {
+			active = buf;
+			ce_editor_dirty();
+			ce_buffer_chdir(buf);
+			ce_dirlist_narrow(buf, NULL);
+			return (buf);
+		}
+	}
+
+	buf = ce_buffer_alloc(0);
+
+	buf->path = rp;
+	buf->flags |= CE_BUFFER_RO;
+	buf->buftype = CE_BUF_TYPE_DIRLIST;
+
+	ce_dirlist_path(buf, path);
+	ce_buffer_activate(buf);
 
 	return (buf);
 }
@@ -167,12 +201,13 @@ ce_buffer_file(const char *path)
 		TAILQ_FOREACH(buf, &buffers, list) {
 			if (!strcmp(buf->path, rp)) {
 				active = buf;
+				ce_buffer_chdir(buf);
 				return (buf);
 			}
 		}
 	}
 
-	buf = buffer_alloc(0);
+	buf = ce_buffer_alloc(0);
 	ce_buffer_setname(buf, path);
 
 	buf->path = rp;
@@ -289,10 +324,15 @@ ce_buffer_free(struct cebuf *buf)
 	if (buf->internal)
 		return;
 
+	if (buf->buftype == CE_BUF_TYPE_DIRLIST)
+		ce_dirlist_close(buf);
+
 	TAILQ_REMOVE(&buffers, buf, list);
 
-	if (active == buf)
+	if (active == buf) {
 		active = buf->prev;
+		ce_buffer_chdir(active);
+	}
 
 	TAILQ_FOREACH(bp, &buffers, list) {
 		if (bp->prev == buf)
@@ -331,8 +371,10 @@ ce_buffer_free_internal(struct cebuf *buf)
 
 	TAILQ_REMOVE(&internals, buf, list);
 
-	if (active == buf)
+	if (active == buf) {
 		active = buf->prev;
+		ce_buffer_chdir(active);
+	}
 
 	for (idx = 0; idx < buf->lcnt; idx++) {
 		line = &buf->lines[idx];
@@ -364,6 +406,7 @@ ce_buffer_restore(void)
 		return;
 
 	active = active->prev;
+	ce_buffer_chdir(active);
 
 	ce_editor_dirty();
 }
@@ -375,6 +418,32 @@ ce_buffer_activate(struct cebuf *buf)
 	active = buf;
 
 	ce_editor_dirty();
+	ce_buffer_chdir(buf);
+}
+
+void
+ce_buffer_chdir(struct cebuf *buf)
+{
+	char		*cp, *dname;
+
+	if (buf == NULL || buf->internal)
+		return;
+
+	cp = NULL;
+
+	if (buf->buftype == CE_BUF_TYPE_DIRLIST) {
+		dname = buf->path;
+	} else {
+		if ((cp = strdup(buf->path)) == NULL)
+			fatal("%s: strdup of '%s' failed", __func__, buf->path);
+
+		if ((dname = dirname(cp)) == NULL)
+			fatal("%s: dirname: %s", __func__, errno_s);
+	}
+
+	ce_editor_chdir(dname);
+
+	free(cp);
 }
 
 void
@@ -394,6 +463,7 @@ ce_buffer_activate_index(size_t index)
 	TAILQ_FOREACH_REVERSE(buf, &buffers, cebuflist, list) {
 		if (idx++ == index) {
 			active = buf;
+			ce_buffer_chdir(buf);
 			ce_editor_dirty();
 			return;
 		}
@@ -1822,8 +1892,8 @@ ce_buffer_line_allocate(struct cebuf *buf, struct celine *line)
 	}
 }
 
-static struct cebuf *
-buffer_alloc(int internal)
+struct cebuf *
+ce_buffer_alloc(int internal)
 {
 	struct cebuf		*buf;
 
@@ -1835,6 +1905,7 @@ buffer_alloc(int internal)
 
 	buf->top = 0;
 	buf->internal = internal;
+	buf->type = CE_BUF_TYPE_DEFAULT;
 	buf->orig_line = TERM_CURSOR_MIN;
 	buf->orig_column = TERM_CURSOR_MIN;
 

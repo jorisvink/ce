@@ -20,10 +20,10 @@
 #include <sys/stat.h>
 
 #include <fts.h>
+#include <fnmatch.h>
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <regex.h>
 #include <unistd.h>
 
 #include "ce.h"
@@ -50,6 +50,7 @@ TAILQ_HEAD(dlist, dentry);
 
 static void	dirlist_load(struct cebuf *, const char *);
 static void	dirlist_tobuf(struct cebuf *, const char *);
+static int	dirlist_cmp(const FTSENT **, const FTSENT **);
 
 void
 ce_dirlist_path(struct cebuf *buf, const char *path)
@@ -94,6 +95,13 @@ ce_dirlist_select(struct cebuf *buf, size_t index)
 }
 
 void
+ce_dirlist_rescan(struct cebuf *buf)
+{
+	ce_dirlist_close(buf);
+	ce_dirlist_path(buf, buf->path);
+}
+
+void
 ce_dirlist_close(struct cebuf *buf)
 {
 	struct dlist		*list;
@@ -134,7 +142,8 @@ dirlist_load(struct cebuf *buf, const char *path)
 	if (buf->intdata == NULL)
 		fatal("%s: no dirlist attached to '%s'", __func__, buf->name);
 
-	fts = fts_open(pathv, FTS_PHYSICAL | FTS_NOCHDIR, NULL);
+	fts = fts_open(pathv,
+	    FTS_NOCHDIR | FTS_PHYSICAL | FTS_SEEDOT | FTS_XDEV, dirlist_cmp);
 	if (fts == NULL) {
 		ce_editor_message("cannot read '%s': %s", path, errno_s);
 		return;
@@ -166,46 +175,55 @@ dirlist_load(struct cebuf *buf, const char *path)
 	}
 
 	fts_close(fts);
+	ce_buffer_chdir(buf);
 
 	ce_editor_message("loaded directory '%s'", path);
 }
 
 static void
-dirlist_tobuf(struct cebuf *buf, const char *file)
+dirlist_tobuf(struct cebuf *buf, const char *match)
 {
 	const char		*d;
 	off_t			sz;
 	char			type;
 	size_t			index;
-	regex_t			regex;
 	struct dlist		*list;
 	struct dentry		*entry;
-	int			i, len, show;
-	char			pattern[PATH_MAX];
+	int			i, len, show, first;
+	char			title[PATH_MAX], pattern[PATH_MAX];
 
 	if (buf->intdata == NULL)
 		fatal("%s: no dirlist attached to '%s'", __func__, buf->name);
 
-	if (file != NULL) {
-		len = snprintf(pattern, sizeof(pattern), "^.*%s.*$", file);
-		if (len == -1 || (size_t)len >= sizeof(pattern)) {
-			fatal("%s: failed to construct pattern '%s'",
-			    __func__, file);
-		}
-
-		if (regcomp(&regex, pattern, REG_EXTENDED | REG_NOSUB)) {
-			fatal("%s: failed to compile pattern '%s'",
-			    __func__, pattern);
-		}
+	if (match != NULL) {
+		len = snprintf(pattern, sizeof(pattern), "*%s*", match);
+		if (len == -1 || (size_t)len >= sizeof(pattern))
+			fatal("%s: failed to construct pattern", __func__);
 	}
 
-	index = 0;
+	len = snprintf(title, sizeof(title), "<dir %s>", buf->path);
+	if (len == -1 || (size_t)len >= sizeof(title))
+		fatal("%s: failed to construct buf title", __func__);
+
+	first = 1;
+	index = 2;
 	list = buf->intdata;
 
 	ce_buffer_reset(buf);
-	ce_buffer_setname(buf, "<directory list>");
+	ce_buffer_setname(buf, title);
 
 	TAILQ_FOREACH(entry, list, list) {
+		if (first) {
+			ce_buffer_appendf(buf,
+			    "Directory listing for '%s'\n\n", entry->path);
+			first = 0;
+			continue;
+		}
+
+		if (entry->level > 1 &&
+		    (!strcmp(entry->name, ".") || !strcmp(entry->name, "..")))
+			continue;
+
 		switch (entry->info) {
 		case FTS_DNR:
 		case FTS_DP:
@@ -218,6 +236,7 @@ dirlist_tobuf(struct cebuf *buf, const char *file)
 			type = 'l';
 			break;
 		case FTS_D:
+		case FTS_DOT:
 			type = 'd';
 			break;
 		default:
@@ -227,8 +246,9 @@ dirlist_tobuf(struct cebuf *buf, const char *file)
 
 		show = 0;
 
-		if (file != NULL) {
-			if (!regexec(&regex, entry->path, 0, NULL, 0))
+		if (match) {
+			if (fnmatch(pattern,
+			    entry->path, FNM_NOESCAPE | FNM_CASEFOLD) == 0)
 				show = 1;
 		} else {
 			show = 1;
@@ -242,7 +262,7 @@ dirlist_tobuf(struct cebuf *buf, const char *file)
 		entry->index = index++;
 		entry->flags = DENTRY_FLAG_VISIBLE;
 
-		if (file == NULL) {
+		if (match == NULL) {
 			for (i = 1; i < entry->level; i++)
 				ce_buffer_appendf(buf, "  ");
 		}
@@ -256,12 +276,18 @@ dirlist_tobuf(struct cebuf *buf, const char *file)
 		}
 
 		ce_buffer_appendf(buf, "[%c] %s (%jd %s) (%d)\n", type,
-		    entry->path, (intmax_t)sz, d, entry->info);
+		    entry->name, (intmax_t)sz, d, entry->info);
 	}
-
-	if (file != NULL)
-		regfree(&regex);
 
 	ce_buffer_populate_lines(buf);
 	ce_editor_dirty();
+}
+
+static int
+dirlist_cmp(const FTSENT **a1, const FTSENT **b1)
+{
+	const FTSENT	*a = *a1;
+	const FTSENT	*b = *b1;
+
+	return (strcmp(a->fts_name, b->fts_name));
 }

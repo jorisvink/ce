@@ -33,10 +33,9 @@
 #define CE_EDITOR_MODE_COMMAND		2
 #define CE_EDITOR_MODE_BUFLIST		3
 #define CE_EDITOR_MODE_SEARCH		4
-#define CE_EDITOR_MODE_DIRLIST		5
-#define CE_EDITOR_MODE_SELECT		6
-#define CE_EDITOR_MODE_NORMAL_CMD	7
-#define CE_EDITOR_MODE_MAX		8
+#define CE_EDITOR_MODE_SELECT		5
+#define CE_EDITOR_MODE_NORMAL_CMD	6
+#define CE_EDITOR_MODE_MAX		7
 
 #define TERM_COLOR_BLACK		0
 #define TERM_COLOR_RED			1
@@ -149,9 +148,15 @@ struct cemark {
 #define CE_BUFFER_MMAP		0x0002
 #define CE_BUFFER_RO		0x0004
 
+#define CE_BUF_TYPE_DEFAULT	0
+#define CE_BUF_TYPE_DIRLIST	1
+
 struct cebuf {
 	/* Internal buffer? */
 	int			internal;
+
+	/* Buffer type, if not internal. */
+	u_int16_t		buftype;
 
 	/* Buffer flags. */
 	u_int32_t		flags;
@@ -229,6 +234,7 @@ void		ce_buffer_map(struct cebuf *);
 void		ce_buffer_free(struct cebuf *);
 void		ce_buffer_list(struct cebuf *);
 void		ce_buffer_reset(struct cebuf *);
+void		ce_buffer_chdir(struct cebuf *);
 void		ce_buffer_activate_index(size_t);
 void		ce_buffer_activate(struct cebuf *);
 size_t		ce_buffer_line_index(struct cebuf *);
@@ -279,9 +285,11 @@ void		ce_buffer_delete_character(void);
 const char	*ce_buffer_strerror(void);
 const char	*ce_buffer_as_string(struct cebuf *);
 
+struct cebuf	*ce_buffer_alloc(int);
 struct cebuf	*ce_buffer_active(void);
 struct cebuf	*ce_buffer_first_dirty(void);
 struct cebuf	*ce_buffer_file(const char *);
+struct cebuf	*ce_buffer_dirlist(const char *);
 struct cebuf	*ce_buffer_internal(const char *);
 struct celine	*ce_buffer_line_current(struct cebuf *);
 
@@ -304,6 +312,7 @@ void		ce_term_attr_bold(void);
 void		ce_term_attr_reverse(void);
 
 void		ce_dirlist_close(struct cebuf *);
+void		ce_dirlist_rescan(struct cebuf *);
 const char	*ce_dirlist_select(struct cebuf *, size_t);
 void		ce_dirlist_path(struct cebuf *, const char *);
 void		ce_dirlist_narrow(struct cebuf *, const char *);
@@ -315,6 +324,7 @@ int		ce_editor_mode(void);
 void		ce_editor_dirty(void);
 int		ce_editor_pasting(void);
 void		ce_editor_show_splash(void);
+void		ce_editor_chdir(const char *);
 int		ce_editor_word_byte(u_int8_t);
 int		ce_editor_word_separator(u_int8_t);
 void		ce_editor_message(const char *, ...);
