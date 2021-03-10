@@ -84,6 +84,7 @@ ce_buffer_init(int argc, char **argv)
 	scratch = ce_buffer_internal("scratch");
 	scratch->mode = 0644;
 	active = scratch;
+	ce_term_update_title();
 
 	for (i = 0; i < argc; i++) {
 		if (*argv[i] == '+' && last != NULL) {
@@ -102,6 +103,7 @@ ce_buffer_init(int argc, char **argv)
 
 	if ((active = TAILQ_FIRST(&buffers)) == NULL) {
 		active = scratch;
+		ce_term_update_title();
 		ce_editor_show_splash();
 	}
 }
@@ -168,7 +170,6 @@ ce_buffer_dirlist(const char *path)
 		if (!strcmp(buf->path, rp)) {
 			active = buf;
 			ce_editor_dirty();
-			ce_buffer_chdir(buf);
 			ce_dirlist_narrow(buf, NULL);
 			return (buf);
 		}
@@ -201,7 +202,6 @@ ce_buffer_file(const char *path)
 		TAILQ_FOREACH(buf, &buffers, list) {
 			if (!strcmp(buf->path, rp)) {
 				active = buf;
-				ce_buffer_chdir(buf);
 				return (buf);
 			}
 		}
@@ -329,10 +329,8 @@ ce_buffer_free(struct cebuf *buf)
 
 	TAILQ_REMOVE(&buffers, buf, list);
 
-	if (active == buf) {
+	if (active == buf)
 		active = buf->prev;
-		ce_buffer_chdir(active);
-	}
 
 	TAILQ_FOREACH(bp, &buffers, list) {
 		if (bp->prev == buf)
@@ -371,10 +369,8 @@ ce_buffer_free_internal(struct cebuf *buf)
 
 	TAILQ_REMOVE(&internals, buf, list);
 
-	if (active == buf) {
+	if (active == buf)
 		active = buf->prev;
-		ce_buffer_chdir(active);
-	}
 
 	for (idx = 0; idx < buf->lcnt; idx++) {
 		line = &buf->lines[idx];
@@ -406,8 +402,8 @@ ce_buffer_restore(void)
 		return;
 
 	active = active->prev;
-	ce_buffer_chdir(active);
 
+	ce_term_update_title();
 	ce_editor_dirty();
 }
 
@@ -418,32 +414,7 @@ ce_buffer_activate(struct cebuf *buf)
 	active = buf;
 
 	ce_editor_dirty();
-	ce_buffer_chdir(buf);
-}
-
-void
-ce_buffer_chdir(struct cebuf *buf)
-{
-	char		*cp, *dname;
-
-	if (buf == NULL || buf->internal)
-		return;
-
-	cp = NULL;
-
-	if (buf->buftype == CE_BUF_TYPE_DIRLIST) {
-		dname = buf->path;
-	} else {
-		if ((cp = strdup(buf->path)) == NULL)
-			fatal("%s: strdup of '%s' failed", __func__, buf->path);
-
-		if ((dname = dirname(cp)) == NULL)
-			fatal("%s: dirname: %s", __func__, errno_s);
-	}
-
-	ce_editor_chdir(dname);
-
-	free(cp);
+	ce_term_update_title();
 }
 
 void
@@ -454,6 +425,7 @@ ce_buffer_activate_index(size_t index)
 
 	if (index == 0) {
 		active = scratch;
+		ce_term_update_title();
 		ce_editor_dirty();
 		return;
 	}
@@ -463,7 +435,7 @@ ce_buffer_activate_index(size_t index)
 	TAILQ_FOREACH_REVERSE(buf, &buffers, cebuflist, list) {
 		if (idx++ == index) {
 			active = buf;
-			ce_buffer_chdir(buf);
+			ce_term_update_title();
 			ce_editor_dirty();
 			return;
 		}
@@ -483,7 +455,7 @@ ce_buffer_as_string(struct cebuf *buf)
 }
 
 void
-ce_buffer_map(struct cebuf *buf)
+ce_buffer_map(struct cebuf *buf, size_t start)
 {
 	size_t		idx, line, towrite;
 
@@ -492,7 +464,11 @@ ce_buffer_map(struct cebuf *buf)
 
 	ce_syntax_init();
 
-	line = buf->orig_line;
+	if (start == 0)
+		line = buf->orig_line;
+	else
+		line = start;
+
 	ce_term_setpos(buf->orig_line, buf->orig_column);
 
 	for (idx = buf->top; idx < buf->lcnt; idx++) {
@@ -1329,6 +1305,10 @@ ce_buffer_move_down(void)
 	if (scroll) {
 		active->top += (active->height / 2) + 1;
 		active->line = (active->height / 2) + 1;
+
+		index = active->top + (active->line - active->orig_line);
+		if (index >= active->lcnt)
+			active->line = active->lcnt - active->top;
 	} else {
 		next = active->line + 1;
 		if (next <= active->lcnt)
@@ -1760,7 +1740,7 @@ ce_buffer_line_index(struct cebuf *buf)
 	if (buf->line == 0)
 		fatal("%s: line == 0", __func__);
 
-	index = buf->top + (buf->line - 1);
+	index = buf->top + (buf->line - buf->orig_line);
 	if (index >= buf->lcnt)
 		fatal("%s: index %zu > lcnt %zu", __func__, index, buf->lcnt);
 
@@ -1904,6 +1884,7 @@ ce_buffer_alloc(int internal)
 		buf->prev = active;
 
 	buf->top = 0;
+	buf->mode = 0644;
 	buf->internal = internal;
 	buf->type = CE_BUF_TYPE_DEFAULT;
 	buf->orig_line = TERM_CURSOR_MIN;

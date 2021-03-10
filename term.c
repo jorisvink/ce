@@ -14,9 +14,11 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <sys/param.h>
 #include <sys/types.h>
 #include <sys/ioctl.h>
 
+#include <libgen.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <termios.h>
@@ -127,6 +129,38 @@ ce_term_setpos(size_t line, size_t col)
 		col = ce_term_width();
 
 	ce_term_writef(TERM_SEQUENCE_FMT_SET_CURSOR, line + adj, col);
+}
+
+void
+ce_term_update_title(void)
+{
+	char		*cp;
+	struct cebuf	*buf;
+	const char	*name;
+	char		path[PATH_MAX], hostname[256];
+
+	if (getcwd(path, sizeof(path)) == NULL)
+		fatal("%s: getcwd: %s", __func__, errno_s);
+
+	if (gethostname(hostname, sizeof(hostname)) == -1)
+		fatal("%s: gethostname: %s", __func__, errno_s);
+
+	cp = NULL;
+	buf = ce_buffer_active();
+
+	if (buf->name[0] == '/') {
+		if ((cp = strdup(buf->name)) == NULL)
+			fatal("%s: strdup: %s", __func__, errno_s);
+
+		if ((name = basename(cp)) == NULL)
+			fatal("%s: basename: %s", __func__, errno_s);
+	} else {
+		name = buf->name;
+	}
+
+	ce_term_writef("\33]0;%s;%s;%s\a", hostname, path, name);
+
+	free(cp);
 }
 
 void

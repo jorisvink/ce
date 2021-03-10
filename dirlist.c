@@ -175,7 +175,6 @@ dirlist_load(struct cebuf *buf, const char *path)
 	}
 
 	fts_close(fts);
-	ce_buffer_chdir(buf);
 
 	ce_editor_message("loaded directory '%s'", path);
 }
@@ -190,7 +189,7 @@ dirlist_tobuf(struct cebuf *buf, const char *match)
 	struct dlist		*list;
 	struct dentry		*entry;
 	int			i, len, show, first;
-	char			title[PATH_MAX], pattern[PATH_MAX];
+	char			*rp, title[PATH_MAX], pattern[PATH_MAX];
 
 	if (buf->intdata == NULL)
 		fatal("%s: no dirlist attached to '%s'", __func__, buf->name);
@@ -214,9 +213,12 @@ dirlist_tobuf(struct cebuf *buf, const char *match)
 
 	TAILQ_FOREACH(entry, list, list) {
 		if (first) {
+			if ((rp = realpath(entry->path, NULL)) == NULL)
+				fatal("%s: realpath: %s", __func__, errno_s);
 			ce_buffer_appendf(buf,
-			    "Directory listing for '%s'\n\n", entry->path);
+			    "Directory listing for '%s'\n\n", rp);
 			first = 0;
+			free(rp);
 			continue;
 		}
 

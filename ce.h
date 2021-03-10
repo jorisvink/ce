@@ -53,6 +53,8 @@
 #define TERM_CURSOR_MIN			1
 #define TERM_ESCAPE			"\33["
 
+#define TERM_SEQUENCE_CLEAR_CURSOR_DOWN	TERM_ESCAPE "J"
+#define TERM_SEQUENCE_CLEAR_CURSOR_UP	TERM_ESCAPE "1J"
 #define TERM_SEQUENCE_CLEAR_ONLY	TERM_ESCAPE "2J"
 #define TERM_SEQUENCE_CLEAR		TERM_ESCAPE "2J" TERM_ESCAPE "1;1H"
 #define TERM_SEQUENCE_CURSOR_UP		TERM_ESCAPE "0A"
@@ -232,16 +234,15 @@ TAILQ_HEAD(cebuflist, cebuf);
 void		ce_buffer_cleanup(void);
 void		ce_buffer_restore(void);
 void		ce_buffer_init(int, char **);
-void		ce_buffer_map(struct cebuf *);
 void		ce_buffer_free(struct cebuf *);
 void		ce_buffer_list(struct cebuf *);
 void		ce_buffer_reset(struct cebuf *);
-void		ce_buffer_chdir(struct cebuf *);
 void		ce_buffer_activate_index(size_t);
 void		ce_buffer_activate(struct cebuf *);
 size_t		ce_buffer_line_index(struct cebuf *);
 void		ce_buffer_word_erase(struct cebuf *);
 void		ce_buffer_word_delete(struct cebuf *);
+void		ce_buffer_map(struct cebuf *, size_t);
 void		ce_buffer_insert_line(struct cebuf *);
 void		ce_buffer_insert_line(struct cebuf *);
 void		ce_buffer_line_columns(struct celine *);
@@ -295,14 +296,14 @@ struct cebuf	*ce_buffer_dirlist(const char *);
 struct cebuf	*ce_buffer_internal(const char *);
 struct celine	*ce_buffer_line_current(struct cebuf *);
 
-size_t		ce_term_width(void);
-size_t		ce_term_height(void);
-
 void		ce_term_color(int);
 void		ce_term_setup(void);
 void		ce_term_flush(void);
+size_t		ce_term_width(void);
+size_t		ce_term_height(void);
 void		ce_term_discard(void);
 void		ce_term_restore(void);
+void		ce_term_update_title(void);
 void		ce_term_setpos(size_t, size_t);
 void		ce_term_writestr(const char *);
 void		ce_term_write(const void *, size_t);
@@ -326,7 +327,6 @@ int		ce_editor_mode(void);
 void		ce_editor_dirty(void);
 int		ce_editor_pasting(void);
 void		ce_editor_show_splash(void);
-void		ce_editor_chdir(const char *);
 int		ce_editor_word_byte(u_int8_t);
 int		ce_editor_word_separator(u_int8_t);
 void		ce_editor_message(const char *, ...);
