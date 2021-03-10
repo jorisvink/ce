@@ -42,6 +42,10 @@
 #define EDITOR_KEY_LEFT		0xfc
 #define EDITOR_KEY_RIGHT	0xfd
 
+/* UTF-8 § (U+00A7). */
+#define EDITOR_KEY_UTF8_PREFIX	0xc2
+#define EDITOR_KEY_UTF8_CONSOLE	0xa7
+
 #define EDITOR_COMMAND_DELETE		1
 #define EDITOR_COMMAND_YANK		2
 #define EDITOR_COMMAND_WORD_NEXT	3
@@ -106,10 +110,10 @@ static void	editor_cmd_insert_mode_prepend(void);
 static void	editor_select_mode_command(u_int8_t);
 static void	editor_normal_mode_command(u_int8_t);
 
-static void	editor_cmdbuf_input(struct cebuf *, char);
-static void	editor_cmdbuf_search(struct cebuf *, char);
-static void	editor_buflist_input(struct cebuf *, char);
-static void	editor_dirlist_input(struct cebuf *, char);
+static void	editor_cmdbuf_input(struct cebuf *, u_int8_t);
+static void	editor_cmdbuf_search(struct cebuf *, u_int8_t);
+static void	editor_buflist_input(struct cebuf *, u_int8_t);
+static void	editor_dirlist_input(struct cebuf *, u_int8_t);
 
 static struct keymap normal_map[] = {
 	{ 'k',			ce_buffer_move_up },
@@ -804,7 +808,7 @@ editor_draw_console(void)
 }
 
 static void
-editor_cmdbuf_input(struct cebuf *buf, char key)
+editor_cmdbuf_input(struct cebuf *buf, u_int8_t key)
 {
 	char			*ep;
 	int			force;
@@ -890,7 +894,7 @@ editor_cmdbuf_input(struct cebuf *buf, char key)
 }
 
 static void
-editor_cmdbuf_search(struct cebuf *buf, char key)
+editor_cmdbuf_search(struct cebuf *buf, u_int8_t key)
 {
 	const char		*cmd;
 
@@ -954,7 +958,7 @@ editor_cmdbuf_search(struct cebuf *buf, char key)
 }
 
 static void
-editor_buflist_input(struct cebuf *buf, char key)
+editor_buflist_input(struct cebuf *buf, u_int8_t key)
 {
 	size_t		index;
 
@@ -1004,14 +1008,16 @@ editor_normal_mode_command(u_int8_t key)
 		}
 	}
 
-	if (key == 0xc2) {
+	if (key == EDITOR_KEY_UTF8_PREFIX) {
 		if (editor_read(STDIN_FILENO, &key, sizeof(key), 25) == 0)
 			return;
 
-		if (key != 0xa7)
-			return;
+		switch (key) {
+		case EDITOR_KEY_UTF8_CONSOLE:
+			editor_cmd_console();
+			break;
+		}
 
-		editor_cmd_console();
 		return;
 	}
 
@@ -1477,11 +1483,22 @@ editor_directory_list(const char *path)
 }
 
 static void
-editor_dirlist_input(struct cebuf *buf, char key)
+editor_dirlist_input(struct cebuf *buf, u_int8_t key)
 {
 	struct stat	st;
 	size_t		index;
 	const char	*path;
+
+	if (key == 0xc2) {
+		if (editor_read(STDIN_FILENO, &key, sizeof(key), 25) == 0)
+			return;
+
+		if (key != 0xa7)
+			return;
+
+		editor_cmd_console();
+		return;
+	}
 
 	switch (key) {
 	case '\n':

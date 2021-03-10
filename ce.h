@@ -221,7 +221,7 @@ struct cebuf {
 	struct cemark		selstart;
 
 	/* Callback for special buffers (like cmdbuf). */
-	void			(*cb)(struct cebuf *, char);
+	void			(*cb)(struct cebuf *, u_int8_t);
 
 	/* Internal buffer special backing data (for dirlist etc). */
 	void			*intdata;
