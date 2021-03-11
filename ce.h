@@ -260,6 +260,7 @@ void		ce_buffer_jump_line(struct cebuf *, long, size_t);
 void		ce_buffer_constrain_cursor_column(struct cebuf *);
 int		ce_buffer_search(struct cebuf *, const char *, int);
 void		ce_buffer_append(struct cebuf *, const void *, size_t);
+void		ce_buffer_appendl(struct cebuf *, const void *, size_t);
 void		ce_buffer_line_allocate(struct cebuf *, struct celine *);
 void		ce_buffer_delete_inside_string(struct cebuf *, u_int8_t);
 void		ce_buffer_delete_lines(struct cebuf *, size_t,
@@ -320,12 +321,12 @@ const char	*ce_dirlist_select(struct cebuf *, size_t);
 void		ce_dirlist_path(struct cebuf *, const char *);
 void		ce_dirlist_narrow(struct cebuf *, const char *);
 
-void		ce_editor_tick(int);
 void		ce_editor_init(void);
 void		ce_editor_loop(void);
 int		ce_editor_mode(void);
 void		ce_editor_dirty(void);
 int		ce_editor_pasting(void);
+void		ce_editor_set_pasting(int);
 void		ce_editor_show_splash(void);
 int		ce_editor_word_byte(u_int8_t);
 int		ce_editor_word_separator(u_int8_t);
@@ -342,6 +343,11 @@ void		ce_editor_cmdbuf_reset(void);
 
 int		ce_utf8_continuation_byte(u_int8_t);
 int		ce_utf8_sequence(const void *, size_t, size_t, size_t *);
+
+void		ce_proc_reap(void);
+void		ce_proc_read(void);
+int		ce_proc_stdout(void);
+void		ce_proc_run(char *, struct cebuf *);
 
 void		ce_syntax_init(void);
 void		ce_syntax_finalize(void);

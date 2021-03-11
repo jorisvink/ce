@@ -1470,6 +1470,29 @@ ce_buffer_appendf(struct cebuf *buf, const char *fmt, ...)
 }
 
 void
+ce_buffer_appendl(struct cebuf *buf, const void *line, size_t len)
+{
+	size_t			elm;
+	const u_int8_t		*ptr;
+
+	elm = buf->lcnt;
+	buffer_resize_lines(buf, buf->lcnt + 1);
+
+	ptr = line;
+
+	buf->lines[elm].length = len;
+	buf->lines[elm].flags = CE_LINE_ALLOCATED;
+	buf->lines[elm].maxsz = buf->lines[elm].length;
+
+	if ((buf->lines[elm].data = calloc(1, len)) == NULL)
+		fatal("%s: strdup: %s", __func__, errno_s);
+
+	memcpy(buf->lines[elm].data, line, len);
+	ce_buffer_line_columns(&buf->lines[elm]);
+	buffer_update_cursor(buf);
+}
+
+void
 ce_buffer_line_columns(struct celine *line)
 {
 	line->columns = buffer_line_data_to_columns(line->data, line->length);

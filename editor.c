@@ -67,7 +67,7 @@ static void	editor_signal_setup(void);
 static void	editor_process_input(int);
 static u_int8_t	editor_process_escape(void);
 static int	editor_allowed_command_key(char);
-static ssize_t	editor_read(int, void *, size_t, int);
+static ssize_t	editor_read_byte(u_int8_t *, int);
 static void	editor_yank_lines(struct cebuf *, size_t, size_t, int);
 
 static void	editor_draw_status(void);
@@ -101,6 +101,7 @@ static void	editor_cmd_delete_words(struct cebuf *, long);
 static void	editor_cmd_delete_lines(struct cebuf *, long);
 
 static void	editor_cmd_select_mode(void);
+static void	editor_cmd_select_execute(void);
 static void	editor_cmd_select_yank_delete(int);
 
 static void	editor_cmd_insert_mode(void);
@@ -237,6 +238,10 @@ ce_editor_init(void)
 void
 ce_editor_loop(void)
 {
+	struct timespec		ts;
+	struct cemark		tmp;
+	struct cebuf		*buf;
+
 	pbuffer = ce_buffer_internal("<pb>");
 	ce_buffer_reset(pbuffer);
 
@@ -254,131 +259,122 @@ ce_editor_loop(void)
 	console->width = ce_term_width();
 	console->height = ce_term_height() / 4;
 
-	while (!quit)
-		ce_editor_tick(-1);
+	while (!quit) {
+		(void)clock_gettime(CLOCK_MONOTONIC, &ts);
+
+		if (sig_recv != -1) {
+			switch (sig_recv) {
+			case SIGQUIT:
+			case SIGTERM:
+				quit = 1;
+				return;
+			case SIGCONT:
+				dirty = 1;
+				editor_resume();
+				break;
+			case SIGWINCH:
+				dirty = 1;
+				ce_term_restore();
+				ce_term_setup();
+
+				cmdbuf->line = ce_term_height();
+				cmdbuf->orig_line = ce_term_height();
+				break;
+			}
+			sig_recv = -1;
+		}
+
+		buf = ce_buffer_active();
+
+		if (mode == CE_EDITOR_MODE_SELECT) {
+			tmp.line = ce_buffer_line_index(buf);
+			tmp.col = buf->column;
+			tmp.off = buf->loff;
+			tmp.set = 1;
+
+			if (tmp.line < buf->selmark.line) {
+				buf->selend = buf->selmark;
+				buf->selstart = tmp;
+			} else if (tmp.line == buf->selmark.line) {
+				if (tmp.col <= buf->selmark.col) {
+					buf->selstart.col = tmp.col;
+					buf->selstart.off = tmp.off;
+					buf->selend = buf->selmark;
+				} else {
+					buf->selend.col = tmp.col;
+					buf->selend.off = tmp.off;
+					buf->selstart = buf->selmark;
+				}
+			} else {
+				if (buf->selstart.line != buf->selmark.line &&
+			    buf->selstart.col != buf->selmark.col)
+					buf->selstart = buf->selmark;
+				buf->selend = tmp;
+			}
+
+			/* for now XXX */
+			dirty = 1;
+		}
+
+		if (dirty) {
+			if (mode == CE_EDITOR_MODE_SEARCH &&
+			    buf->prev->buftype == CE_BUF_TYPE_DIRLIST) {
+				ce_term_writestr(TERM_SEQUENCE_CLEAR_ONLY);
+				ce_buffer_map(buf->prev, 0);
+			} else if (buf != cmdbuf) {
+				ce_term_writestr(TERM_SEQUENCE_CLEAR_ONLY);
+				if (buf == console)
+					editor_draw_console();
+				else
+					ce_buffer_map(buf, 0);
+			}
+
+			dirty = 0;
+		}
+
+		if (buf == cmdbuf)
+			ce_buffer_map(buf, 0);
+
+		if (splash) {
+			ce_term_writestr(TERM_SEQUENCE_CURSOR_SAVE);
+			ce_term_setpos(ce_term_height() * 0.45,
+			    (ce_term_width() / 2) -
+			    (sizeof(CE_SPLASH_TEXT_1) - 1) / 2);
+			ce_term_writestr(CE_SPLASH_TEXT_1);
+			ce_term_setpos((ce_term_height() * 0.45) + 2,
+			    (ce_term_width() / 2) -
+			    (sizeof(CE_SPLASH_TEXT_2) - 1) / 2);
+			ce_term_writestr(CE_SPLASH_TEXT_2);
+			ce_term_writestr(TERM_SEQUENCE_CURSOR_RESTORE);
+		}
+
+		editor_draw_status();
+
+		if (msg.message) {
+			if ((ts.tv_sec - msg.when) >= EDITOR_MESSAGE_DELAY) {
+				free(msg.message);
+				msg.message = NULL;
+			}
+
+			ce_term_writestr(TERM_SEQUENCE_CURSOR_SAVE);
+			ce_term_setpos(ce_term_height(), TERM_CURSOR_MIN);
+			ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
+			if (msg.message)
+				ce_term_writestr(msg.message);
+			ce_term_writestr(TERM_SEQUENCE_CURSOR_RESTORE);
+		}
+
+		ce_term_flush();
+		editor_process_input(-1);
+
+		if (splash) {
+			dirty = 1;
+			splash = 0;
+		}
+	}
 
 	free(search);
 	free(msg.message);
-}
-
-void
-ce_editor_tick(int delay)
-{
-	struct timespec		ts;
-	struct cemark		tmp;
-	struct cebuf		*buf;
-
-	(void)clock_gettime(CLOCK_MONOTONIC, &ts);
-
-	if (sig_recv != -1) {
-		switch (sig_recv) {
-		case SIGQUIT:
-		case SIGTERM:
-			quit = 1;
-			return;
-		case SIGCONT:
-			dirty = 1;
-			editor_resume();
-			break;
-		case SIGWINCH:
-			dirty = 1;
-			ce_term_restore();
-			ce_term_setup();
-
-			cmdbuf->line = ce_term_height();
-			cmdbuf->orig_line = ce_term_height();
-			break;
-		}
-		sig_recv = -1;
-	}
-
-	buf = ce_buffer_active();
-
-	if (mode == CE_EDITOR_MODE_SELECT) {
-		tmp.line = ce_buffer_line_index(buf);
-		tmp.col = buf->column;
-		tmp.off = buf->loff;
-		tmp.set = 1;
-
-		if (tmp.line < buf->selmark.line) {
-			buf->selend = buf->selmark;
-			buf->selstart = tmp;
-		} else if (tmp.line == buf->selmark.line) {
-			if (tmp.col <= buf->selmark.col) {
-				buf->selstart.col = tmp.col;
-				buf->selstart.off = tmp.off;
-				buf->selend = buf->selmark;
-			} else {
-				buf->selend.col = tmp.col;
-				buf->selend.off = tmp.off;
-				buf->selstart = buf->selmark;
-			}
-		} else {
-			if (buf->selstart.line != buf->selmark.line &&
-			    buf->selstart.col != buf->selmark.col)
-				buf->selstart = buf->selmark;
-			buf->selend = tmp;
-		}
-
-		/* for now XXX */
-		dirty = 1;
-	}
-
-	if (dirty) {
-		if (mode == CE_EDITOR_MODE_SEARCH &&
-		    buf->prev->buftype == CE_BUF_TYPE_DIRLIST) {
-			ce_term_writestr(TERM_SEQUENCE_CLEAR_ONLY);
-			ce_buffer_map(buf->prev, 0);
-		} else if (buf != cmdbuf) {
-			ce_term_writestr(TERM_SEQUENCE_CLEAR_ONLY);
-			if (buf == console)
-				editor_draw_console();
-			else
-				ce_buffer_map(buf, 0);
-		}
-
-		dirty = 0;
-	}
-
-	if (buf == cmdbuf)
-		ce_buffer_map(buf, 0);
-
-	if (splash) {
-		ce_term_writestr(TERM_SEQUENCE_CURSOR_SAVE);
-		ce_term_setpos(ce_term_height() * 0.45,
-		    (ce_term_width() / 2) -
-		    (sizeof(CE_SPLASH_TEXT_1) - 1) / 2);
-		ce_term_writestr(CE_SPLASH_TEXT_1);
-		ce_term_setpos((ce_term_height() * 0.45) + 2,
-		    (ce_term_width() / 2) -
-		    (sizeof(CE_SPLASH_TEXT_2) - 1) / 2);
-		ce_term_writestr(CE_SPLASH_TEXT_2);
-		ce_term_writestr(TERM_SEQUENCE_CURSOR_RESTORE);
-	}
-
-	editor_draw_status();
-
-	if (msg.message) {
-		if ((ts.tv_sec - msg.when) >= EDITOR_MESSAGE_DELAY) {
-			free(msg.message);
-			msg.message = NULL;
-		}
-
-		ce_term_writestr(TERM_SEQUENCE_CURSOR_SAVE);
-		ce_term_setpos(ce_term_height(), TERM_CURSOR_MIN);
-		ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
-		if (msg.message)
-			ce_term_writestr(msg.message);
-		ce_term_writestr(TERM_SEQUENCE_CURSOR_RESTORE);
-	}
-
-	ce_term_flush();
-	editor_process_input(delay);
-
-	if (splash) {
-		dirty = 1;
-		splash = 0;
-	}
 }
 
 void
@@ -496,6 +492,12 @@ ce_editor_word_separator(u_int8_t byte)
 	return (0);
 }
 
+void
+ce_editor_set_pasting(int val)
+{
+	pasting = val;
+}
+
 int
 ce_editor_pasting(void)
 {
@@ -525,6 +527,8 @@ editor_signal_setup(void)
 		fatal("sigaction: %s", errno_s);
 	if (sigaction(SIGTERM, &sa, NULL) == -1)
 		fatal("sigaction: %s", errno_s);
+	if (sigaction(SIGCHLD, &sa, NULL) == -1)
+		fatal("sigaction: %s", errno_s);
 	if (sigaction(SIGWINCH, &sa, NULL) == -1)
 		fatal("sigaction: %s", errno_s);
 
@@ -543,7 +547,7 @@ editor_process_input(int delay)
 	if (mode >= CE_EDITOR_MODE_MAX)
 		fatal("%s: mode %d invalid", __func__, mode);
 
-	if (editor_read(STDIN_FILENO, &key, sizeof(key), delay) == 0)
+	if (editor_read_byte(&key, delay) == 0)
 		return;
 
 	if (key == EDITOR_KEY_ESC)
@@ -583,13 +587,13 @@ editor_process_escape(void)
 
 	ret = EDITOR_KEY_ESC;
 
-	if (editor_read(STDIN_FILENO, &key, sizeof(key), 5) == 0)
+	if (editor_read_byte(&key, 5) == 0)
 		goto cleanup;
 
 	if (key != 0x5b)
 		goto cleanup;
 
-	if (editor_read(STDIN_FILENO, &key, sizeof(key), 50) == 0)
+	if (editor_read_byte(&key, 50) == 0)
 		goto cleanup;
 
 	switch (key) {
@@ -612,22 +616,25 @@ cleanup:
 }
 
 static ssize_t
-editor_read(int fd, void *data, size_t len, int ms)
+editor_read_byte(u_int8_t *out, int ms)
 {
-	size_t			off;
-	int			nfd;
-	struct pollfd		pfd;
-	u_int8_t		*ptr;
-	ssize_t			sz, total;
+	ssize_t			sz;
+	struct pollfd		pfd[2];
+	int			nfd, proc_fd;
 
-	off = 0;
-	total = 0;
-	ptr = data;
+	nfd = 1;
+	proc_fd = ce_proc_stdout();
 
-	pfd.events = POLLIN;
-	pfd.fd = STDIN_FILENO;
+	pfd[0].events = POLLIN;
+	pfd[0].fd = STDIN_FILENO;
 
-	if ((nfd = poll(&pfd, 1, ms)) == -1) {
+	if (proc_fd != -1) {
+		nfd = 2;
+		pfd[1].fd = proc_fd;
+		pfd[1].events = POLLIN;
+	}
+
+	if ((nfd = poll(pfd, nfd, ms)) == -1) {
 		if (errno == EINTR)
 			return (0);
 		fatal("%s: poll %s", __func__, errno_s);
@@ -636,23 +643,27 @@ editor_read(int fd, void *data, size_t len, int ms)
 	if (nfd == 0)
 		return (0);
 
-	if (pfd.revents & (POLLHUP | POLLERR))
+	if (pfd[0].revents & (POLLHUP | POLLERR))
 		fatal("%s: poll error", __func__);
 
-	while (len > 0) {
-		sz = read(fd, ptr + off, len - off);
+	if (proc_fd != -1) {
+		if (pfd[1].revents & (POLLIN | POLLHUP | POLLERR))
+			ce_proc_read();
+	}
+
+	if (pfd[0].revents & POLLIN) {
+		sz = read(STDIN_FILENO,  out, 1);
 		if (sz == -1) {
 			if (errno == EINTR)
-				continue;
+				return (0);
 			fatal("%s: read: %s", __func__, errno_s);
 		}
 
-		off += sz;
-		len -= sz;
-		total += sz;
+		if (sz == 0)
+			fatal("%s: stdin eof", __func__);
 	}
 
-	return (total);
+	return (1);
 }
 
 static void
@@ -1009,7 +1020,7 @@ editor_normal_mode_command(u_int8_t key)
 	}
 
 	if (key == EDITOR_KEY_UTF8_PREFIX) {
-		if (editor_read(STDIN_FILENO, &key, sizeof(key), 25) == 0)
+		if (editor_read_byte(&key, 25) == 0)
 			return;
 
 		switch (key) {
@@ -1146,9 +1157,29 @@ editor_select_mode_command(u_int8_t key)
 	case 'w':
 		ce_buffer_word_next(ce_buffer_active());
 		break;
+	case '\n':
+		editor_cmd_select_execute();
+		editor_cmd_normal_mode();
+		break;
 	default:
 		break;
 	}
+}
+
+static void
+editor_cmd_select_execute(void)
+{
+	char		nul;
+
+	editor_cmd_select_yank_delete(0);
+
+	nul = '\0';
+	ce_editor_pbuffer_append(&nul, sizeof(nul));
+	ce_debug("executing '%s'", (const char *)pbuffer->data);
+
+	ce_proc_run((char *)pbuffer->data, ce_buffer_active());
+
+	ce_editor_pbuffer_reset();
 }
 
 static void
@@ -1274,7 +1305,7 @@ editor_cmd_change_string(struct cebuf *buf)
 {
 	u_int8_t		key;
 
-	if (editor_read(STDIN_FILENO, &key, sizeof(key), -1) == 0)
+	if (editor_read_byte(&key, -1) == 0)
 		return;
 
 	switch (key) {
@@ -1489,14 +1520,16 @@ editor_dirlist_input(struct cebuf *buf, u_int8_t key)
 	size_t		index;
 	const char	*path;
 
-	if (key == 0xc2) {
-		if (editor_read(STDIN_FILENO, &key, sizeof(key), 25) == 0)
+	if (key == EDITOR_KEY_UTF8_PREFIX) {
+		if (editor_read_byte(&key, 25) == 0)
 			return;
 
-		if (key != 0xa7)
-			return;
+		switch (key) {
+		case EDITOR_KEY_UTF8_CONSOLE:
+			editor_cmd_console();
+			break;
+		}
 
-		editor_cmd_console();
 		return;
 	}
 

@@ -7,7 +7,7 @@ OBJDIR?=obj
 INSTALL_DIR=$(PREFIX)/bin
 MAN_DIR?=$(PREFIX)/share/man
 
-SRC=	ce.c buffer.c dirlist.c editor.c syntax.c term.c utf8.c
+SRC=	ce.c buffer.c dirlist.c editor.c proc.c syntax.c term.c utf8.c
 
 CFLAGS+=-Wall -Werror -Wstrict-prototypes -Wmissing-prototypes
 CFLAGS+=-Wmissing-declarations -Wshadow -Wpointer-arith -Wcast-qual
