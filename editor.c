@@ -1171,21 +1171,57 @@ editor_cmd_select_execute(void)
 {
 	struct stat	st;
 	char		nul;
-	const char	*cmd;
+	long		linenr;
+	int		try_file;
+	char		*cmd, *line, *p, *e, *ep, n;
 
+	e = NULL;
+	p = NULL;
+	line = NULL;
+
+	linenr = 0;
+	try_file = 1;
 	editor_cmd_select_yank_delete(0);
 
 	nul = '\0';
 	ce_editor_pbuffer_append(&nul, sizeof(nul));
 	cmd = pbuffer->data;
 
-	if (stat(cmd, &st) != -1) {
+	if ((p = strchr(cmd, ':')) != NULL) {
+		*p = '\0';
+		line = p + 1;
+
+		e = line;
+		while (isdigit(*e))
+			e++;
+
+		n = *e;
+		*e = '\0';
+
+		errno = 0;
+		linenr = strtol(line, &ep, 10);
+		if (errno != 0 || *ep != '\0') {
+			try_file = 0;
+			linenr = 0;
+		}
+	}
+
+	if (try_file && stat(cmd, &st) != -1) {
 		if (S_ISREG(st.st_mode)) {
 			editor_cmd_open_file(cmd);
+			if (linenr) {
+				ce_buffer_jump_line(ce_buffer_active(),
+				    linenr, TERM_CURSOR_MIN);
+			}
 			ce_editor_pbuffer_reset();
 			return;
 		}
 	}
+
+	if (p)
+		*p = ':';
+	if (e)
+		*e = ':';
 
 	ce_debug("executing '%s'", (const char *)pbuffer->data);
 	ce_proc_run((char *)pbuffer->data, ce_buffer_active());
