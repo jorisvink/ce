@@ -170,9 +170,16 @@ ce_proc_reap(void)
 	if (active == NULL)
 		return;
 
-	pid = waitpid(active->pid, &status, 0);
-	if (pid == -1)
-		fatal("%s: waitpid: %s", __func__, errno_s);
+	for (;;) {
+		pid = waitpid(active->pid, &status, 0);
+		if (pid == -1) {
+			if (errno == EINTR)
+				continue;
+			fatal("%s: waitpid: %s", __func__, errno_s);
+		}
+
+		break;
+	}
 
 	ce_debug("proc %d completed with %d", pid, status);
 
