@@ -1169,14 +1169,25 @@ editor_select_mode_command(u_int8_t key)
 static void
 editor_cmd_select_execute(void)
 {
+	struct stat	st;
 	char		nul;
+	const char	*cmd;
 
 	editor_cmd_select_yank_delete(0);
 
 	nul = '\0';
 	ce_editor_pbuffer_append(&nul, sizeof(nul));
-	ce_debug("executing '%s'", (const char *)pbuffer->data);
+	cmd = pbuffer->data;
 
+	if (stat(cmd, &st) != -1) {
+		if (S_ISREG(st.st_mode)) {
+			editor_cmd_open_file(cmd);
+			ce_editor_pbuffer_reset();
+			return;
+		}
+	}
+
+	ce_debug("executing '%s'", (const char *)pbuffer->data);
 	ce_proc_run((char *)pbuffer->data, ce_buffer_active());
 
 	ce_editor_pbuffer_reset();
