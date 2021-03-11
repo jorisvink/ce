@@ -181,7 +181,7 @@ ce_buffer_dirlist(const char *path)
 	buf->flags |= CE_BUFFER_RO;
 	buf->buftype = CE_BUF_TYPE_DIRLIST;
 
-	ce_dirlist_path(buf, path);
+	ce_dirlist_path(buf, buf->path);
 	ce_buffer_activate(buf);
 
 	return (buf);
@@ -458,9 +458,6 @@ void
 ce_buffer_map(struct cebuf *buf, size_t start)
 {
 	size_t		idx, line, towrite;
-
-	if (buf->data == NULL)
-		return;
 
 	ce_syntax_init();
 
@@ -1477,7 +1474,6 @@ ce_buffer_appendl(struct cebuf *buf, const void *line, size_t len)
 
 	elm = buf->lcnt;
 	buffer_resize_lines(buf, buf->lcnt + 1);
-
 	ptr = line;
 
 	buf->lines[elm].length = len;

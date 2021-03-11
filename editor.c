@@ -1527,10 +1527,6 @@ editor_directory_list(const char *path)
 static void
 editor_dirlist_input(struct cebuf *buf, u_int8_t key)
 {
-	struct stat	st;
-	size_t		index;
-	const char	*path;
-
 	if (key == EDITOR_KEY_UTF8_PREFIX) {
 		if (editor_read_byte(&key, 25) == 0)
 			return;
@@ -1542,31 +1538,6 @@ editor_dirlist_input(struct cebuf *buf, u_int8_t key)
 		}
 
 		return;
-	}
-
-	switch (key) {
-	case '\n':
-		index = buf->top + (buf->line - 1);
-		path = ce_dirlist_select(buf, index);
-		if (path != NULL) {
-			if (lstat(path, &st) == -1) {
-				ce_editor_message("failed to open '%s': %s",
-				    path, errno_s);
-				break;
-			}
-
-			if (S_ISREG(st.st_mode)) {
-				editor_cmd_open_file(path);
-				ce_dirlist_narrow(buf, NULL);
-			} else if (S_ISDIR(st.st_mode)) {
-				editor_directory_list(path);
-				ce_dirlist_narrow(buf, NULL);
-			} else {
-				ce_editor_message("not opening '%s': unknown",
-				    path);
-			}
-		}
-		break;
 	}
 }
 

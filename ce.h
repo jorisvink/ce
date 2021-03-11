@@ -317,7 +317,6 @@ void		ce_term_attr_reverse(void);
 
 void		ce_dirlist_close(struct cebuf *);
 void		ce_dirlist_rescan(struct cebuf *);
-const char	*ce_dirlist_select(struct cebuf *, size_t);
 void		ce_dirlist_path(struct cebuf *, const char *);
 void		ce_dirlist_narrow(struct cebuf *, const char *);
 

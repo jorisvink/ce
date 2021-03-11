@@ -28,25 +28,23 @@
 
 #include "ce.h"
 
-#define DENTRY_FLAG_VISIBLE	0x0001
-
 struct dentry {
-	u_int16_t		flags;
 	u_int16_t		info;
 	int			level;
 	off_t			size;
-	size_t			index;
 	char			*path;
-	char			*name;
 	TAILQ_ENTRY(dentry)	list;
+};
+
+struct dlist {
+	char			*path;
+	TAILQ_HEAD(, dentry)	entries;
 };
 
 union cp {
 	const char		*cp;
 	char			*p;
 };
-
-TAILQ_HEAD(dlist, dentry);
 
 static void	dirlist_load(struct cebuf *, const char *);
 static void	dirlist_tobuf(struct cebuf *, const char *);
@@ -63,35 +61,16 @@ ce_dirlist_path(struct cebuf *buf, const char *path)
 	if ((list = calloc(1, sizeof(*list))) == NULL)
 		fatal("%s: calloc failed while allocating list", __func__);
 
-	TAILQ_INIT(list);
+	if ((list->path = strdup(path)) == NULL)
+		fatal("%s: strdup: %s", __func__, errno_s);
+
+	TAILQ_INIT(&list->entries);
 
 	buf->intdata = list;
 	buf->flags |= CE_BUFFER_RO;
 
 	dirlist_load(buf, path);
 	dirlist_tobuf(buf, NULL);
-}
-
-const char *
-ce_dirlist_select(struct cebuf *buf, size_t index)
-{
-	struct dlist		*list;
-	struct dentry		*entry;
-
-	if (buf->intdata == NULL)
-		fatal("%s: no dirlist attached to '%s'", __func__, buf->name);
-
-	list = buf->intdata;
-
-	TAILQ_FOREACH(entry, list, list) {
-		if (!(entry->flags & DENTRY_FLAG_VISIBLE))
-			continue;
-
-		if (entry->index == index)
-			return (entry->path);
-	}
-
-	return (NULL);
 }
 
 void
@@ -113,13 +92,13 @@ ce_dirlist_close(struct cebuf *buf)
 	list = buf->intdata;
 	buf->intdata = NULL;
 
-	while ((entry = TAILQ_FIRST(list)) != NULL) {
-		TAILQ_REMOVE(list, entry, list);
+	while ((entry = TAILQ_FIRST(&list->entries)) != NULL) {
+		TAILQ_REMOVE(&list->entries, entry, list);
 		free(entry->path);
-		free(entry->name);
 		free(entry);
 	}
 
+	free(list->path);
 	free(list);
 }
 
@@ -143,7 +122,7 @@ dirlist_load(struct cebuf *buf, const char *path)
 		fatal("%s: no dirlist attached to '%s'", __func__, buf->name);
 
 	fts = fts_open(pathv,
-	    FTS_NOCHDIR | FTS_PHYSICAL | FTS_SEEDOT | FTS_XDEV, dirlist_cmp);
+	    FTS_NOCHDIR | FTS_PHYSICAL | FTS_XDEV, dirlist_cmp);
 	if (fts == NULL) {
 		ce_editor_message("cannot read '%s': %s", path, errno_s);
 		return;
@@ -153,7 +132,7 @@ dirlist_load(struct cebuf *buf, const char *path)
 
 	while ((ent = fts_read(fts)) != NULL) {
 		if ((entry = calloc(1, sizeof(*entry))) == NULL) {
-			fatal("%s: calloc failued while allocating entry",
+			fatal("%s: calloc failed while allocating entry",
 			    __func__);
 		}
 
@@ -161,17 +140,15 @@ dirlist_load(struct cebuf *buf, const char *path)
 		entry->level = ent->fts_level;
 		entry->size = ent->fts_statp->st_size;
 
+		ce_debug("%s", ent->fts_accpath);
+		ce_debug("%s", ent->fts_path);
+
 		if ((entry->path = strdup(ent->fts_accpath)) == NULL) {
 			fatal("%s: strdup failed on '%s'", __func__,
 			    ent->fts_accpath);
 		}
 
-		if ((entry->name = strdup(ent->fts_name)) == NULL) {
-			fatal("%s: strdup failed on '%s'", __func__,
-			    ent->fts_name);
-		}
-
-		TAILQ_INSERT_TAIL(list, entry, list);
+		TAILQ_INSERT_TAIL(&list->entries, entry, list);
 	}
 
 	fts_close(fts);
@@ -182,14 +159,11 @@ dirlist_load(struct cebuf *buf, const char *path)
 static void
 dirlist_tobuf(struct cebuf *buf, const char *match)
 {
-	const char		*d;
-	off_t			sz;
 	char			type;
-	size_t			index;
 	struct dlist		*list;
 	struct dentry		*entry;
-	int			i, len, show, first;
-	char			*rp, title[PATH_MAX], pattern[PATH_MAX];
+	int			len, show;
+	char			title[PATH_MAX], pattern[PATH_MAX];
 
 	if (buf->intdata == NULL)
 		fatal("%s: no dirlist attached to '%s'", __func__, buf->name);
@@ -204,28 +178,24 @@ dirlist_tobuf(struct cebuf *buf, const char *match)
 	if (len == -1 || (size_t)len >= sizeof(title))
 		fatal("%s: failed to construct buf title", __func__);
 
-	first = 1;
-	index = 2;
 	list = buf->intdata;
+
+	free(buf->lines);
+	buf->lcnt = 0;
+	buf->lines = NULL;
 
 	ce_buffer_reset(buf);
 	ce_buffer_setname(buf, title);
 
-	TAILQ_FOREACH(entry, list, list) {
-		if (first) {
-			if ((rp = realpath(entry->path, NULL)) == NULL)
-				fatal("%s: realpath: %s", __func__, errno_s);
-			ce_buffer_appendf(buf,
-			    "Directory listing for '%s'\n\n", rp);
-			first = 0;
-			free(rp);
-			continue;
-		}
+	len = snprintf(title, sizeof(title), "Directory listing for '%s'\n",
+	    list->path);
+	if (len == -1 || (size_t)len >= sizeof(title))
+		fatal("%s: failed to construct title", __func__);
 
-		if (entry->level > 1 &&
-		    (!strcmp(entry->name, ".") || !strcmp(entry->name, "..")))
-			continue;
+	ce_buffer_appendl(buf, title, len);
+	ce_buffer_appendl(buf, "\n", 1);
 
+	TAILQ_FOREACH(entry, &list->entries, list) {
 		switch (entry->info) {
 		case FTS_DNR:
 		case FTS_DP:
@@ -256,33 +226,18 @@ dirlist_tobuf(struct cebuf *buf, const char *match)
 			show = 1;
 		}
 
-		if (show == 0) {
-			entry->flags = 0;
+		if (show == 0)
 			continue;
-		}
 
-		entry->index = index++;
-		entry->flags = DENTRY_FLAG_VISIBLE;
+		len = snprintf(title, sizeof(title), "%s\n", entry->path);
+		if (len == -1 || (size_t)len >= sizeof(title))
+			fatal("%s: snprintf failed", __func__);
 
-		if (match == NULL) {
-			for (i = 1; i < entry->level; i++)
-				ce_buffer_appendf(buf, "  ");
-		}
-
-		if (entry->size < 1024) {
-			d = "B";
-			sz = entry->size;
-		} else {
-			d = "KB";
-			sz = entry->size / 1024;
-		}
-
-		ce_buffer_appendf(buf, "[%c] %s (%jd %s) (%d)\n", type,
-		    entry->name, (intmax_t)sz, d, entry->info);
+		ce_buffer_appendl(buf, title, len);
 	}
 
-	ce_buffer_populate_lines(buf);
 	ce_editor_dirty();
+	ce_buffer_jump_line(buf, TERM_CURSOR_MIN, TERM_CURSOR_MIN);
 }
 
 static int
