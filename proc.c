@@ -205,8 +205,6 @@ ce_proc_reap(void)
 		    "program exited with %d\n", status);
 	}
 
-	len = snprintf(buf, sizeof(buf),
-	    "program exited with %d\n", status);
 	if (len == -1 || (size_t)len >= sizeof(buf))
 		fatal("%s: failed to construct status buf", __func__);
 
