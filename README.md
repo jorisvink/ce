@@ -55,6 +55,13 @@ $            = jump to end of line
 
 0            = jump to start of line
 
+s            = selection
+               Selecting a command and hitting enter will cause it
+               to be exceuted.
+
+               Selecting a file and hitting enter will cause it to be
+               opened.
+
 ctrl-f       = page down
 
 ctrl-b       = page up
@@ -94,6 +101,13 @@ ctrl-z       = suspend ce
 ai<char>     = alter inside string with given character (" or ').
 
 di<char>     = delete inside string with given character (" or ').
+
+ctrl-p       = process commands
+     k       = kill active process
+
+ctrl-w       = console window commands
+    [num]+   = increase console window by num rows
+    [num]-   = decrease console window by num rows
 
 **insert mode key bindings**
 

@@ -53,6 +53,8 @@
 #define EDITOR_COMMAND_MARK_SET		5
 #define EDITOR_COMMAND_MARK_JMP		6
 #define EDITOR_COMMAND_ALTER		7
+#define EDITOR_COMMAND_WINDOW_ALTER	8
+#define EDITOR_COMMAND_PROCESS		9
 
 #define KEY_MAP_LEN(x)		((sizeof(x) / sizeof(x[0])))
 
@@ -257,7 +259,9 @@ ce_editor_loop(void)
 
 	console = ce_buffer_internal("<console>");
 	console->width = ce_term_width();
-	console->height = ce_term_height() / 4;
+	console->height = ce_term_height() / 5;
+	if (console->height < 2)
+		console->height = 2;
 
 	while (!quit) {
 		(void)clock_gettime(CLOCK_MONOTONIC, &ts);
@@ -1063,6 +1067,12 @@ editor_normal_mode_command(u_int8_t key)
 		case 'w':
 			normalcmd = EDITOR_COMMAND_WORD_NEXT;
 			goto direct;
+		case 0x10:
+			normalcmd = EDITOR_COMMAND_PROCESS;
+			break;
+		case 0x17:
+			normalcmd = EDITOR_COMMAND_WINDOW_ALTER;
+			break;
 		default:
 			reset = 1;
 			break;
@@ -1119,6 +1129,40 @@ direct:
 			break;
 		case EDITOR_COMMAND_WORD_PREV:
 			editor_cmd_word_prev(buf, num);
+			break;
+		case EDITOR_COMMAND_PROCESS:
+			switch (key) {
+			case 'k':
+				ce_proc_cleanup();
+				break;
+			}
+			break;
+		case EDITOR_COMMAND_WINDOW_ALTER:
+			switch (key) {
+			case '+':
+				if (console->height + (size_t)num <
+				    ce_term_height() - 2) {
+					console->height += num;
+					ce_editor_dirty();
+				}
+				break;
+			case '-':
+				if (console->height > (size_t)num + 2) {
+					console->height -= num;
+					ce_editor_dirty();
+				}
+				break;
+			case 'm':
+				console->height = ce_term_height() / 4;
+				if (console->height < 2)
+					console->height = 2;
+				ce_editor_dirty();
+				break;
+			case 'f':
+				console->height = ce_term_height() - 4;
+				ce_editor_dirty();
+				break;
+			}
 			break;
 		}
 	}

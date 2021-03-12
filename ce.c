@@ -86,6 +86,7 @@ main(int argc, char *argv[])
 	ce_buffer_init(argc, argv);
 
 	ce_editor_loop();
+	ce_proc_cleanup();
 	ce_buffer_cleanup();
 	ce_term_restore();
 

@@ -347,6 +347,7 @@ int		ce_utf8_sequence(const void *, size_t, size_t, size_t *);
 void		ce_proc_reap(void);
 void		ce_proc_read(void);
 int		ce_proc_stdout(void);
+void		ce_proc_cleanup(void);
 void		ce_proc_run(char *, struct cebuf *);
 
 void		ce_syntax_init(void);

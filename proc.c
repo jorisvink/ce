@@ -21,6 +21,7 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <signal.h>
 #include <unistd.h>
 
 #include "ce.h"
@@ -114,6 +115,19 @@ ce_proc_run(char *cmd, struct cebuf *buf)
 		fatal("%s: fcntl(set): %s", __func__, errno_s);
 
 	ce_debug("proc %d started", active->pid);
+}
+
+void
+ce_proc_cleanup(void)
+{
+	if (active == NULL)
+		return;
+
+	if (kill(active->pid, SIGKILL) == -1)
+		printf("warning: failed to kill proc: %s\n", errno_s);
+
+	ce_proc_reap();
+	ce_editor_message("active process killed");
 }
 
 int
