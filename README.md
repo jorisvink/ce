@@ -56,11 +56,6 @@ $            = jump to end of line
 0            = jump to start of line
 
 s            = selection
-               Selecting a command and hitting enter will cause it
-               to be exceuted.
-
-               Selecting a file and hitting enter will cause it to be
-               opened.
 
 ctrl-f       = page down
 
@@ -86,8 +81,6 @@ ctrl-r       = show list of buffers
 
 ctrl-d       = directory listing of directory of active buffer
 
-ctrl-g       = directory listing of current working directory
-
 ctrl-z       = suspend ce
 
 [num]dd      = delete number of lines
@@ -102,12 +95,11 @@ ai<char>     = alter inside string with given character (" or ').
 
 di<char>     = delete inside string with given character (" or ').
 
-ctrl-p       = process commands
-     k       = kill active process
+ctrl-p-k     = kill active process
 
-ctrl-w       = console window commands
-    [num]+   = increase console window by num rows
-    [num]-   = decrease console window by num rows
+ctrl-w +     = increase console window by num rows
+
+ctrl-w -     = decrease console window by num rows
 
 **insert mode key bindings**
 
@@ -134,6 +126,17 @@ w            = write active buffer
 e            = open specified file
 
 bc           = close current buffer
+
+Select-execute
+--------------
+
+The select-execute function of ce allows you to select a string inside
+the editor and get it to the execute it as a command by hitting enter.
+
+If the contents of the selection points to a file, the file will be opened.
+
+If a command is executed, the output will be placed into the buffer from
+which the command was run.
 
 KNOWN ISSUES
 ------------
