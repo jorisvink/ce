@@ -721,7 +721,7 @@ editor_draw_status(void)
 	} else {
 		pc = ((curbuf->top + curbuf->line) / (float)curbuf->lcnt) * 100;
 		llen = snprintf(lline, sizeof(lline), "%zuL [%zu%%]%s",
-		    curbuf->lcnt, pc, procfd != 1 ? " *" : "");
+		    curbuf->lcnt, pc, procfd != -1 ? " *" : "");
 	}
 
 	if (llen == -1 || (size_t)llen >= sizeof(lline))
