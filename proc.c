@@ -30,6 +30,7 @@ struct proc {
 	int			ifd;
 	int			ofd;
 	size_t			idx;
+	int			first;
 	struct cebuf		*buf;
 };
 
@@ -97,8 +98,10 @@ ce_proc_run(char *cmd, struct cebuf *buf)
 	if ((active = calloc(1, sizeof(*active))) == NULL)
 		fatal("%s: calloc: %s", __func__, errno_s);
 
+	active->first = 1;
 	active->buf = buf;
 	active->pid = pid;
+	active->idx = buf->lcnt;
 	active->ifd = in_pipe[1];
 	active->ofd = out_pipe[0];
 
@@ -110,7 +113,6 @@ ce_proc_run(char *cmd, struct cebuf *buf)
 	if (fcntl(active->ofd, F_SETFL, &flags) == -1)
 		fatal("%s: fcntl(set): %s", __func__, errno_s);
 
-	active->idx = buf->lcnt;
 	ce_debug("proc %d started", active->pid);
 }
 
@@ -163,6 +165,11 @@ ce_proc_read(void)
 	if (ret > 0)
 		ce_buffer_appendl(active->buf, buf, ret);
 
+	if (active->first) {
+		active->first = 0;
+		ce_buffer_center_line(active->buf, active->idx);
+	}
+
 	ce_editor_dirty();
 }
 
@@ -214,7 +221,6 @@ ce_proc_reap(void)
 		ce_buffer_appendl(active->buf, buf, len);
 
 	ce_buffer_appendl(active->buf, "\n", 1);
-	ce_buffer_center_line(active->buf, active->idx);
 	ce_editor_dirty();
 
 	free(active);
