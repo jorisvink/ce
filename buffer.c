@@ -1188,29 +1188,38 @@ ce_buffer_delete_character(void)
 }
 
 void
-ce_buffer_center(void)
+ce_buffer_center_line(struct cebuf *buf, size_t line)
 {
 	size_t		center, index, span, sp;
 
-	center = active->height / 2;
-	index = ce_buffer_line_index(active);
-
 	span = 0;
-	active->top = index;
+	index = line;
+	center = buf->height / 2;
+
+	buf->top = index;
 
 	while (span < center && index > 0) {
-		sp = buffer_line_span(active, &active->lines[index--]);
+		sp = buffer_line_span(buf, &buf->lines[index--]);
 		if (span + sp > center)
 			break;
 		span += sp;
 	}
 
-	active->line = (active->top - index) + 1;
-	active->top = index;
+	buf->line = (buf->top - index) + 1;
+	buf->top = index;
 
-	buffer_update_cursor_line(active);
-	ce_term_setpos(active->cursor_line, active->column);
-	ce_editor_dirty();
+	buffer_update_cursor_line(buf);
+
+	if (buf == active) {
+		ce_term_setpos(buf->cursor_line, buf->column);
+		ce_editor_dirty();
+	}
+}
+
+void
+ce_buffer_center(void)
+{
+	ce_buffer_center_line(active, ce_buffer_line_index(active));
 }
 
 void

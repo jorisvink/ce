@@ -255,6 +255,7 @@ void		ce_buffer_input(struct cebuf *, u_int8_t);
 void		ce_buffer_line_alloc_empty(struct cebuf *);
 void		ce_buffer_delete_line(struct cebuf *, int);
 void		ce_buffer_mark_last(struct cebuf *, size_t);
+void		ce_buffer_center_line(struct cebuf *, size_t);
 void		ce_buffer_setname(struct cebuf *, const char *);
 void		ce_buffer_jump_line(struct cebuf *, long, size_t);
 void		ce_buffer_constrain_cursor_column(struct cebuf *);
@@ -274,7 +275,6 @@ int		ce_buffer_word_cursor(struct cebuf *,
 		    const u_int8_t **, size_t *);
 
 void		ce_buffer_center(void);
-void		ce_buffer_center_unused(void);
 void		ce_buffer_page_up(void);
 void		ce_buffer_move_up(void);
 void		ce_buffer_jump_down(void);

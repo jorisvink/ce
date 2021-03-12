@@ -29,6 +29,7 @@ struct proc {
 	pid_t			pid;
 	int			ifd;
 	int			ofd;
+	size_t			idx;
 	struct cebuf		*buf;
 };
 
@@ -109,6 +110,7 @@ ce_proc_run(char *cmd, struct cebuf *buf)
 	if (fcntl(active->ofd, F_SETFL, &flags) == -1)
 		fatal("%s: fcntl(set): %s", __func__, errno_s);
 
+	active->idx = buf->lcnt;
 	ce_debug("proc %d started", active->pid);
 }
 
@@ -212,6 +214,7 @@ ce_proc_reap(void)
 		ce_buffer_appendl(active->buf, buf, len);
 
 	ce_buffer_appendl(active->buf, "\n", 1);
+	ce_buffer_center_line(active->buf, active->idx);
 	ce_editor_dirty();
 
 	free(active);
