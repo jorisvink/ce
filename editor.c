@@ -671,8 +671,8 @@ editor_draw_status(void)
 {
 	const u_int8_t		*ptr;
 	struct cebuf		*curbuf;
-	int			flen, slen, llen;
 	size_t			cmdoff, width, pc;
+	int			flen, slen, llen, procfd;
 	const char		*isdirty, *filemode, *modestr;
 	char			fline[1024], sline[128], lline[128];
 
@@ -709,17 +709,19 @@ editor_draw_status(void)
 	else
 		filemode = "rw";
 
+	procfd = ce_proc_stdout();
+
 	if (curbuf->top == 0) {
-		llen = snprintf(lline, sizeof(lline), "%zuL [Top]",
-		    curbuf->lcnt);
+		llen = snprintf(lline, sizeof(lline), "%zuL [Top]%s",
+		    curbuf->lcnt, procfd != -1 ? " *" : "");
 	} else if (curbuf->lcnt - (curbuf->top + curbuf->line) <
 	    ((ce_term_height() - 2) / 2)) {
-		llen = snprintf(lline, sizeof(lline), "%zuL [Bot]",
-		    curbuf->lcnt);
+		llen = snprintf(lline, sizeof(lline), "%zuL [Bot]%s",
+		    curbuf->lcnt, procfd != -1 ? " *" : "");
 	} else {
 		pc = ((curbuf->top + curbuf->line) / (float)curbuf->lcnt) * 100;
-		llen = snprintf(lline, sizeof(lline), "%zuL [%zu%%]",
-		    curbuf->lcnt, pc);
+		llen = snprintf(lline, sizeof(lline), "%zuL [%zu%%]%s",
+		    curbuf->lcnt, pc, procfd != 1 ? " *" : "");
 	}
 
 	if (llen == -1 || (size_t)llen >= sizeof(lline))
