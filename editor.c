@@ -1221,7 +1221,7 @@ editor_cmd_select_execute(void)
 	if (p)
 		*p = ':';
 	if (e)
-		*e = ':';
+		*e = n;
 
 	ce_debug("executing '%s'", (const char *)pbuffer->data);
 	ce_proc_run((char *)pbuffer->data, ce_buffer_active());

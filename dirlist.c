@@ -159,7 +159,6 @@ dirlist_load(struct cebuf *buf, const char *path)
 static void
 dirlist_tobuf(struct cebuf *buf, const char *match)
 {
-	char			type;
 	struct dlist		*list;
 	struct dentry		*entry;
 	int			len, show;
@@ -196,26 +195,6 @@ dirlist_tobuf(struct cebuf *buf, const char *match)
 	ce_buffer_appendl(buf, "\n", 1);
 
 	TAILQ_FOREACH(entry, &list->entries, list) {
-		switch (entry->info) {
-		case FTS_DNR:
-		case FTS_DP:
-			continue;
-		case FTS_F:
-			type = 'f';
-			break;
-		case FTS_SL:
-		case FTS_SLNONE:
-			type = 'l';
-			break;
-		case FTS_D:
-		case FTS_DOT:
-			type = 'd';
-			break;
-		default:
-			type = '?';
-			break;
-		}
-
 		show = 0;
 
 		if (match) {

@@ -15,6 +15,7 @@
  */
 
 #include <sys/types.h>
+#include <sys/wait.h>
 
 #include <ctype.h>
 #include <fcntl.h>
@@ -28,7 +29,6 @@ struct proc {
 	pid_t			pid;
 	int			ifd;
 	int			ofd;
-	size_t			idx;
 	struct cebuf		*buf;
 };
 
@@ -61,6 +61,11 @@ ce_proc_run(char *cmd, struct cebuf *buf)
 		return;
 	}
 
+	proc_split_cmdline(cmd, argv, 32);
+
+	for (idx = 0; argv[idx] != NULL; idx++)
+		ce_debug("%d %s", idx, argv[idx]);
+
 	if ((pid = fork()) == -1) {
 		close(in_pipe[0]);
 		close(in_pipe[1]);
@@ -78,11 +83,6 @@ ce_proc_run(char *cmd, struct cebuf *buf)
 		    dup2(out_pipe[1], STDERR_FILENO) == -1 ||
 		    dup2(in_pipe[0], STDIN_FILENO) == -1)
 			fatal("dup2: %s", errno_s);
-
-		proc_split_cmdline(cmd, argv, 32);
-
-		for (idx = 0; argv[idx] != NULL; idx++)
-			ce_debug("%s", argv[idx]);
 
 		execvp(argv[0], argv);
 		ce_debug("execvp: %s", errno_s);
@@ -109,10 +109,6 @@ ce_proc_run(char *cmd, struct cebuf *buf)
 	if (fcntl(active->ofd, F_SETFL, &flags) == -1)
 		fatal("%s: fcntl(set): %s", __func__, errno_s);
 
-	ce_buffer_appendl(buf, " ", 1);
-	active->idx = buf->lcnt;
-	ce_buffer_jump_line(buf, buf->lcnt, TERM_CURSOR_MIN);
-
 	ce_debug("proc %d started", active->pid);
 }
 
@@ -125,39 +121,47 @@ ce_proc_stdout(void)
 void
 ce_proc_read(void)
 {
-	int		iter;
 	ssize_t		ret, idx;
 	u_int8_t	buf[4096];
 
 	if (active == NULL)
 		fatal("%s: called without active proc", __func__);
 
-	for (iter = 0; iter < 5; iter++) {
-		ret = read(active->ofd, buf, sizeof(buf));
-		if (ret == -1) {
-			if (errno == EINTR)
-				return;
-			if (errno == EAGAIN || errno == EWOULDBLOCK)
-				break;
-			fatal("%s: read: %s", __func__, errno_s);
-		}
+	ce_debug("%s called", __func__);
 
-		ce_debug("read %zd bytes from process", ret);
-		ce_editor_set_pasting(1);
+	ret = read(active->ofd, buf, sizeof(buf));
+	if (ret == -1) {
+		if (errno == EINTR)
+			return;
+		if (errno == EAGAIN || errno == EWOULDBLOCK)
+			return;
+		fatal("%s: read: %s", __func__, errno_s);
+	}
 
-		if (ce_buffer_active() != active->buf)
-			ce_buffer_activate(active->buf);
+	ce_editor_set_pasting(1);
+	ce_debug("read %zd bytes from process", ret);
 
-		for (idx = 0; idx < ret; idx++)
-			ce_buffer_input(active->buf, buf[idx]);
+	if (ret == 0) {
+		ce_proc_reap();
+		return;
+	}
 
-		if (ret == 0) {
-			ce_proc_reap();
-			break;
+	if (ce_buffer_active() != active->buf)
+		ce_buffer_activate(active->buf);
+
+	for (idx = 0; idx < ret; idx++) {
+		if (buf[idx] == '\n') {
+			ce_buffer_appendl(active->buf, buf, idx + 1);
+			memmove(&buf[0], &buf[idx + 1], ret - idx - 1);
+			ret -= idx + 1;
+			idx = 0;
 		}
 	}
 
-	ce_debug("reading break");
+	if (ret > 0)
+		ce_buffer_appendl(active->buf, buf, ret);
+
+	ce_editor_dirty();
 }
 
 void
@@ -201,14 +205,15 @@ ce_proc_reap(void)
 		    "program exited with %d\n", status);
 	}
 
+	len = snprintf(buf, sizeof(buf),
+	    "program exited with %d\n", status);
 	if (len == -1 || (size_t)len >= sizeof(buf))
 		fatal("%s: failed to construct status buf", __func__);
 
 	if (len > 0)
 		ce_buffer_appendl(active->buf, buf, len);
 
-	ce_buffer_appendl(active->buf, " ", 1);
-	ce_buffer_jump_line(active->buf, active->idx, TERM_CURSOR_MIN);
+	ce_buffer_appendl(active->buf, "\n", 1);
 	ce_editor_dirty();
 
 	free(active);

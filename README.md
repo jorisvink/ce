@@ -124,8 +124,4 @@ bc           = close current buffer
 KNOWN ISSUES
 ------------
 
-Center on cursor (shift-c) does not work very well
-on files with many multilines. Too bad, don't wrap
-80 columns :)
-
 The fuzzy search is slow on large directory trees.

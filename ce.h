@@ -274,6 +274,7 @@ int		ce_buffer_word_cursor(struct cebuf *,
 		    const u_int8_t **, size_t *);
 
 void		ce_buffer_center(void);
+void		ce_buffer_center_unused(void);
 void		ce_buffer_page_up(void);
 void		ce_buffer_move_up(void);
 void		ce_buffer_jump_down(void);

@@ -1190,40 +1190,35 @@ ce_buffer_delete_character(void)
 void
 ce_buffer_center(void)
 {
-	int		adj;
-	size_t		half;
+	size_t		center, index, span, sp;
 
-	adj = 0;
-	half = active->height / 2;
+	center = active->height / 2;
+	index = ce_buffer_line_index(active);
 
-	if (active->cursor_line < half) {
-		adj = 1;
-		if (active->top > half) {
-			active->top -= half - active->cursor_line;
-			active->line = active->height / 2;
-			active->cursor_line = active->height / 2;
-		} else {
-			active->line = active->top + active->line;
-			active->cursor_line = active->line;
-			active->top = 0;
-		}
-	} else if (active->cursor_line > half) {
-		adj = 1;
-		active->top += active->cursor_line - half;
-		active->line = active->height / 2;
-		active->cursor_line = active->height / 2;
+	span = 0;
+	active->top = index;
+
+	while (span < center && index > 0) {
+		sp = buffer_line_span(active, &active->lines[index--]);
+		if (span + sp > center)
+			break;
+		span += sp;
 	}
 
-	if (adj) {
-		ce_term_setpos(active->cursor_line, active->column);
-		ce_editor_dirty();
-	}
+	active->line = (active->top - index) + 1;
+	active->top = index;
+
+	buffer_update_cursor_line(active);
+	ce_term_setpos(active->cursor_line, active->column);
+	ce_editor_dirty();
 }
 
 void
 ce_buffer_move_up(void)
 {
-	int		scroll;
+	size_t		index;
+	struct celine	*line;
+	int		scroll, span;
 
 	if (active->cursor_line < TERM_CURSOR_MIN)
 		fatal("%s: line (%zu) < min", __func__, active->cursor_line);
@@ -1232,6 +1227,12 @@ ce_buffer_move_up(void)
 		return;
 
 	scroll = 0;
+	index = ce_buffer_line_index(active);
+	line = ce_buffer_line_current(active);
+	span = buffer_line_span(active, line);
+
+	ce_debug("UP: index=%zu span=%d cursor_line=%zu top=%zu line=%zu",
+	    index, span, active->cursor_line, active->top, active->line);
 
 	if (active->cursor_line == TERM_CURSOR_MIN) {
 		if (active->top >= active->height / 2) {
@@ -1279,8 +1280,9 @@ ce_buffer_page_up(void)
 void
 ce_buffer_move_down(void)
 {
+	struct celine	*line;
 	int		scroll;
-	size_t		index, next;
+	size_t		index, next, span, start;
 
 	if (active->lcnt == 0)
 		return;
@@ -1292,20 +1294,42 @@ ce_buffer_move_down(void)
 
 	scroll = 0;
 	index = ce_buffer_line_index(active);
+	line = ce_buffer_line_current(active);
 
 	if (index == active->lcnt - 1)
 		return;
 
-	if (active->cursor_line == active->height)
+	span = buffer_line_span(active, line);
+	if ((active->cursor_line + span) > active->height)
 		scroll = 1;
 
 	if (scroll) {
-		active->top += (active->height / 2) + 1;
-		active->line = (active->height / 2) + 1;
+		span = 0;
+		start = index;
+		ce_debug("index=%zu", index);
+		while (span < (active->height / 2) + 1 &&
+		    index < active->lcnt) {
+			span += buffer_line_span(active, &active->lines[index]);
+			index++;
+		}
 
-		index = active->top + (active->line - active->orig_line);
-		if (index >= active->lcnt)
-			active->line = active->lcnt - active->top;
+		ce_debug("screen spans %zu lines", index - start);
+
+		if (index == active->lcnt) {
+			buffer_update_cursor(active);
+			ce_buffer_center();
+		} else {
+			active->top += index - start;
+			active->line = index - start;
+
+			index = active->top +
+			    (active->line - active->orig_line);
+			if (index >= active->lcnt)
+				active->line = active->lcnt - active->top;
+		}
+
+		ce_debug("top=%zu line=%zu", active->top, active->line);
+
 	} else {
 		next = active->line + 1;
 		if (next <= active->lcnt)
@@ -1467,25 +1491,58 @@ ce_buffer_appendf(struct cebuf *buf, const char *fmt, ...)
 }
 
 void
-ce_buffer_appendl(struct cebuf *buf, const void *line, size_t len)
+ce_buffer_appendl(struct cebuf *buf, const void *data, size_t len)
 {
 	size_t			elm;
-	const u_int8_t		*ptr;
+	int			grow;
+	u_int8_t		*ptr;
+	struct celine		*line;
 
-	elm = buf->lcnt;
-	buffer_resize_lines(buf, buf->lcnt + 1);
-	ptr = line;
+	grow = 0;
 
-	buf->lines[elm].length = len;
-	buf->lines[elm].flags = CE_LINE_ALLOCATED;
-	buf->lines[elm].maxsz = buf->lines[elm].length;
+	if (buf->lcnt != 0) {
+		line = &buf->lines[buf->lcnt - 1];
+		ptr = line->data;
 
-	if ((buf->lines[elm].data = calloc(1, len)) == NULL)
-		fatal("%s: strdup: %s", __func__, errno_s);
+		if (line->length > 0) {
+			if (ptr[line->length - 1] == '\n')
+				grow = 1;
+		} else {
+			grow = 1;
+		}
+	} else {
+		grow = 1;
+	}
 
-	memcpy(buf->lines[elm].data, line, len);
+	if (grow) {
+		elm = buf->lcnt;
+		buffer_resize_lines(buf, buf->lcnt + 1);
+
+		buf->lines[elm].length = len;
+		buf->lines[elm].flags = CE_LINE_ALLOCATED;
+		buf->lines[elm].maxsz = buf->lines[elm].length;
+
+		if ((buf->lines[elm].data = calloc(1, len)) == NULL)
+			fatal("%s: strdup: %s", __func__, errno_s);
+
+		memcpy(buf->lines[elm].data, data, len);
+	} else {
+		elm = buf->lcnt - 1;
+		line = &buf->lines[elm];
+		ce_buffer_line_allocate(buf, line);
+
+		if ((ptr = realloc(line->data, line->length + len)) == NULL)
+			fatal("%s: realloc: %s", __func__, errno_s);
+
+		memcpy(&ptr[line->length], data, len);
+		line->length += len;
+		line->data = ptr;
+		ce_debug("appended '%.*s' to '%.*s'",
+		    (int)len, (const char *)data,
+		    (int)(line->length - len), (const char *)line->data);
+	}
+
 	ce_buffer_line_columns(&buf->lines[elm]);
-	buffer_update_cursor(buf);
 }
 
 void
