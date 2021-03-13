@@ -324,11 +324,14 @@ void		ce_dirlist_narrow(struct cebuf *, const char *);
 void		ce_editor_init(void);
 void		ce_editor_loop(void);
 int		ce_editor_mode(void);
+const char	*ce_editor_pwd(void);
 void		ce_editor_dirty(void);
 int		ce_editor_pasting(void);
 void		ce_editor_set_pasting(int);
 void		ce_editor_show_splash(void);
 int		ce_editor_word_byte(u_int8_t);
+const char	*ce_editor_fullpath(const char *);
+const char	*ce_editor_shortpath(const char *);
 int		ce_editor_word_separator(u_int8_t);
 void		ce_editor_message(const char *, ...);
 

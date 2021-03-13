@@ -803,6 +803,7 @@ ce_buffer_list(struct cebuf *output)
 {
 	size_t		idx;
 	struct cebuf	*buf;
+	const char	*name;
 
 	idx = 1;
 	output->flags |= CE_BUFFER_RO;
@@ -823,8 +824,14 @@ ce_buffer_list(struct cebuf *output)
 			output->line = idx;
 			output->cursor_line = idx;
 		}
+
+		if (buf->internal || buf->buftype == CE_BUF_TYPE_DIRLIST)
+			name = buf->name;
+		else
+			name = ce_editor_shortpath(buf->path);
+
 		ce_buffer_appendf(output, "[%zd] [%s%s] (%zu lines)\n", idx - 1,
-		    buf->name, (buf->flags & CE_BUFFER_DIRTY) ? "*" : "",
+		    name, (buf->flags & CE_BUFFER_DIRTY) ? "*" : "",
 		    buf->lcnt);
 		idx++;
 	}

@@ -19,6 +19,7 @@
 #include <sys/types.h>
 
 #include <ctype.h>
+#include <pwd.h>
 #include <libgen.h>
 #include <poll.h>
 #include <signal.h>
@@ -222,6 +223,8 @@ static int			splash = 0;
 static int			pasting = 0;
 static volatile sig_atomic_t	sig_recv = -1;
 static int			normalcmd = -1;
+static char			*home = NULL;
+static char			*curdir = NULL;
 static char			*search = NULL;
 static struct cebuf		*cmdbuf = NULL;
 static struct cebuf		*console = NULL;
@@ -233,6 +236,30 @@ static int			lastmode = CE_EDITOR_MODE_NORMAL;
 void
 ce_editor_init(void)
 {
+	struct passwd	*pw;
+	char		*login, pwd[PATH_MAX];
+
+	if ((home = getenv("HOME")) == NULL) {
+		if ((login = getlogin()) == NULL)
+			fatal("%s: getlogin: %s", __func__, errno_s);
+
+		if ((pw = getpwnam(login)) == NULL)
+			fatal("%s: getpwnam: %s", __func__, errno_s);
+
+		home = pw->pw_dir;
+	}
+
+	if ((home = strdup(home)) == NULL)
+		fatal("%s: strdup: %s", __func__, errno_s);
+
+	if (getcwd(pwd, sizeof(pwd)) == NULL)
+		fatal("%s: getpwd: %s", __func__, errno_s);
+
+	editor_directory_change(pwd);
+
+	ce_debug("homedir is '%s'", home);
+	ce_debug("curdir is '%s'", curdir);
+
 	memset(&msg, 0, sizeof(msg));
 
 	editor_signal_setup();
@@ -338,7 +365,7 @@ ce_editor_loop(void)
 		}
 
 		if (buf == cmdbuf)
-			ce_buffer_map(buf, 0);
+			ce_buffer_map(cmdbuf, 0);
 
 		if (splash) {
 			ce_term_writestr(TERM_SEQUENCE_CURSOR_SAVE);
@@ -507,6 +534,62 @@ int
 ce_editor_pasting(void)
 {
 	return (pasting);
+}
+
+const char *
+ce_editor_fullpath(const char *path)
+{
+	int		len;
+	static char	tmp[PATH_MAX];
+
+	if (path[0] == '~') {
+		if (strlen(path) > 1) {
+			len = snprintf(tmp, sizeof(tmp), "%s%s%s",
+			    home, path[1] == '/' ? "" : "/", &path[1]);
+		} else {
+			len = snprintf(tmp, sizeof(tmp), "%s", home);
+		}
+	} else {
+		len = snprintf(tmp, sizeof(tmp), "%s", path);
+	}
+
+	if (len == -1 || (size_t)len >= sizeof(tmp))
+		fatal("%s: failed to construct '%s'", __func__, path);
+
+	return (tmp);
+}
+
+const char *
+ce_editor_shortpath(const char *path)
+{
+	int		slen;
+	size_t		len, plen;
+	static char	tmp[PATH_MAX];
+
+	plen = strlen(path);
+
+	len = strlen(curdir);
+	if (!strncmp(curdir, path, len)) {
+		if (len == plen)
+			return (path);
+		return (&path[len + 1]);
+	}
+
+	len = strlen(home);
+	if (!strncmp(home, path, len)) {
+		slen = snprintf(tmp, sizeof(tmp), "~%s", &path[len]);
+		if (slen == -1 || (size_t)slen >= sizeof(tmp))
+			fatal("%s: snprintf '~%s'", __func__, &path[len]);
+		return (tmp);
+	}
+
+	return (path);
+}
+
+const char *
+ce_editor_pwd(void)
+{
+	return (curdir);
 }
 
 static void
@@ -732,7 +815,8 @@ editor_draw_status(void)
 	if (llen == -1 || (size_t)llen >= sizeof(lline))
 		fatal("failed to create status percent line");
 
-	flen = snprintf(fline, sizeof(fline), "%s%s", curbuf->name, isdirty);
+	flen = snprintf(fline, sizeof(fline), "%s%s",
+	    ce_editor_shortpath(curbuf->name), isdirty);
 	if (flen == -1)
 		fatal("failed to create status file line");
 
@@ -762,6 +846,13 @@ editor_draw_status(void)
 	}
 
 	ce_term_writestr(TERM_SEQUENCE_CURSOR_SAVE);
+
+	if (ce_buffer_active() != cmdbuf) {
+		ce_term_setpos(ce_term_height(), TERM_CURSOR_MIN);
+		ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
+		ce_term_writestr(ce_editor_shortpath(curdir));
+	}
+
 	ce_term_setpos(ce_term_height() - 1, TERM_CURSOR_MIN);
 
 	ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
@@ -1225,6 +1316,7 @@ editor_cmd_select_execute(void)
 {
 	struct stat	st;
 	char		nul;
+	const char	*fp;
 	long		linenr;
 	int		try_file;
 	char		*cmd, *line, *p, *e, *ep, n;
@@ -1260,13 +1352,19 @@ editor_cmd_select_execute(void)
 		}
 	}
 
-	if (try_file && stat(cmd, &st) != -1) {
+	fp = ce_editor_fullpath(cmd);
+
+	if (try_file && stat(fp, &st) != -1) {
 		if (S_ISREG(st.st_mode)) {
-			editor_cmd_open_file(cmd);
+			editor_cmd_open_file(fp);
 			if (linenr) {
 				ce_buffer_jump_line(ce_buffer_active(),
 				    linenr, TERM_CURSOR_MIN);
 			}
+			ce_editor_pbuffer_reset();
+			return;
+		} else if (S_ISDIR(st.st_mode)) {
+			editor_directory_list(fp);
 			ce_editor_pbuffer_reset();
 			return;
 		}
@@ -1564,7 +1662,7 @@ editor_cmd_directory_list(void)
 {
 	struct cebuf	*buf;
 	const char	*path;
-	char		*rp, *cp, *dname, pwd[PATH_MAX];
+	char		*rp, *cp, *dname;
 
 	cp = NULL;
 	buf = ce_buffer_active();
@@ -1573,9 +1671,6 @@ editor_cmd_directory_list(void)
 		ce_dirlist_rescan(buf);
 		return;
 	}
-
-	if (getcwd(pwd, sizeof(pwd)) == NULL)
-		fatal("%s: getcwd: %s", __func__, errno_s);
 
 	if (buf->path != NULL) {
 		if ((cp = strdup(buf->path)) == NULL)
@@ -1594,7 +1689,7 @@ editor_cmd_directory_list(void)
 
 		path = rp;
 	} else {
-		path = pwd;
+		path = curdir;
 	}
 
 	editor_directory_list(path);
@@ -1606,9 +1701,12 @@ editor_cmd_directory_list(void)
 static void
 editor_directory_list(const char *path)
 {
+	const char	*fp;
 	struct cebuf	*buf;
 
-	if ((buf = ce_buffer_dirlist(path)) != NULL)
+	fp = ce_editor_fullpath(path);
+
+	if ((buf = ce_buffer_dirlist(fp)) != NULL)
 		buf->cb = editor_dirlist_input;
 	else
 		ce_editor_message("failed to open dirlist for %s", path);
@@ -1617,8 +1715,22 @@ editor_directory_list(const char *path)
 static void
 editor_directory_change(const char *path)
 {
-	if (chdir(path) == -1)
+	char		*rp;
+	const char	*fp;
+
+	fp = ce_editor_fullpath(path);
+
+	if (chdir(fp) == -1) {
 		ce_editor_message("failed to chdir(%s): %s", path, errno_s);
+	} else {
+		free(curdir);
+
+		if ((rp = realpath(fp, NULL)) == NULL)
+			fatal("%s: realpath: %s", __func__, errno_s);
+
+		curdir = rp;
+		ce_editor_message("%s", ce_editor_shortpath(curdir));
+	}
 }
 
 static void
@@ -1945,7 +2057,11 @@ editor_allowed_command_key(char key)
 static void
 editor_cmd_open_file(const char *path)
 {
-	if (ce_buffer_file(path) == NULL) {
+	const char	*fp;
+
+	fp = ce_editor_fullpath(path);
+
+	if (ce_buffer_file(fp) == NULL) {
 		ce_editor_message("%s", ce_buffer_strerror());
 		return;
 	}

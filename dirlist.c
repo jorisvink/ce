@@ -111,6 +111,7 @@ ce_dirlist_narrow(struct cebuf *buf, const char *pattern)
 static void
 dirlist_load(struct cebuf *buf, const char *path)
 {
+	const char		*p;
 	FTS			*fts;
 	FTSENT			*ent;
 	struct dlist		*list;
@@ -140,10 +141,9 @@ dirlist_load(struct cebuf *buf, const char *path)
 		entry->level = ent->fts_level;
 		entry->size = ent->fts_statp->st_size;
 
-		ce_debug("%s", ent->fts_accpath);
-		ce_debug("%s", ent->fts_path);
+		p = ce_editor_shortpath(ent->fts_accpath);
 
-		if ((entry->path = strdup(ent->fts_accpath)) == NULL) {
+		if ((entry->path = strdup(p)) == NULL) {
 			fatal("%s: strdup failed on '%s'", __func__,
 			    ent->fts_accpath);
 		}

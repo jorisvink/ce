@@ -137,10 +137,7 @@ ce_term_update_title(void)
 	char		*cp;
 	struct cebuf	*buf;
 	const char	*name;
-	char		path[PATH_MAX], hostname[256];
-
-	if (getcwd(path, sizeof(path)) == NULL)
-		fatal("%s: getcwd: %s", __func__, errno_s);
+	char		hostname[256];
 
 	if (gethostname(hostname, sizeof(hostname)) == -1)
 		fatal("%s: gethostname: %s", __func__, errno_s);
@@ -158,7 +155,7 @@ ce_term_update_title(void)
 		name = buf->name;
 	}
 
-	ce_term_writef("\33]0;%s;%s;%s\a", hostname, path, name);
+	ce_term_writef("\33]0;%s;%s;%s\a", hostname, ce_editor_pwd(), name);
 
 	free(cp);
 }
