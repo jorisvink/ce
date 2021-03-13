@@ -88,6 +88,7 @@ static void	editor_cmd_buffer_list(void);
 static void	editor_cmd_console(void);
 static void	editor_cmd_directory_list(void);
 static void	editor_directory_list(const char *);
+static void	editor_directory_change(const char *);
 
 static void	editor_cmd_open_file(const char *);
 
@@ -881,6 +882,13 @@ editor_cmdbuf_input(struct cebuf *buf, u_int8_t key)
 				break;
 			}
 			break;
+		case 'c':
+			switch (cmd[2]) {
+			case 'd':
+				if (strlen(cmd) > 4)
+					editor_directory_change(&cmd[4]);
+				break;
+			}
 		}
 		ce_buffer_activate(buf);
 		editor_cmd_normal_mode();
@@ -1607,6 +1615,13 @@ editor_directory_list(const char *path)
 }
 
 static void
+editor_directory_change(const char *path)
+{
+	if (chdir(path) == -1)
+		ce_editor_message("failed to chdir(%s): %s", path, errno_s);
+}
+
+static void
 editor_dirlist_input(struct cebuf *buf, u_int8_t key)
 {
 	if (key == EDITOR_KEY_UTF8_PREFIX) {
@@ -1920,6 +1935,7 @@ editor_allowed_command_key(char key)
 	case '-':
 	case '_':
 	case '!':
+	case '~':
 		return (1);
 	}
 
