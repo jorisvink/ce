@@ -208,7 +208,7 @@ ce_buffer_file(const char *path)
 	}
 
 	buf = ce_buffer_alloc(0);
-	ce_buffer_setname(buf, path);
+	ce_buffer_setname(buf, rp ? rp : path);
 
 	buf->path = rp;
 	if (buf->path == NULL) {
@@ -1620,7 +1620,7 @@ ce_buffer_save_active(int force, const char *dstpath)
 	struct iovec		*iov;
 	const char		*file, *dir;
 	int			fd, len, ret;
-	char			path[PATH_MAX], *copy;
+	char			path[PATH_MAX], *copy, *rp;
 	size_t			elms, off, cnt, line, maxsz, next;
 
 	fd = -1;
@@ -1789,10 +1789,16 @@ ce_buffer_save_active(int force, const char *dstpath)
 		goto cleanup;
 	}
 
+	if ((rp = realpath(dstpath, NULL)) != NULL) {
+		free(active->path);
+		active->path = rp;
+	}
+
 	ret = 0;
 	active->mtime = st.st_mtime;
 	active->flags &= ~CE_BUFFER_DIRTY;
-	ce_editor_message("%s, wrote %zu lines", dstpath, active->lcnt);
+	ce_buffer_setname(active, active->path);
+	ce_editor_message("%s, wrote %zu lines", active->path, active->lcnt);
 
 cleanup:
 	free(iov);
