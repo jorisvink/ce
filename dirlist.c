@@ -137,6 +137,9 @@ dirlist_load(struct cebuf *buf, const char *path)
 			    __func__);
 		}
 
+		if (!strcmp(ent->fts_accpath, path))
+			continue;
+
 		entry->info = ent->fts_info;
 		entry->level = ent->fts_level;
 		entry->size = ent->fts_statp->st_size;

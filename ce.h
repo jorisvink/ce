@@ -274,6 +274,7 @@ void		ce_buffer_word_prev(struct cebuf *);
 int		ce_buffer_word_cursor(struct cebuf *,
 		    const u_int8_t **, size_t *);
 
+void		ce_buffer_top(void);
 void		ce_buffer_center(void);
 void		ce_buffer_page_up(void);
 void		ce_buffer_move_up(void);
@@ -331,6 +332,7 @@ void		ce_editor_set_pasting(int);
 void		ce_editor_show_splash(void);
 int		ce_editor_word_byte(u_int8_t);
 const char	*ce_editor_fullpath(const char *);
+void		ce_editor_settings(struct cebuf *);
 const char	*ce_editor_shortpath(const char *);
 int		ce_editor_word_separator(u_int8_t);
 void		ce_editor_message(const char *, ...);
@@ -358,6 +360,7 @@ void		ce_syntax_finalize(void);
 void		ce_syntax_write(struct cebuf *, struct celine *,
 		    size_t, size_t);
 
+int		ce_lame_mode(void);
 void		ce_file_type_detect(struct cebuf *);
 
 void		ce_debug(const char *, ...)

@@ -40,6 +40,7 @@ static struct {
 };
 
 static FILE	*fp = NULL;
+static int	lame_mode = 0;
 
 /* joris' config. */
 struct ceconf config = {
@@ -61,8 +62,7 @@ main(int argc, char *argv[])
 			break;
 		case 'l':
 			/* lame mode. */
-			config.tab_width = 4;
-			config.tab_expand = 1;
+			lame_mode = 1;
 			break;
 		case 'v':
 			printf("coma editor 0.3\n");
@@ -121,6 +121,12 @@ ce_file_type_detect(struct cebuf *buf)
 	}
 
 	ce_debug("'%s' is type '%d'", buf->path, buf->type);
+}
+
+int
+ce_lame_mode(void)
+{
+	return (lame_mode);
 }
 
 void

@@ -126,6 +126,7 @@ static struct keymap normal_map[] = {
 	{ 'l',			ce_buffer_move_right },
 	{ 'h',			ce_buffer_move_left },
 	{ 'C',			ce_buffer_center },
+	{ 'T',			ce_buffer_top },
 
 	{ '$',			ce_buffer_jump_right },
 	{ '0',			ce_buffer_jump_left },
@@ -590,6 +591,33 @@ const char *
 ce_editor_pwd(void)
 {
 	return (curdir);
+}
+
+void
+ce_editor_settings(struct cebuf *buf)
+{
+	if (buf == NULL) {
+		config.tab_width = CE_TAB_WIDTH_DEFAULT;
+		config.tab_expand = CE_TAB_EXPAND_DEFAULT;
+		return;
+	}
+
+	if (ce_lame_mode()) {
+		config.tab_width = 4;
+		config.tab_expand = 1;
+		return;
+	}
+
+	switch (buf->type) {
+	case CE_FILE_TYPE_PYTHON:
+		config.tab_width = 4;
+		config.tab_expand = 1;
+		break;
+	default:
+		config.tab_width = CE_TAB_WIDTH_DEFAULT;
+		config.tab_expand = CE_TAB_EXPAND_DEFAULT;
+		break;
+	}
 }
 
 static void
@@ -1353,10 +1381,9 @@ editor_cmd_select_execute(void)
 	}
 
 	fp = ce_editor_fullpath(cmd);
-
 	if (try_file && stat(fp, &st) != -1) {
 		if (S_ISREG(st.st_mode)) {
-			editor_cmd_open_file(fp);
+			editor_cmd_open_file(cmd);
 			if (linenr) {
 				ce_buffer_jump_line(ce_buffer_active(),
 				    linenr, TERM_CURSOR_MIN);
@@ -1719,16 +1746,17 @@ editor_directory_change(const char *path)
 	const char	*fp;
 
 	fp = ce_editor_fullpath(path);
+	rp = realpath(fp, NULL);
 
 	if (chdir(fp) == -1) {
 		ce_editor_message("failed to chdir(%s): %s", path, errno_s);
 	} else {
-		free(curdir);
-
-		if ((rp = realpath(fp, NULL)) == NULL)
+		if (rp == NULL)
 			fatal("%s: realpath: %s", __func__, errno_s);
 
+		free(curdir);
 		curdir = rp;
+
 		ce_editor_message("%s", ce_editor_shortpath(curdir));
 	}
 }

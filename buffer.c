@@ -105,6 +105,7 @@ ce_buffer_init(int argc, char **argv)
 		active = scratch;
 		ce_term_update_title();
 		ce_editor_show_splash();
+		ce_editor_settings(active);
 	}
 }
 
@@ -202,6 +203,7 @@ ce_buffer_file(const char *path)
 		TAILQ_FOREACH(buf, &buffers, list) {
 			if (!strcmp(buf->path, rp)) {
 				active = buf;
+				ce_editor_settings(active);
 				return (buf);
 			}
 		}
@@ -329,8 +331,10 @@ ce_buffer_free(struct cebuf *buf)
 
 	TAILQ_REMOVE(&buffers, buf, list);
 
-	if (active == buf)
+	if (active == buf) {
 		active = buf->prev;
+		ce_editor_settings(active);
+	}
 
 	TAILQ_FOREACH(bp, &buffers, list) {
 		if (bp->prev == buf)
@@ -369,8 +373,10 @@ ce_buffer_free_internal(struct cebuf *buf)
 
 	TAILQ_REMOVE(&internals, buf, list);
 
-	if (active == buf)
+	if (active == buf) {
 		active = buf->prev;
+		ce_editor_settings(active);
+	}
 
 	for (idx = 0; idx < buf->lcnt; idx++) {
 		line = &buf->lines[idx];
@@ -405,6 +411,7 @@ ce_buffer_restore(void)
 
 	ce_term_update_title();
 	ce_editor_dirty();
+	ce_editor_settings(active);
 }
 
 void
@@ -415,6 +422,7 @@ ce_buffer_activate(struct cebuf *buf)
 
 	ce_editor_dirty();
 	ce_term_update_title();
+	ce_editor_settings(active);
 }
 
 void
@@ -427,6 +435,7 @@ ce_buffer_activate_index(size_t index)
 		active = scratch;
 		ce_term_update_title();
 		ce_editor_dirty();
+		ce_editor_settings(active);
 		return;
 	}
 
@@ -437,6 +446,7 @@ ce_buffer_activate_index(size_t index)
 			active = buf;
 			ce_term_update_title();
 			ce_editor_dirty();
+			ce_editor_settings(active);
 			return;
 		}
 	}
@@ -1227,6 +1237,22 @@ void
 ce_buffer_center(void)
 {
 	ce_buffer_center_line(active, ce_buffer_line_index(active));
+}
+
+void
+ce_buffer_top(void)
+{
+	size_t		index;
+
+	index = ce_buffer_line_index(active);
+
+	active->top = index;
+	active->line = active->orig_line;
+
+	buffer_update_cursor_line(active);
+	ce_term_setpos(active->cursor_line, active->column);
+
+	ce_editor_dirty();
 }
 
 void

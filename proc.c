@@ -172,7 +172,7 @@ ce_proc_read(void)
 			ce_buffer_appendl(active->buf, buf, idx + 1);
 			memmove(&buf[0], &buf[idx + 1], ret - idx - 1);
 			ret -= idx + 1;
-			idx = 0;
+			idx = -1;
 		}
 	}
 
