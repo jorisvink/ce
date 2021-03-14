@@ -43,6 +43,8 @@ ce uses a modal approach to editing much like vi.
 
 C            = center view on line at cursor
 
+T            = set current line as top of editor
+
 k            = move up one row
 
 j            = move down one row
