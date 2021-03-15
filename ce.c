@@ -34,8 +34,9 @@ static struct {
 	{ ".patch",	CE_FILE_TYPE_DIFF },
 	{ ".js",	CE_FILE_TYPE_JS },
 	{ ".sh",	CE_FILE_TYPE_SHELL },
-	{ ".java",	CE_FILE_TYPE_JAVA },
 	{ ".swift",	CE_FILE_TYPE_SWIFT },
+	{ ".yml",	CE_FILE_TYPE_YAML },
+	{ ".yaml",	CE_FILE_TYPE_YAML },
 	{ NULL,		0 },
 };
 
@@ -143,6 +144,17 @@ ce_debug(const char *fmt, ...)
 
 	fprintf(fp, "\n");
 	fflush(fp);
+}
+
+char *
+ce_strdup(const char *p)
+{
+	char	*np;
+
+	if ((np = strdup(p)) == NULL)
+		fatal("%s: strdup(%s): %s", __func__, p, errno_s);
+
+	return (np);
 }
 
 void

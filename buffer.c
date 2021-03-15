@@ -131,8 +131,7 @@ void
 ce_buffer_setname(struct cebuf *buf, const char *name)
 {
 	free(buf->name);
-	if ((buf->name = strdup(name)) == NULL)
-		fatal("%s: strdup: %s", __func__, errno_s);
+	buf->name = ce_strdup(name);
 }
 
 struct cebuf *
@@ -219,10 +218,9 @@ ce_buffer_file(const char *path)
 			goto cleanup;
 		}
 
-		if ((buf->path = strdup(path)) == NULL)
-			fatal("%s: strdup: %s", __func__, errno_s);
-
+		buf->path = ce_strdup(path);
 		buf->mode = S_IRUSR | S_IWUSR;
+
 		goto finalize;
 	}
 
@@ -417,6 +415,9 @@ ce_buffer_restore(void)
 void
 ce_buffer_activate(struct cebuf *buf)
 {
+	if (active == buf)
+		return;
+
 	buf->prev = active;
 	active = buf;
 
@@ -1565,7 +1566,7 @@ ce_buffer_appendl(struct cebuf *buf, const void *data, size_t len)
 		buf->lines[elm].maxsz = buf->lines[elm].length;
 
 		if ((buf->lines[elm].data = calloc(1, len)) == NULL)
-			fatal("%s: strdup: %s", __func__, errno_s);
+			fatal("%s: calloc: %s", __func__, errno_s);
 
 		memcpy(buf->lines[elm].data, data, len);
 	} else {
@@ -1696,8 +1697,7 @@ ce_buffer_save_active(int force, const char *dstpath)
 		goto cleanup;
 	}
 
-	if ((copy = strdup(dstpath)) == NULL)
-		fatal("%s: strdup failed %s", __func__, errno_s);
+	copy = ce_strdup(dstpath);
 
 	if ((file = basename(copy)) == NULL) {
 		buffer_seterr("basename failed: %s", errno_s);

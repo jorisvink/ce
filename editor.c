@@ -19,6 +19,7 @@
 #include <sys/types.h>
 
 #include <ctype.h>
+#include <dirent.h>
 #include <pwd.h>
 #include <libgen.h>
 #include <poll.h>
@@ -32,6 +33,8 @@
 
 #define CE_SPLASH_TEXT_1	"Coma Editor"
 #define CE_SPLASH_TEXT_2	"joris@coders.se"
+
+#define CE_SUGGESTION_PREFIX	"+=+=+=+=+=+=+=+"
 
 /* Show messages for 5 seconds. */
 #define EDITOR_MESSAGE_DELAY	5
@@ -71,6 +74,7 @@ static void	editor_process_input(int);
 static u_int8_t	editor_process_escape(void);
 static int	editor_allowed_command_key(char);
 static ssize_t	editor_read_byte(u_int8_t *, int);
+static void	editor_autocomplete_path(struct cebuf *);
 static void	editor_yank_lines(struct cebuf *, size_t, size_t, int);
 
 static void	editor_draw_status(void);
@@ -231,6 +235,7 @@ static struct cebuf		*cmdbuf = NULL;
 static struct cebuf		*console = NULL;
 static struct cebuf		*buflist = NULL;
 static struct cebuf		*pbuffer = NULL;
+static struct cebuf		*suggestions = NULL;
 static int			mode = CE_EDITOR_MODE_NORMAL;
 static int			lastmode = CE_EDITOR_MODE_NORMAL;
 
@@ -250,8 +255,7 @@ ce_editor_init(void)
 		home = pw->pw_dir;
 	}
 
-	if ((home = strdup(home)) == NULL)
-		fatal("%s: strdup: %s", __func__, errno_s);
+	home = ce_strdup(home);
 
 	if (getcwd(pwd, sizeof(pwd)) == NULL)
 		fatal("%s: getpwd: %s", __func__, errno_s);
@@ -292,6 +296,8 @@ ce_editor_loop(void)
 	if (console->height < 2)
 		console->height = 2;
 
+	suggestions = ce_buffer_internal("<suggestions>");
+
 	while (!quit) {
 		(void)clock_gettime(CLOCK_MONOTONIC, &ts);
 
@@ -312,6 +318,11 @@ ce_editor_loop(void)
 
 				cmdbuf->line = ce_term_height();
 				cmdbuf->orig_line = ce_term_height();
+
+				console->width = ce_term_width();
+				console->height = ce_term_height() / 5;
+				if (console->height < 2)
+					console->height = 2;
 				break;
 			}
 			sig_recv = -1;
@@ -609,6 +620,7 @@ ce_editor_settings(struct cebuf *buf)
 	}
 
 	switch (buf->type) {
+	case CE_FILE_TYPE_YAML:
 	case CE_FILE_TYPE_PYTHON:
 		config.tab_width = 4;
 		config.tab_expand = 1;
@@ -737,6 +749,8 @@ editor_read_byte(u_int8_t *out, int ms)
 	ssize_t			sz;
 	struct pollfd		pfd[2];
 	int			nfd, proc_fd;
+
+	*out = 0;
 
 	nfd = 1;
 	proc_fd = ce_proc_stdout();
@@ -945,6 +959,145 @@ editor_draw_console(void)
 }
 
 static void
+editor_autocomplete_path(struct cebuf *buf)
+{
+	struct stat		st;
+	struct dirent		*dp;
+	const char		*fp;
+	DIR			*dir;
+	int			cnt, pref_dirs, islocal;
+	char			*path, *p, *name, *match;
+	size_t			len, off, start, width, mlen;
+
+	if (buf->length <= 2)
+		return;
+
+	if ((path = calloc(1, buf->length + 1)) == NULL)
+		fatal("%s: calloc(%zu): %s", __func__, buf->length, errno_s);
+
+	memcpy(path, buf->data, buf->length);
+	path[buf->length] = '\0';
+
+	if (path[1] == 'c' && path[2] == 'd') {
+		off = 3;
+		pref_dirs = 1;
+	} else if (path[1] == 'l') {
+		off = 2;
+		pref_dirs = 1;
+	} else {
+		off = 2;
+		pref_dirs = 0;
+	}
+
+	p = &path[off];
+	while (isspace(*(const unsigned char *)p)) {
+		p++;
+		off++;
+	}
+
+	fp = ce_editor_fullpath(p);
+	if ((name = strrchr(fp, '/')) != NULL) {
+		*(name)++ = '\0';
+		if (fp[0] == '\0')
+			dir = opendir("/");
+		else
+			dir = opendir(fp);
+		islocal = 0;
+	} else {
+		name = p;
+		islocal = 1;
+		dir = opendir(".");
+	}
+
+	if (dir == NULL) {
+		free(path);
+		return;
+	}
+
+	cnt = 0;
+	start = 3;
+	match = NULL;
+	len = strlen(name);
+
+	width = 0;
+	ce_buffer_reset(suggestions);
+
+	while ((dp = readdir(dir)) != NULL) {
+		if (!strcmp(dp->d_name, ".") ||
+		    !strcmp(dp->d_name, ".."))
+			continue;
+
+		if (len == 0 && islocal == 1 &&
+		    pref_dirs == 0 && dp->d_type != DT_REG)
+			continue;
+
+		if (len > 0 && strncmp(dp->d_name, name, len))
+			continue;
+
+		if (pref_dirs && dp->d_type != DT_DIR)
+			continue;
+
+		cnt++;
+		free(match);
+		match = ce_strdup(dp->d_name);
+		mlen = strlen(match);
+
+		if (width + mlen + 1 > ce_term_width()) {
+			width = 0;
+			ce_buffer_appendf(suggestions, "\n");
+		}
+
+		width += mlen + 1;
+		ce_buffer_appendf(suggestions, "%s ", match);
+	}
+
+	ce_buffer_populate_lines(suggestions);
+
+	start = 1 + suggestions->lcnt;
+	suggestions->orig_line = ce_term_height() - start;
+
+	if (suggestions->lcnt > 0 && cnt > 1) {
+		ce_term_writestr(TERM_SEQUENCE_CLEAR_ONLY);
+		ce_buffer_map(cmdbuf->prev, 0);
+
+		ce_term_writestr(TERM_SEQUENCE_CURSOR_SAVE);
+		ce_term_setpos(ce_term_height() - (start + 1), TERM_CURSOR_MIN);
+		ce_term_writestr(TERM_SEQUENCE_CLEAR_CURSOR_DOWN);
+		ce_term_writestr(CE_SUGGESTION_PREFIX);
+		ce_term_setpos(ce_term_height() - start, TERM_CURSOR_MIN);
+		ce_buffer_map(suggestions, 0);
+		ce_term_writestr(TERM_SEQUENCE_CURSOR_RESTORE);
+
+		free(match);
+		match = NULL;
+	} else {
+		ce_editor_dirty();
+	}
+
+	if (match != NULL) {
+		ce_buffer_appendf(buf, "%s", &match[len]);
+		buf->column += strlen(&match[len]);
+
+		fp = ce_buffer_as_string(buf);
+		if (lstat(&fp[off], &st) != -1) {
+			buf->length--;
+			if (S_ISDIR(st.st_mode)) {
+				ce_buffer_appendf(buf, "/");
+				buf->column++;
+			}
+		} else {
+			buf->length--;
+		}
+
+	}
+
+	closedir(dir);
+
+	free(path);
+	free(match);
+}
+
+static void
 editor_cmdbuf_input(struct cebuf *buf, u_int8_t key)
 {
 	char			*ep;
@@ -1024,6 +1177,7 @@ editor_cmdbuf_input(struct cebuf *buf, u_int8_t key)
 		ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
 		break;
 	case '\t':
+		editor_autocomplete_path(buf);
 		break;
 	default:
 		if (editor_allowed_command_key(key)) {
@@ -1048,8 +1202,7 @@ editor_cmdbuf_search(struct cebuf *buf, u_int8_t key)
 		cmd = ce_buffer_as_string(buf);
 		if (strlen(cmd) > 1) {
 			free(search);
-			if ((search = strdup(cmd + 1)) == NULL)
-				fatal("%s: strdup: %s", __func__, errno_s);
+			search = ce_strdup(cmd + 1);
 			ce_buffer_search(buf->prev,
 			    search, CE_BUFFER_SEARCH_NORMAL);
 		}
@@ -1381,7 +1534,7 @@ editor_cmd_select_execute(void)
 	}
 
 	fp = ce_editor_fullpath(cmd);
-	if (try_file && stat(fp, &st) != -1) {
+	if (try_file && lstat(fp, &st) != -1) {
 		if (S_ISREG(st.st_mode)) {
 			editor_cmd_open_file(cmd);
 			if (linenr) {
@@ -1700,8 +1853,7 @@ editor_cmd_directory_list(void)
 	}
 
 	if (buf->path != NULL) {
-		if ((cp = strdup(buf->path)) == NULL)
-			fatal("%s: strdup of '%s' failed", __func__, buf->path);
+		cp = ce_strdup(buf->path);
 
 		if ((dname = dirname(cp)) == NULL)
 			fatal("%s: dirname: %s", __func__, errno_s);
@@ -2099,4 +2251,3 @@ editor_cmd_open_file(const char *path)
 
 	ce_editor_dirty();
 }
-

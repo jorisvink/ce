@@ -84,13 +84,12 @@ static int	syntax_highlight_c_label(struct state *);
 static int	syntax_highlight_c_comment(struct state *);
 static int	syntax_highlight_c_preproc(struct state *);
 
+static void	syntax_highlight_yaml(struct state *);
 static void	syntax_highlight_swift(struct state *);
 
 static void	syntax_highlight_python(struct state *);
 static int	syntax_highlight_python_decorator(struct state *);
 static int	syntax_highlight_python_multiline_string(struct state *);
-
-static void	syntax_highlight_java(struct state *);
 
 static int	syntax_highlight_string(struct state *);
 static int	syntax_highlight_numeric(struct state *);
@@ -184,28 +183,6 @@ static const char *swift_kw[] = {
 	"#sourceLocation", "#warning",
 	NULL
 };
-
-static const char *java_kw[] = {
-	"do", "if", "for", "new", "try", "goto", "this", "else",
-	"case", "null", "enum", "break", "throw", "catch", "final",
-	"class", "super", "while", "switch", "assert", "throws",
-	"return", "static", "native", "default", "package", "extends",
-	"finally", "abstract", "continue", "strictfp", "volatile",
-	"transient", "interface", "implements", "instanceof", "default",
-	"synchronized", NULL
-};
-
-static const char *java_types[] = {
-	"int", "short", "long", "double", "char", "byte", "float",
-	"boolean", "String", "void", "Void", "Integer", "Short",
-	"Long", "Double", "Float", "Character", "Byte", NULL
-};
-
-static const char *java_special[] = {
-	"import", "public", "private", "static", "protected", "class",
-	NULL
-};
-
 
 static const char *js_kw[] = {
 	"break", "case", "catch", "continue", "debugger", "default",
@@ -320,11 +297,11 @@ ce_syntax_write(struct cebuf *buf, struct celine *line, size_t index,
 			case CE_FILE_TYPE_SHELL:
 				syntax_highlight_shell(&syntax_state);
 				break;
-			case CE_FILE_TYPE_JAVA:
-				syntax_highlight_java(&syntax_state);
-				break;
 			case CE_FILE_TYPE_SWIFT:
 				syntax_highlight_swift(&syntax_state);
+				break;
+			case CE_FILE_TYPE_YAML:
+				syntax_highlight_yaml(&syntax_state);
 				break;
 			default:
 				syntax_state_color_clear(&syntax_state);
@@ -1110,37 +1087,6 @@ syntax_term_write(struct state *state, const void *data, size_t len, int count)
 }
 
 static void
-syntax_highlight_java(struct state *state)
-{
-	if (syntax_highlight_c_comment(state) == 0)
-		return;
-
-	if (syntax_highlight_numeric(state) == 0)
-		return;
-
-	if (syntax_highlight_string(state) == 0)
-		return;
-
-	if (syntax_highlight_python_decorator(state) == 0)
-		return;
-
-	if (syntax_highlight_c_label(state) == 0)
-		return;
-
-	if (syntax_highlight_word(state, java_kw, TERM_COLOR_BLACK) == 0)
-		return;
-
-	if (syntax_highlight_word(state, java_types, TERM_COLOR_BLACK) == 0)
-		return;
-
-	if (syntax_highlight_word(state, java_special, TERM_COLOR_BLACK) == 0)
-		return;
-
-	syntax_state_color_clear(state);
-	syntax_write(state, 1);
-}
-
-static void
 syntax_highlight_swift(struct state *state)
 {
 	if (syntax_highlight_c_comment(state) == 0)
@@ -1156,6 +1102,25 @@ syntax_highlight_swift(struct state *state)
 		return;
 
 	if (syntax_highlight_python_decorator(state) == 0)
+		return;
+
+	syntax_state_color_clear(state);
+	syntax_write(state, 1);
+}
+
+static void
+syntax_highlight_yaml(struct state *state)
+{
+	if (syntax_highlight_c_comment(state) == 0)
+		return;
+
+	if (syntax_highlight_pound_comment(state) == 0)
+		return;
+
+	if (syntax_highlight_numeric(state) == 0)
+		return;
+
+	if (syntax_highlight_string(state) == 0)
 		return;
 
 	syntax_state_color_clear(state);

@@ -80,8 +80,8 @@
 #define CE_FILE_TYPE_DIFF		3
 #define CE_FILE_TYPE_JS			4
 #define CE_FILE_TYPE_SHELL		5
-#define CE_FILE_TYPE_JAVA		6
-#define CE_FILE_TYPE_SWIFT		7
+#define CE_FILE_TYPE_SWIFT		6
+#define CE_FILE_TYPE_YAML		7
 
 #define CE_TAB_WIDTH_DEFAULT		8
 #define CE_TAB_EXPAND_DEFAULT		0
@@ -363,6 +363,7 @@ void		ce_syntax_write(struct cebuf *, struct celine *,
 int		ce_lame_mode(void);
 void		ce_file_type_detect(struct cebuf *);
 
+char		*ce_strdup(const char *);
 void		ce_debug(const char *, ...)
 		    __attribute__((format (printf, 1, 2)));
 void		fatal(const char *, ...)
