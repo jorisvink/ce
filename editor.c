@@ -1079,7 +1079,9 @@ editor_autocomplete_path(struct cebuf *buf)
 		buf->column += strlen(&match[len]);
 
 		fp = ce_buffer_as_string(buf);
-		if (lstat(&fp[off], &st) != -1) {
+		fp = ce_editor_fullpath(&fp[off]);
+
+		if (lstat(fp, &st) != -1) {
 			buf->length--;
 			if (S_ISDIR(st.st_mode)) {
 				ce_buffer_appendf(buf, "/");
