@@ -128,6 +128,7 @@ struct celine {
 #define CE_MARK_MAX		'z'
 #define CE_MARK_OFFSET		CE_MARK_MIN
 #define CE_MARK_PREVIOUS	'\''
+#define CE_MARK_SELEXEC		'.'
 
 struct cemark {
 	/* If this mark has valid data. */
@@ -215,10 +216,11 @@ struct cebuf {
 	/* Special marker (previous). */
 	struct cemark		prevmark;
 
-	/* Special market for selection. */
+	/* Special markers for selection. */
 	struct cemark		selend;
 	struct cemark		selmark;
 	struct cemark		selstart;
+	struct cemark		selexec;
 
 	/* Callback for special buffers (like cmdbuf). */
 	void			(*cb)(struct cebuf *, u_int8_t);

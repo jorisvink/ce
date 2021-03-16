@@ -34,7 +34,7 @@
 #define CE_SPLASH_TEXT_1	"Coma Editor"
 #define CE_SPLASH_TEXT_2	"joris@coders.se"
 
-#define CE_SUGGESTION_PREFIX	"+=+=+=+=+=+=+=+"
+#define CE_UTF8_U2015		"\xe2\x80\x95"
 
 /* Show messages for 5 seconds. */
 #define EDITOR_MESSAGE_DELAY	5
@@ -958,10 +958,8 @@ editor_draw_console(void)
 	ce_buffer_map(console, 0);
 
 	ce_term_setpos(console->height + 1, TERM_CURSOR_MIN);
-	ce_term_color(TERM_COLOR_CYAN + TERM_COLOR_BG);
-	ce_term_color(TERM_COLOR_BLACK + TERM_COLOR_FG);
 	for (idx = 0; idx < console->width; idx++)
-		ce_term_writestr(" ");
+		ce_term_writestr(CE_UTF8_U2015);
 
 	ce_term_setpos(console->cursor_line, console->column);
 
@@ -975,8 +973,8 @@ editor_autocomplete_path(struct cebuf *buf)
 	struct dirent		*dp;
 	const char		*fp;
 	DIR			*dir;
-	int			cnt, pref_dirs, islocal;
 	char			*path, *p, *name, *match;
+	int			cnt, pref_dirs, islocal, partial;
 	size_t			len, off, start, width, mlen, nlen, idx;
 
 	if (buf->length <= 2)
@@ -1026,6 +1024,7 @@ editor_autocomplete_path(struct cebuf *buf)
 
 	cnt = 0;
 	start = 3;
+	partial = 0;
 	match = NULL;
 	len = strlen(name);
 
@@ -1065,6 +1064,7 @@ editor_autocomplete_path(struct cebuf *buf)
 					    idx + 1, errno_s);
 				}
 
+				partial++;
 				memcpy(match, dp->d_name, idx);
 				match[idx] = '\0';
 			}
@@ -1098,7 +1098,8 @@ editor_autocomplete_path(struct cebuf *buf)
 		ce_term_writestr(TERM_SEQUENCE_CURSOR_SAVE);
 		ce_term_setpos(ce_term_height() - (start + 1), TERM_CURSOR_MIN);
 		ce_term_writestr(TERM_SEQUENCE_CLEAR_CURSOR_DOWN);
-		ce_term_writestr(CE_SUGGESTION_PREFIX);
+		for (idx = 0; idx < ce_term_width(); idx++)
+			ce_term_writestr(CE_UTF8_U2015);
 		ce_term_setpos(ce_term_height() - start, TERM_CURSOR_MIN);
 		ce_buffer_map(suggestions, 0);
 		ce_term_writestr(TERM_SEQUENCE_CURSOR_RESTORE);
@@ -1115,7 +1116,7 @@ editor_autocomplete_path(struct cebuf *buf)
 
 		if (lstat(fp, &st) != -1) {
 			buf->length--;
-			if (S_ISDIR(st.st_mode)) {
+			if (S_ISDIR(st.st_mode) && !partial) {
 				fp = buf->data;
 				if (fp[buf->length - 1] != '/') {
 					ce_buffer_appendf(buf, "/");
@@ -1457,6 +1458,9 @@ direct:
 				break;
 			case 't':
 				ce_buffer_top();
+				break;
+			case 'c':
+				ce_buffer_mark_jump(buf, CE_MARK_SELEXEC);
 				break;
 			}
 			break;

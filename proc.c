@@ -111,6 +111,9 @@ ce_proc_run(char *cmd, struct cebuf *buf)
 	active->ifd = in_pipe[1];
 	active->ofd = out_pipe[0];
 
+	buf->selexec.set = 1;
+	buf->selexec.line = buf->lcnt;
+
 	if (fcntl(active->ofd, F_GETFL, &flags) == -1)
 		fatal("%s: fcntl(get): %s", __func__, errno_s);
 

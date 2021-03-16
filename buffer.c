@@ -1917,16 +1917,21 @@ ce_buffer_mark_jump(struct cebuf *buf, char mark)
 	struct cemark	*mk;
 	size_t		lastline;
 
-	if (mark != CE_MARK_PREVIOUS &&
+	if (mark != CE_MARK_PREVIOUS && mark != CE_MARK_SELEXEC &&
 	    (mark < CE_MARK_MIN || mark > CE_MARK_MAX))
 		fatal("%s: invalid marker '0x%02x'", __func__, mark);
 
-	if (mark == CE_MARK_PREVIOUS) {
+	switch (mark) {
+	case CE_MARK_PREVIOUS:
 		mk = &buf->prevmark;
-		ce_debug("prevmark: %d, line: %zu", mk->set, mk->line);
-	} else {
+		break;
+	case CE_MARK_SELEXEC:
+		mk = &buf->selexec;
+		break;
+	default:
 		idx = mark - CE_MARK_OFFSET;
 		mk = &buf->markers[idx];
+		break;
 	}
 
 	if (mk->set) {
