@@ -44,7 +44,7 @@ void
 ce_proc_run(char *cmd, struct cebuf *buf)
 {
 	pid_t		pid;
-	char		*argv[32];
+	char		*argv[32], *copy;
 	int		flags, idx, in_pipe[2], out_pipe[2];
 
 	if (active != NULL) {
@@ -64,6 +64,7 @@ ce_proc_run(char *cmd, struct cebuf *buf)
 		return;
 	}
 
+	copy = ce_strdup(cmd);
 	proc_split_cmdline(cmd, argv, 32);
 
 	for (idx = 0; argv[idx] != NULL; idx++)
@@ -98,6 +99,10 @@ ce_proc_run(char *cmd, struct cebuf *buf)
 
 	if ((active = calloc(1, sizeof(*active))) == NULL)
 		fatal("%s: calloc: %s", __func__, errno_s);
+
+	ce_buffer_appendl(buf, copy, strlen(copy));
+	ce_buffer_appendl(buf, "\n", 1);
+	free(copy);
 
 	active->first = 1;
 	active->buf = buf;
@@ -237,9 +242,12 @@ ce_proc_reap(void)
 	ce_buffer_appendl(active->buf, "\n", 1);
 	ce_editor_dirty();
 
-	free(active);
-	active = NULL;
+	close(active->ifd);
+	close(active->ofd);
 
+	free(active);
+
+	active = NULL;
 	ce_editor_set_pasting(0);
 }
 

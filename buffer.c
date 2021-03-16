@@ -134,6 +134,22 @@ ce_buffer_setname(struct cebuf *buf, const char *name)
 	buf->name = ce_strdup(name);
 }
 
+void
+ce_buffer_resize(void)
+{
+	struct cebuf	*buf;
+
+	TAILQ_FOREACH(buf, &buffers, list) {
+		buf->width = ce_term_width();
+		buf->height = ce_term_height() - 2;
+	}
+
+	TAILQ_FOREACH(buf, &internals, list) {
+		buf->width = ce_term_width();
+		buf->height = ce_term_height() - 2;
+	}
+}
+
 struct cebuf *
 ce_buffer_internal(const char *name)
 {

@@ -231,6 +231,7 @@ struct cebuf {
 
 TAILQ_HEAD(cebuflist, cebuf);
 
+void		ce_buffer_resize(void);
 void		ce_buffer_cleanup(void);
 void		ce_buffer_restore(void);
 void		ce_buffer_init(int, char **);

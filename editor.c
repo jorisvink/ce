@@ -301,7 +301,7 @@ ce_editor_loop(void)
 
 	console = ce_buffer_internal("<console>");
 	console->width = ce_term_width();
-	console->height = ce_term_height() / 5;
+	console->height = ((ce_term_height() - 2) / 2) - 1;
 	if (console->height < 2)
 		console->height = 2;
 
@@ -324,6 +324,7 @@ ce_editor_loop(void)
 				dirty = 1;
 				ce_term_restore();
 				ce_term_setup();
+				ce_buffer_resize();
 
 				cmdbuf->line = ce_term_height();
 				cmdbuf->orig_line = ce_term_height();
@@ -1482,7 +1483,7 @@ direct:
 				}
 				break;
 			case 'm':
-				console->height = ce_term_height() / 4;
+				console->height = ce_term_height() / 2;
 				if (console->height < 2)
 					console->height = 2;
 				ce_editor_dirty();
