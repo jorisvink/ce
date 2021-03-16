@@ -59,6 +59,7 @@
 #define EDITOR_COMMAND_ALTER		7
 #define EDITOR_COMMAND_WINDOW_ALTER	8
 #define EDITOR_COMMAND_PROCESS		9
+#define EDITOR_COMMAND_ALIGN		10
 
 #define KEY_MAP_LEN(x)		((sizeof(x) / sizeof(x[0])))
 
@@ -215,6 +216,14 @@ static struct {
 	{ buflist_map, KEY_MAP_LEN(buflist_map) },
 	{ command_map, KEY_MAP_LEN(command_map) },
 	{ select_map, KEY_MAP_LEN(select_map) },
+};
+
+static struct {
+	const char		*cmd;
+	void			(*run)(const char *);
+} cmdtab[] = {
+	{ "cd", editor_directory_change },
+	{ NULL, NULL },
 };
 
 static struct {
@@ -967,7 +976,7 @@ editor_autocomplete_path(struct cebuf *buf)
 	DIR			*dir;
 	int			cnt, pref_dirs, islocal;
 	char			*path, *p, *name, *match;
-	size_t			len, off, start, width, mlen;
+	size_t			len, off, start, width, mlen, nlen, idx;
 
 	if (buf->length <= 2)
 		return;
@@ -1038,9 +1047,31 @@ editor_autocomplete_path(struct cebuf *buf)
 			continue;
 
 		cnt++;
-		free(match);
-		match = ce_strdup(dp->d_name);
-		mlen = strlen(match);
+
+		if (match != NULL) {
+			mlen = strlen(match);
+			nlen = strlen(dp->d_name);
+
+			for (idx = 0; idx < nlen && idx < mlen; idx++) {
+				if (match[idx] != dp->d_name[idx])
+					break;
+			}
+
+			if (idx > 0) {
+				free(match);
+				if ((match = calloc(1, idx + 1)) == NULL) {
+					fatal("%s: calloc:(%zu): %s", __func__,
+					    idx + 1, errno_s);
+				}
+
+				memcpy(match, dp->d_name, idx);
+				match[idx] = '\0';
+			}
+		} else {
+			match = ce_strdup(dp->d_name);
+		}
+
+		mlen = strlen(dp->d_name);
 
 		if (width + mlen + 1 > ce_term_width()) {
 			width = 0;
@@ -1048,12 +1079,15 @@ editor_autocomplete_path(struct cebuf *buf)
 		}
 
 		width += mlen + 1;
-		ce_buffer_appendf(suggestions, "%s ", match);
+		ce_buffer_appendf(suggestions, "%s ", dp->d_name);
 	}
 
 	ce_buffer_populate_lines(suggestions);
 
 	start = 1 + suggestions->lcnt;
+	if (start > ce_term_height() - 2)
+		start = ce_term_height() / 2;
+
 	suggestions->orig_line = ce_term_height() - start;
 
 	if (suggestions->lcnt > 0 && cnt > 1) {
@@ -1067,14 +1101,11 @@ editor_autocomplete_path(struct cebuf *buf)
 		ce_term_setpos(ce_term_height() - start, TERM_CURSOR_MIN);
 		ce_buffer_map(suggestions, 0);
 		ce_term_writestr(TERM_SEQUENCE_CURSOR_RESTORE);
-
-		free(match);
-		match = NULL;
 	} else {
 		ce_editor_dirty();
 	}
 
-	if (match != NULL) {
+	if (match != NULL && len > 0 && strlen(&match[len]) > 0) {
 		ce_buffer_appendf(buf, "%s", &match[len]);
 		buf->column += strlen(&match[len]);
 
@@ -1084,8 +1115,11 @@ editor_autocomplete_path(struct cebuf *buf)
 		if (lstat(fp, &st) != -1) {
 			buf->length--;
 			if (S_ISDIR(st.st_mode)) {
-				ce_buffer_appendf(buf, "/");
-				buf->column++;
+				fp = buf->data;
+				if (fp[buf->length - 1] != '/') {
+					ce_buffer_appendf(buf, "/");
+					buf->column++;
+				}
 			}
 		} else {
 			buf->length--;
@@ -1349,6 +1383,9 @@ editor_normal_mode_command(u_int8_t key)
 		case 'w':
 			normalcmd = EDITOR_COMMAND_WORD_NEXT;
 			goto direct;
+		case 'z':
+			normalcmd = EDITOR_COMMAND_ALIGN;
+			break;
 		case 0x10:
 			normalcmd = EDITOR_COMMAND_PROCESS;
 			break;
@@ -1411,6 +1448,16 @@ direct:
 			break;
 		case EDITOR_COMMAND_WORD_PREV:
 			editor_cmd_word_prev(buf, num);
+			break;
+		case EDITOR_COMMAND_ALIGN:
+			switch (key) {
+			case 'z':
+				ce_buffer_center();
+				break;
+			case 't':
+				ce_buffer_top();
+				break;
+			}
 			break;
 		case EDITOR_COMMAND_PROCESS:
 			switch (key) {
@@ -1501,7 +1548,7 @@ editor_cmd_select_execute(void)
 	char		nul;
 	const char	*fp;
 	long		linenr;
-	int		try_file;
+	int		i, try_file;
 	char		*cmd, *line, *p, *e, *ep, n;
 
 	e = NULL;
@@ -1515,6 +1562,17 @@ editor_cmd_select_execute(void)
 	nul = '\0';
 	ce_editor_pbuffer_append(&nul, sizeof(nul));
 	cmd = pbuffer->data;
+
+	if ((p = strchr(cmd, ' ')) != NULL) {
+		*p = '\0';
+		for (i = 0; cmdtab[i].cmd != NULL; i++) {
+			if (!strcmp(cmd, cmdtab[i].cmd)) {
+				cmdtab[i].run(p + 1);
+				return;
+			}
+		}
+		*p = ' ';
+	}
 
 	if ((p = strchr(cmd, ':')) != NULL) {
 		*p = '\0';
@@ -1537,7 +1595,7 @@ editor_cmd_select_execute(void)
 
 	fp = ce_editor_fullpath(cmd);
 	if (try_file && lstat(fp, &st) != -1) {
-		if (S_ISREG(st.st_mode)) {
+		if (S_ISREG(st.st_mode) && !(st.st_mode & S_IXUSR)) {
 			editor_cmd_open_file(cmd);
 			if (linenr) {
 				ce_buffer_jump_line(ce_buffer_active(),
@@ -1546,7 +1604,7 @@ editor_cmd_select_execute(void)
 			ce_editor_pbuffer_reset();
 			return;
 		} else if (S_ISDIR(st.st_mode)) {
-			editor_directory_list(fp);
+			editor_directory_list(cmd);
 			ce_editor_pbuffer_reset();
 			return;
 		}
