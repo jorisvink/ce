@@ -668,7 +668,6 @@ ce_editor_history_add(struct ce_histlist *list, const char *cmd)
 	hist->cmd = ce_strdup(cmd);
 
 	TAILQ_INSERT_HEAD(list, hist, list);
-	ce_debug("registered %s", cmd);
 }
 
 static void
@@ -717,7 +716,6 @@ editor_process_input(int delay)
 	if (editor_read_byte(&key, delay) == 0)
 		return;
 
-	ce_debug("0x%02x", key);
 	if (key == EDITOR_KEY_ESC)
 		key = editor_process_escape();
 
