@@ -250,7 +250,6 @@ ce_syntax_write(struct cebuf *buf, struct celine *line, size_t index,
 		syntax_state.inside_preproc = 0;
 		if (syntax_state.inside_string == 0)
 			syntax_state_color_clear(&syntax_state);
-		syntax_term_write(&syntax_state, p, 1, 0);
 		return;
 	}
 
@@ -274,6 +273,9 @@ ce_syntax_write(struct cebuf *buf, struct celine *line, size_t index,
 
 			if (syntax_state.inside_comment)
 				syntax_state_term_bold(&syntax_state, 1);
+			break;
+		case '\n':
+			syntax_state.off++;
 			break;
 		default:
 			spaces = syntax_state.off;

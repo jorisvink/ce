@@ -83,13 +83,16 @@ static void	editor_draw_console(void);
 
 static void	editor_cmd_quit(int);
 static void	editor_cmd_reset(void);
-static void	editor_cmd_suspend(void);
 static void	editor_cmd_paste(void);
+static void	editor_cmd_suspend(void);
 static void	editor_cmd_word_erase(void);
 static void	editor_cmd_search_next(void);
 static void	editor_cmd_search_prev(void);
 static void	editor_cmd_search_word(void);
 static void	editor_cmd_buffer_list(void);
+
+static void	editor_cmd_history_prev(void);
+static void	editor_cmd_history_next(void);
 
 static void	editor_cmd_console(void);
 static void	editor_cmd_directory_list(void);
@@ -169,6 +172,8 @@ static struct keymap insert_map[] = {
 	{ EDITOR_KEY_RIGHT,	ce_buffer_move_right },
 	{ EDITOR_KEY_LEFT,	ce_buffer_move_left },
 	{ EDITOR_WORD_ERASE,	editor_cmd_word_erase },
+	{ 0x10,			editor_cmd_history_prev },
+	{ 0x0e,			editor_cmd_history_next },
 	{ EDITOR_KEY_ESC,	editor_cmd_normal_mode },
 };
 
@@ -231,6 +236,7 @@ static struct {
 	time_t			when;
 } msg;
 
+static struct ce_histlist	cmdhist;
 static int			quit = 0;
 static int			dirty = 1;
 static int			splash = 0;
@@ -244,6 +250,7 @@ static struct cebuf		*cmdbuf = NULL;
 static struct cebuf		*console = NULL;
 static struct cebuf		*buflist = NULL;
 static struct cebuf		*pbuffer = NULL;
+static struct cehist		*histcur = NULL;
 static struct cebuf		*suggestions = NULL;
 static int			mode = CE_EDITOR_MODE_NORMAL;
 static int			lastmode = CE_EDITOR_MODE_NORMAL;
@@ -253,6 +260,8 @@ ce_editor_init(void)
 {
 	struct passwd	*pw;
 	char		*login, pwd[PATH_MAX];
+
+	TAILQ_INIT(&cmdhist);
 
 	if ((home = getenv("HOME")) == NULL) {
 		if ((login = getlogin()) == NULL)
@@ -642,6 +651,26 @@ ce_editor_settings(struct cebuf *buf)
 	}
 }
 
+void
+ce_editor_history_add(struct ce_histlist *list, const char *cmd)
+{
+	struct cehist		*hist;
+
+	hist = TAILQ_FIRST(list);
+	if (hist != NULL) {
+		if (!strcmp(hist->cmd, cmd))
+			return;
+	}
+
+	if ((hist = calloc(1, sizeof(*hist))) == NULL)
+		fatal("%s: calloc: %s", __func__, errno_s);
+
+	hist->cmd = ce_strdup(cmd);
+
+	TAILQ_INSERT_HEAD(list, hist, list);
+	ce_debug("registered %s", cmd);
+}
+
 static void
 editor_signal(int sig)
 {
@@ -688,6 +717,7 @@ editor_process_input(int delay)
 	if (editor_read_byte(&key, delay) == 0)
 		return;
 
+	ce_debug("0x%02x", key);
 	if (key == EDITOR_KEY_ESC)
 		key = editor_process_escape();
 
@@ -715,6 +745,7 @@ editor_process_input(int delay)
 		return;
 	}
 
+	ce_proc_autocomplete_reset();
 	ce_buffer_input(curbuf, key);
 }
 
@@ -1139,14 +1170,18 @@ static void
 editor_cmdbuf_input(struct cebuf *buf, u_int8_t key)
 {
 	char			*ep;
+	struct cehist		*hist;
 	int			force;
 	long			linenr;
 	const char		*cmd, *path;
+
+	hist = NULL;
 
 	switch (key) {
 	case '\n':
 		ce_buffer_restore();
 		cmd = ce_buffer_as_string(buf);
+		ce_editor_history_add(&cmdhist, cmd);
 
 		if (isdigit((unsigned char)cmd[1])) {
 			errno = 0;
@@ -1217,12 +1252,37 @@ editor_cmdbuf_input(struct cebuf *buf, u_int8_t key)
 	case '\t':
 		editor_autocomplete_path(buf);
 		break;
+	case EDITOR_KEY_UP:
+		if (histcur == NULL) {
+			hist = TAILQ_FIRST(&cmdhist);
+		} else {
+			hist = TAILQ_NEXT(histcur, list);
+			if (hist == NULL)
+				hist = histcur;
+		}
+		break;
+	case EDITOR_KEY_DOWN:
+		if (histcur != NULL) {
+			hist = TAILQ_PREV(histcur, ce_histlist, list);
+			if (hist == NULL)
+				hist = histcur;
+		}
+		break;
 	default:
 		if (editor_allowed_command_key(key)) {
 			ce_buffer_append(buf, &key, sizeof(key));
 			buf->column++;
 		}
 		break;
+	}
+
+	histcur = hist;
+
+	if (hist != NULL) {
+		editor_cmd_reset();
+		ce_buffer_append(cmdbuf, hist->cmd, strlen(hist->cmd));
+		cmdbuf->length = strlen(hist->cmd);
+		cmdbuf->column = 1 + strlen(hist->cmd);
 	}
 
 	cmdbuf->lines[0].length = buf->length;
@@ -1896,10 +1956,20 @@ editor_cmd_buffer_list(void)
 static void
 editor_cmd_console(void)
 {
-	if (ce_buffer_active() == console)
+	struct celine		*line;
+
+	if (ce_buffer_active() == console) {
 		ce_buffer_restore();
-	else
+	} else {
 		ce_buffer_activate(console);
+
+		line = ce_buffer_line_current(console);
+		if (line->length != 1)
+			ce_buffer_appendl(console, "\n", 1);
+
+		ce_buffer_jump_line(console, console->lcnt, 0);
+		editor_cmd_insert_mode();
+	}
 }
 
 static void
@@ -1993,6 +2063,18 @@ editor_dirlist_input(struct cebuf *buf, u_int8_t key)
 
 		return;
 	}
+}
+
+static void
+editor_cmd_history_prev(void)
+{
+	ce_proc_autocomplete(1);
+}
+
+static void
+editor_cmd_history_next(void)
+{
+	ce_proc_autocomplete(0);
 }
 
 static void
@@ -2236,6 +2318,8 @@ editor_cmd_normal_mode(void)
 {
 	struct cebuf	*buf = ce_buffer_active();
 
+	ce_proc_autocomplete_reset();
+
 	if (mode == CE_EDITOR_MODE_INSERT) {
 		lastmode = mode;
 		mode = CE_EDITOR_MODE_NORMAL;
@@ -2255,8 +2339,10 @@ editor_cmd_normal_mode(void)
 
 	if (mode == CE_EDITOR_MODE_COMMAND ||
 	    mode == CE_EDITOR_MODE_BUFLIST ||
-	    mode == CE_EDITOR_MODE_SEARCH)
+	    mode == CE_EDITOR_MODE_SEARCH) {
+		histcur = NULL;
 		ce_buffer_restore();
+	}
 
 	if (mode == CE_EDITOR_MODE_COMMAND || mode == CE_EDITOR_MODE_SEARCH)
 		editor_cmd_reset();

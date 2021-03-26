@@ -37,8 +37,19 @@ struct proc {
 
 static void	proc_split_cmdline(char *, char **, size_t);
 
+static struct ce_histlist	cmdhist;
+static struct cehist		*histcur = NULL;
+static struct cehist		*histmatch = NULL;
+static char			*histsearch = NULL;
+
 /* The only running background process. */
 static struct proc	*active = NULL;
+
+void
+ce_proc_init(void)
+{
+	TAILQ_INIT(&cmdhist);
+}
 
 void
 ce_proc_run(char *cmd, struct cebuf *buf)
@@ -102,6 +113,8 @@ ce_proc_run(char *cmd, struct cebuf *buf)
 
 	ce_buffer_appendl(buf, copy, strlen(copy));
 	ce_buffer_appendl(buf, "\n", 1);
+
+	ce_editor_history_add(&cmdhist, copy);
 	free(copy);
 
 	active->first = 1;
@@ -248,10 +261,105 @@ ce_proc_reap(void)
 	close(active->ifd);
 	close(active->ofd);
 
+	ce_buffer_mark_jump(active->buf, CE_MARK_SELEXEC);
+	ce_buffer_top();
+
 	free(active);
 
 	active = NULL;
 	ce_editor_set_pasting(0);
+}
+
+void
+ce_proc_autocomplete(int up)
+{
+	size_t			len;
+	u_int8_t		*ptr;
+	struct cebuf		*buf;
+	struct celine		*line;
+	struct cehist		*hist;
+	int			match;
+
+	buf = ce_buffer_active();
+	line = ce_buffer_line_current(buf);
+
+	if (line->length == 0)
+		return;
+
+	len = line->length - 1;
+
+	if (histsearch == NULL) {
+		if ((histcur = TAILQ_FIRST(&cmdhist)) == NULL)
+			return;
+		if ((histsearch = malloc(len + 1)) == NULL)
+			fatal("%s: malloc: %s", __func__, errno_s);
+		memcpy(histsearch, line->data, len);
+		histsearch[len] = '\0';
+
+	}
+
+	match = 0;
+	hist = histcur;
+
+	for (;;) {
+		if (histmatch != hist && strstr(hist->cmd, histsearch)) {
+			len = strlen(hist->cmd);
+
+			if (!(line->flags & CE_LINE_ALLOCATED)) {
+				line->flags |= CE_LINE_ALLOCATED;
+			} else {
+				free(line->data);
+			}
+
+			line->maxsz = len;
+			line->length = len + 1;
+			if ((line->data = malloc(len + 1)) == NULL)
+				fatal("%s: calloc: %s", __func__, errno_s);
+
+			memcpy(line->data, hist->cmd, len);
+
+			ptr = line->data;
+			ptr[len] = '\n';
+
+			ce_buffer_line_columns(line);
+			buf->loff = len;
+			buf->column = line->columns;
+
+			ce_editor_dirty();
+
+			match = 1;
+			histmatch = hist;
+		}
+
+		if (!up) {
+			histcur = TAILQ_PREV(histcur, ce_histlist, list);
+			if (histcur == NULL) {
+				histcur = TAILQ_FIRST(&cmdhist);
+				break;
+			}
+			hist = histcur;
+		} else {
+			histcur = TAILQ_NEXT(histcur, list);
+			if (histcur == NULL) {
+				histcur = hist;
+				break;
+			}
+			hist = histcur;
+		}
+
+		if (match)
+			break;
+	}
+}
+
+void
+ce_proc_autocomplete_reset(void)
+{
+	free(histsearch);
+
+	histcur = NULL;
+	histmatch = NULL;
+	histsearch = NULL;
 }
 
 static void

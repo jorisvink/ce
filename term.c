@@ -113,6 +113,7 @@ void
 ce_term_setpos(size_t line, size_t col)
 {
 	u_int16_t	adj;
+	static size_t	last = 0;
 
 	if (col < TERM_CURSOR_MIN) {
 		fatal("%s: invalid column %zu (%zu)",
@@ -124,11 +125,18 @@ ce_term_setpos(size_t line, size_t col)
 		    __func__, line, ce_term_height());
 	}
 
-	adj = col / (ce_term_width() + 1);
-	if ((col = col % ce_term_width()) == 0)
-		col = ce_term_width();
+	if (line > TERM_CURSOR_MIN &&
+	    (last + 1) == line && col == TERM_CURSOR_MIN) {
+		ce_term_writef("\r\n");
+	} else {
+		adj = col / (ce_term_width() + 1);
+		if ((col = col % ce_term_width()) == 0)
+			col = ce_term_width();
 
-	ce_term_writef(TERM_SEQUENCE_FMT_SET_CURSOR, line + adj, col);
+		ce_term_writef(TERM_SEQUENCE_FMT_SET_CURSOR, line + adj, col);
+	}
+
+	last = line;
 }
 
 void

@@ -100,6 +100,16 @@ struct ceconf {
 extern struct ceconf		config;
 
 /*
+ * A history entry for a command executed via cmdbuf or select-execute.
+ */
+struct cehist {
+	char			*cmd;
+	TAILQ_ENTRY(cehist)	list;
+};
+
+TAILQ_HEAD(ce_histlist, cehist);
+
+/*
  * Represents a single line in a file.
  */
 #define CE_LINE_ALLOCATED	0x0001
@@ -339,6 +349,7 @@ void		ce_editor_settings(struct cebuf *);
 const char	*ce_editor_shortpath(const char *);
 int		ce_editor_word_separator(u_int8_t);
 void		ce_editor_message(const char *, ...);
+void		ce_editor_history_add(struct ce_histlist *, const char *);
 
 void		ce_editor_pbuffer_sync(void);
 void		ce_editor_pbuffer_reset(void);
@@ -352,10 +363,13 @@ void		ce_editor_cmdbuf_reset(void);
 int		ce_utf8_continuation_byte(u_int8_t);
 int		ce_utf8_sequence(const void *, size_t, size_t, size_t *);
 
+void		ce_proc_init(void);
 void		ce_proc_reap(void);
 void		ce_proc_read(void);
 int		ce_proc_stdout(void);
 void		ce_proc_cleanup(void);
+void		ce_proc_autocomplete(int);
+void		ce_proc_autocomplete_reset(void);
 void		ce_proc_run(char *, struct cebuf *);
 
 void		ce_syntax_init(void);

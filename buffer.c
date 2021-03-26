@@ -1015,8 +1015,11 @@ ce_buffer_delete_lines(struct cebuf *buf, size_t start, size_t end, int rev,
 	if (end >= buf->lcnt)
 		buf->line--;
 
-	if (buf->line == 0)
+	if (buf->line == 0) {
+		if (buf->top > 0)
+			buf->top--;
 		buf->line = TERM_CURSOR_MIN;
+	}
 
 	if (buf->lcnt == 0) {
 		cursor_column = TERM_CURSOR_MIN;
@@ -1882,7 +1885,7 @@ ce_buffer_line_index(struct cebuf *buf)
 
 	index = buf->top + (buf->line - buf->orig_line);
 	if (index >= buf->lcnt)
-		fatal("%s: index %zu > lcnt %zu", __func__, index, buf->lcnt);
+		fatal("%s: index %zu >= lcnt %zu", __func__, index, buf->lcnt);
 
 	return (index);
 }
