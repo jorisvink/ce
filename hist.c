@@ -59,7 +59,6 @@ ce_hist_add(struct ce_histlist *list, const char *cmd)
 
 	TAILQ_FOREACH(hist, list, list) {
 		if (!strcmp(hist->cmd, cmd)) {
-			ce_debug("dup %s", cmd);
 			TAILQ_REMOVE(list, hist, list);
 			TAILQ_INSERT_HEAD(list, hist, list);
 			return;
@@ -206,7 +205,6 @@ hist_file_open(int mode)
 	}
 
 	if (mode == HIST_MODE_READ && st.st_mtime == histtime) {
-		ce_debug("hist not modified");
 		(void)close(fd);
 		return (NULL);
 	}
@@ -244,8 +242,6 @@ hist_file_read(void)
 	if ((fp = hist_file_open(HIST_MODE_READ)) == NULL)
 		return;
 
-	ce_debug("reading history");
-
 	while ((hist = TAILQ_FIRST(&cmdhist)) != NULL) {
 		TAILQ_REMOVE(&cmdhist, hist, list);
 		free(hist->cmd);
@@ -276,6 +272,5 @@ hist_file_append(const char *cmd)
 	if (fprintf(fp, "%s\n", cmd) != (int)len + 1)
 		fatal("%s: not all data written", __func__);
 
-	ce_debug("wrote '%s' to history", cmd);
 	fclose(fp);
 }
