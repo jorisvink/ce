@@ -857,7 +857,7 @@ editor_draw_status(void)
 		fatal("%s: unknown mode %d", __func__, mode);
 	}
 
-	if (curbuf->flags & CE_BUFFER_DIRTY)
+	if (curbuf->internal == 0 && (curbuf->flags & CE_BUFFER_DIRTY))
 		isdirty = " [+]";
 
 	if (curbuf->flags & CE_BUFFER_RO)
