@@ -339,6 +339,7 @@ void		ce_editor_init(void);
 void		ce_editor_loop(void);
 int		ce_editor_mode(void);
 const char	*ce_editor_pwd(void);
+const char	*ce_editor_home(void);
 void		ce_editor_dirty(void);
 int		ce_editor_pasting(void);
 void		ce_editor_set_pasting(int);
@@ -349,7 +350,6 @@ void		ce_editor_settings(struct cebuf *);
 const char	*ce_editor_shortpath(const char *);
 int		ce_editor_word_separator(u_int8_t);
 void		ce_editor_message(const char *, ...);
-void		ce_editor_history_add(struct ce_histlist *, const char *);
 
 void		ce_editor_pbuffer_sync(void);
 void		ce_editor_pbuffer_reset(void);
@@ -363,13 +363,15 @@ void		ce_editor_cmdbuf_reset(void);
 int		ce_utf8_continuation_byte(u_int8_t);
 int		ce_utf8_sequence(const void *, size_t, size_t, size_t *);
 
-void		ce_proc_init(void);
+void		ce_hist_init(void);
+void		ce_hist_autocomplete(int);
+void		ce_hist_autocomplete_reset(void);
+void		ce_hist_add(struct ce_histlist *, const char *);
+
 void		ce_proc_reap(void);
 void		ce_proc_read(void);
 int		ce_proc_stdout(void);
 void		ce_proc_cleanup(void);
-void		ce_proc_autocomplete(int);
-void		ce_proc_autocomplete_reset(void);
 void		ce_proc_run(char *, struct cebuf *);
 
 void		ce_syntax_init(void);
@@ -384,7 +386,8 @@ char		*ce_strdup(const char *);
 void		ce_debug(const char *, ...)
 		    __attribute__((format (printf, 1, 2)));
 void		fatal(const char *, ...)
-		    __attribute__((format (printf, 1, 2)));
+		    __attribute__((format (printf, 1, 2)))
+		    __attribute__((noreturn));
 
 #if defined(__APPLE__)
 void		ce_macos_get_pasteboard_contents(u_int8_t **, size_t *);
