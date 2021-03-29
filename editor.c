@@ -1113,7 +1113,7 @@ editor_autocomplete_path(struct cebuf *buf)
 
 	ce_buffer_populate_lines(suggestions);
 
-	start = 1 + suggestions->lcnt;
+	start = 2 + suggestions->lcnt;
 	if (start > ce_term_height() - 2)
 		start = ce_term_height() / 2;
 
