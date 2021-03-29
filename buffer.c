@@ -141,12 +141,12 @@ ce_buffer_resize(void)
 
 	TAILQ_FOREACH(buf, &buffers, list) {
 		buf->width = ce_term_width();
-		buf->height = ce_term_height() - 2;
+		buf->height = ce_term_height() - 3;
 	}
 
 	TAILQ_FOREACH(buf, &internals, list) {
 		buf->width = ce_term_width();
-		buf->height = ce_term_height() - 2;
+		buf->height = ce_term_height() - 3;
 	}
 }
 
@@ -2039,7 +2039,7 @@ ce_buffer_alloc(int internal)
 	buf->orig_column = TERM_CURSOR_MIN;
 
 	buf->width = ce_term_width();
-	buf->height = ce_term_height() - 2;
+	buf->height = ce_term_height() - 3;
 
 	buf->line = buf->orig_line;
 	buf->column = buf->orig_column;

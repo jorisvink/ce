@@ -39,6 +39,11 @@
 /* Show messages for 5 seconds. */
 #define EDITOR_MESSAGE_DELAY	5
 
+#define EDITOR_CMD_BUFLIST	0x12
+#define EDITOR_CMD_PASTE	0x16
+#define EDITOR_CMD_HIST_PREV	0x10
+#define EDITOR_CMD_HIST_NEXT	0x0e
+
 #define EDITOR_WORD_ERASE	0x17
 #define EDITOR_KEY_ESC		0x1b
 #define EDITOR_KEY_UP		0xfa
@@ -162,18 +167,19 @@ static struct keymap normal_map[] = {
 
 	{ 0x04,			editor_cmd_directory_list },
 
-	{ 0x12,			editor_cmd_buffer_list },
+	{ EDITOR_CMD_BUFLIST,	editor_cmd_buffer_list },
 	{ 0x1a,			editor_cmd_suspend },
 };
 
 static struct keymap insert_map[] = {
+	{ EDITOR_CMD_PASTE,	editor_cmd_paste },
 	{ EDITOR_KEY_UP,	ce_buffer_move_up },
 	{ EDITOR_KEY_DOWN,	ce_buffer_move_down },
 	{ EDITOR_KEY_RIGHT,	ce_buffer_move_right },
 	{ EDITOR_KEY_LEFT,	ce_buffer_move_left },
 	{ EDITOR_WORD_ERASE,	editor_cmd_word_erase },
-	{ 0x10,			editor_cmd_history_prev },
-	{ 0x0e,			editor_cmd_history_next },
+	{ EDITOR_CMD_HIST_NEXT,	editor_cmd_history_next },
+	{ EDITOR_CMD_HIST_PREV,	editor_cmd_history_prev },
 	{ EDITOR_KEY_ESC,	editor_cmd_normal_mode },
 };
 
@@ -921,12 +927,18 @@ editor_draw_status(void)
 		ce_term_writestr(ce_editor_shortpath(curdir));
 	}
 
-	ce_term_setpos(ce_term_height() - 1, TERM_CURSOR_MIN);
-
+	width = ce_term_width();
+	ce_term_setpos(ce_term_height() - 2, TERM_CURSOR_MIN);
 	ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
-	ce_term_color(TERM_COLOR_CYAN + TERM_COLOR_FG);
-	ce_term_color(TERM_COLOR_BLACK + TERM_COLOR_BG);
-	ce_term_writestr(TERM_SEQUENCE_ATTR_REVERSE);
+	ce_term_color(TERM_COLOR_WHITE + TERM_COLOR_FG);
+	while (width > 0) {
+		ce_term_writestr(CE_UTF8_U2015);
+		width--;
+	}
+
+	ce_term_setpos(ce_term_height() - 1, TERM_CURSOR_MIN);
+	ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
+	ce_term_color(TERM_COLOR_WHITE + TERM_COLOR_FG);
 	ce_term_writef("%s %s", &fline[cmdoff], sline);
 
 	if ((size_t)(slen + flen) < (ce_term_width() - llen)) {
@@ -2186,8 +2198,10 @@ editor_cmd_paste(void)
 	if (ptr[len] == '\n')
 		ce_buffer_jump_left();
 
-	lastmode = mode;
-	mode = CE_EDITOR_MODE_NORMAL;
+	if (buf != console) {
+		lastmode = mode;
+		mode = CE_EDITOR_MODE_NORMAL;
+	}
 
 	if (lines > 1)
 		ce_buffer_jump_line(buf, prev, 0);
