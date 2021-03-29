@@ -384,7 +384,7 @@ syntax_state_term_reset(struct state *state)
 
 		if (state->selection) {
 			state->highlight = 1;
-			ce_term_color(TERM_COLOR_WHITE + TERM_COLOR_BG);
+			ce_term_writestr(TERM_SEQUENCE_ATTR_REVERSE);
 		}
 	}
 }
@@ -416,7 +416,7 @@ syntax_state_term_highlight(struct state *state)
 	if (state->highlight == 0) {
 		state->dirty = 1;
 		state->highlight = 1;
-		ce_term_color(TERM_COLOR_WHITE + TERM_COLOR_BG);
+		ce_term_writestr(TERM_SEQUENCE_ATTR_REVERSE);
 	}
 }
 
@@ -427,6 +427,10 @@ syntax_state_color(struct state *state, int color)
 		state->dirty = 1;
 		ce_term_color(color + TERM_COLOR_FG);
 		state->color = color;
+		if (state->selection && state->highlight == 0) {
+			state->highlight = 1;
+			ce_term_writestr(TERM_SEQUENCE_ATTR_REVERSE);
+		}
 	}
 }
 
