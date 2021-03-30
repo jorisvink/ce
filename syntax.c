@@ -327,8 +327,7 @@ syntax_state_selection(struct state *state)
 	if (ce_editor_mode() != CE_EDITOR_MODE_SELECT)
 		goto out;
 
-	if (state->col == state->buf->column &&
-	    state->index == state->buf->cursor_line)
+	if (state->col == state->buf->column)
 		goto out;
 
 	if (state->buf->selstart.line == state->buf->selend.line &&
