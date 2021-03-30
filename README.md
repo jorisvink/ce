@@ -6,8 +6,6 @@ ce is my minimalistic editor I use on a day-to-day basis.
 Is this editor for you? Definitely not, it is highly opinionated
 and tailored to my requirements.
 
-Its highlighting works best on a light background terminal.
-
 License
 -------
 Coma Editor is licensed under the ISC license.
