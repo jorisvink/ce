@@ -763,7 +763,7 @@ syntax_highlight_python_decorator(struct state *state)
 {
 	if (state->off == 0 && state->p[0] == '@') {
 		syntax_state_color(state, TERM_COLOR_CYAN);
-		syntax_write(state, state->len);
+		syntax_write(state, state->len - 1);
 		return (0);
 	}
 
