@@ -761,9 +761,19 @@ syntax_highlight_python(struct state *state)
 static int
 syntax_highlight_python_decorator(struct state *state)
 {
+	size_t		idx;
+
 	if (state->off == 0 && state->p[0] == '@') {
+		syntax_state_color(state, TERM_COLOR_MAGENTA);
+		syntax_write(state, 1);
+
 		syntax_state_color(state, TERM_COLOR_CYAN);
-		syntax_write(state, state->len - 1);
+		for (idx = 1; idx < state->len - 1; idx++) {
+			if (state->p[idx] == '(')
+				return (0);
+			syntax_term_write(state, &state->p[idx], 1, 1);
+		}
+
 		return (0);
 	}
 
