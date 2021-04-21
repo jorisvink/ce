@@ -763,7 +763,7 @@ syntax_highlight_python_decorator(struct state *state)
 {
 	size_t		idx;
 
-	if (state->off == 0 && state->p[0] == '@') {
+	if (state->p[0] == '@') {
 		syntax_state_color(state, TERM_COLOR_MAGENTA);
 		syntax_write(state, 1);
 
