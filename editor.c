@@ -652,6 +652,7 @@ ce_editor_settings(struct cebuf *buf)
 
 	switch (buf->type) {
 	case CE_FILE_TYPE_YAML:
+	case CE_FILE_TYPE_JSON:
 	case CE_FILE_TYPE_PYTHON:
 		config.tab_width = 4;
 		config.tab_expand = 1;

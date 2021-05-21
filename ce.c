@@ -37,6 +37,7 @@ static struct {
 	{ ".swift",	CE_FILE_TYPE_SWIFT },
 	{ ".yml",	CE_FILE_TYPE_YAML },
 	{ ".yaml",	CE_FILE_TYPE_YAML },
+	{ ".json",	CE_FILE_TYPE_JSON },
 	{ NULL,		0 },
 };
 
@@ -116,11 +117,6 @@ ce_file_type_detect(struct cebuf *buf)
 
 		buf->type = file_types[idx].type;
 		break;
-	}
-
-	if (buf->type == CE_FILE_TYPE_PYTHON) {
-		config.tab_width = 4;
-		config.tab_expand = 1;
 	}
 
 	ce_debug("'%s' is type '%d'", buf->path, buf->type);
