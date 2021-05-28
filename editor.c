@@ -1220,8 +1220,13 @@ editor_cmdbuf_input(struct cebuf *buf, u_int8_t key)
 		case 'b':
 			switch (cmd[2]) {
 			case 'c':
-				ce_buffer_free(ce_buffer_active());
-				ce_editor_dirty();
+				if (cmd[3] == 'o') {
+					ce_buffer_close_nonactive();
+					ce_editor_dirty();
+				} else {
+					ce_buffer_free(ce_buffer_active());
+					ce_editor_dirty();
+				}
 				break;
 			}
 			break;

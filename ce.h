@@ -251,6 +251,7 @@ void		ce_buffer_init(int, char **);
 void		ce_buffer_free(struct cebuf *);
 void		ce_buffer_list(struct cebuf *);
 void		ce_buffer_reset(struct cebuf *);
+void		ce_buffer_close_nonactive(void);
 void		ce_buffer_activate_index(size_t);
 void		ce_buffer_activate(struct cebuf *);
 size_t		ce_buffer_line_index(struct cebuf *);

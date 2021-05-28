@@ -121,6 +121,19 @@ ce_buffer_cleanup(void)
 		ce_buffer_free_internal(buf);
 }
 
+void
+ce_buffer_close_nonactive(void)
+{
+	struct cebuf	*buf, *next;
+
+	for (buf = TAILQ_FIRST(&buffers); buf != NULL; buf = next) {
+		next = TAILQ_NEXT(buf, list);
+		if (buf == active)
+			continue;
+		ce_buffer_free(buf);
+	}
+}
+
 const char *
 ce_buffer_strerror(void)
 {
