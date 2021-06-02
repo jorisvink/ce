@@ -284,12 +284,11 @@ ce_editor_init(void)
 	if (getcwd(pwd, sizeof(pwd)) == NULL)
 		fatal("%s: getpwd: %s", __func__, errno_s);
 
+	memset(&msg, 0, sizeof(msg));
 	editor_directory_change(pwd);
 
 	ce_debug("homedir is '%s'", home);
 	ce_debug("curdir is '%s'", curdir);
-
-	memset(&msg, 0, sizeof(msg));
 
 	editor_signal_setup();
 }
