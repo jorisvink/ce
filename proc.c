@@ -27,13 +27,16 @@
 
 #include "ce.h"
 
+#define PROC_AUTO_SCROLL	(1 << 1)
+
 struct proc {
 	pid_t			pid;
-	int			ifd;
 	int			ofd;
+	int			first;
+	int			flags;
 	size_t			idx;
 	size_t			cnt;
-	int			first;
+	char			*cmd;
 	struct cebuf		*buf;
 };
 
@@ -42,26 +45,29 @@ static void	proc_split_cmdline(char *, char **, size_t);
 /* The only running background process. */
 static struct proc	*active = NULL;
 
+/*
+ * Processes where we shouldn't autoscroll.
+ */
+static const char	*noscroll[] = {
+	"rg",
+	"grep",
+	"git",
+	NULL
+};
+
 void
 ce_proc_run(char *cmd, struct cebuf *buf)
 {
 	pid_t		pid;
 	char		*argv[32], *copy;
-	int		flags, idx, in_pipe[2], out_pipe[2];
+	int		flags, idx, out_pipe[2];
 
 	if (active != NULL) {
 		ce_editor_message("execute failed, another proc is pending");
 		return;
 	}
 
-	if (pipe(in_pipe) == -1) {
-		ce_editor_message("%s: pipe: %s", __func__, errno_s);
-		return;
-	}
-
 	if (pipe(out_pipe) == -1) {
-		close(in_pipe[0]);
-		close(in_pipe[1]);
 		ce_editor_message("%s: pipe: %s", __func__, errno_s);
 		return;
 	}
@@ -73,8 +79,6 @@ ce_proc_run(char *cmd, struct cebuf *buf)
 		ce_debug("%d %s", idx, argv[idx]);
 
 	if ((pid = fork()) == -1) {
-		close(in_pipe[0]);
-		close(in_pipe[1]);
 		close(out_pipe[0]);
 		close(out_pipe[1]);
 		ce_editor_message("failed to run '%s': %s", cmd, errno_s);
@@ -82,13 +86,13 @@ ce_proc_run(char *cmd, struct cebuf *buf)
 	}
 
 	if (pid == 0) {
-		close(in_pipe[1]);
 		close(out_pipe[0]);
 
 		if (dup2(out_pipe[1], STDOUT_FILENO) == -1 ||
-		    dup2(out_pipe[1], STDERR_FILENO) == -1 ||
-		    dup2(in_pipe[0], STDIN_FILENO) == -1)
+		    dup2(out_pipe[1], STDERR_FILENO) == -1)
 			fatal("dup2: %s", errno_s);
+
+		(void)close(STDIN_FILENO);
 
 		execvp(argv[0], argv);
 		ce_debug("execvp: %s", errno_s);
@@ -96,7 +100,6 @@ ce_proc_run(char *cmd, struct cebuf *buf)
 		exit(1);
 	}
 
-	close(in_pipe[0]);
 	close(out_pipe[1]);
 
 	if ((active = calloc(1, sizeof(*active))) == NULL)
@@ -110,8 +113,18 @@ ce_proc_run(char *cmd, struct cebuf *buf)
 	active->buf = buf;
 	active->pid = pid;
 	active->idx = buf->lcnt;
-	active->ifd = in_pipe[1];
 	active->ofd = out_pipe[0];
+
+	if ((active->cmd = strdup(cmd)) == NULL)
+		fatal("%s: strdup: %s", __func__, errno_s);
+
+	active->flags = PROC_AUTO_SCROLL;
+	for (idx = 0; noscroll[idx] != NULL; idx++) {
+		if (!strcmp(noscroll[idx], active->cmd)) {
+			active->flags = 0;
+			break;
+		}
+	}
 
 	buf->selexec.set = 1;
 	buf->selexec.line = buf->lcnt;
@@ -124,7 +137,7 @@ ce_proc_run(char *cmd, struct cebuf *buf)
 	if (fcntl(active->ofd, F_SETFL, &flags) == -1)
 		fatal("%s: fcntl(set): %s", __func__, errno_s);
 
-	ce_debug("proc %d started", active->pid);
+	ce_debug("proc %d started (idx %zu)", active->pid, active->idx);
 }
 
 void
@@ -167,7 +180,6 @@ ce_proc_read(void)
 	}
 
 	active->cnt += ret;
-	ce_editor_set_pasting(1);
 	ce_debug("read %zd bytes from process", ret);
 
 	if (ret == 0) {
@@ -194,6 +206,8 @@ ce_proc_read(void)
 		active->first = 0;
 		ce_buffer_center_line(active->buf, active->idx - 1);
 		ce_buffer_top();
+	} else if (active->flags & PROC_AUTO_SCROLL) {
+		ce_buffer_jump_line(active->buf, active->buf->lcnt, 0);
 	}
 
 	ce_editor_dirty();
@@ -223,37 +237,36 @@ ce_proc_reap(void)
 	ce_debug("proc %d completed with %d", pid, status);
 
 	close(active->ofd);
-	close(active->ifd);
 
 	if (WIFEXITED(status)) {
 		len = snprintf(buf, sizeof(buf),
-		    "program exited with %d\n", WEXITSTATUS(status));
-		if (WEXITSTATUS(status) == 0 && active->cnt > 0)
-			len = 0;
+		    "%s exited with %d",
+		    active->cmd, WEXITSTATUS(status));
 	} else if (WIFSIGNALED(status)) {
 		len = snprintf(buf, sizeof(buf),
-		    "program exited with signal %d\n", WSTOPSIG(status));
+		    "%s aborted due to signal %d",
+		    active->cmd, WSTOPSIG(status));
 	} else {
 		len = snprintf(buf, sizeof(buf),
-		    "program exited with %d\n", status);
+		    "%s exited with status %d", active->cmd, status);
 	}
 
 	if (len == -1 || (size_t)len >= sizeof(buf))
 		fatal("%s: failed to construct status buf", __func__);
 
-	if (len > 0)
-		ce_buffer_appendl(active->buf, buf, len);
+	if (active->flags & PROC_AUTO_SCROLL) {
+		ce_buffer_appendl(active->buf, "\n", 1);
+		ce_buffer_jump_line(active->buf, active->buf->lcnt, 0);
+	}
 
 	ce_buffer_appendl(active->buf, "\n", 1);
+	ce_editor_message(buf);
 	ce_editor_dirty();
 
-	close(active->ifd);
-	close(active->ofd);
-
+	free(active->cmd);
 	free(active);
 
 	active = NULL;
-	ce_editor_set_pasting(0);
 }
 
 static void

@@ -107,6 +107,7 @@ ce_hist_autocomplete(int up)
 
 	for (;;) {
 		if (histmatch != hist && strstr(hist->cmd, histsearch)) {
+			ce_debug("hit on %s", hist->cmd);
 			len = strlen(hist->cmd);
 
 			if (!(line->flags & CE_LINE_ALLOCATED)) {

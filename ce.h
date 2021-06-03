@@ -22,7 +22,8 @@
 #include <stdarg.h>
 #include <string.h>
 
-#define errno_s				strerror(errno)
+#define CE_GREP_CMD		"!rg -uuu --line-number "
+#define errno_s			strerror(errno)
 
 #define CE_BUFFER_SEARCH_NORMAL		0
 #define CE_BUFFER_SEARCH_PREVIOUS	1
@@ -164,6 +165,7 @@ struct cemark {
 
 #define CE_BUF_TYPE_DEFAULT	0
 #define CE_BUF_TYPE_DIRLIST	1
+#define CE_BUF_TYPE_SHELLCMD	2
 
 struct cebuf {
 	/* Internal buffer? */
@@ -248,6 +250,7 @@ void		ce_buffer_resize(void);
 void		ce_buffer_cleanup(void);
 void		ce_buffer_restore(void);
 void		ce_buffer_init(int, char **);
+void		ce_buffer_map(struct cebuf *);
 void		ce_buffer_free(struct cebuf *);
 void		ce_buffer_list(struct cebuf *);
 void		ce_buffer_reset(struct cebuf *);
@@ -257,7 +260,6 @@ void		ce_buffer_activate(struct cebuf *);
 size_t		ce_buffer_line_index(struct cebuf *);
 void		ce_buffer_word_erase(struct cebuf *);
 void		ce_buffer_word_delete(struct cebuf *);
-void		ce_buffer_map(struct cebuf *, size_t);
 void		ce_buffer_insert_line(struct cebuf *);
 void		ce_buffer_insert_line(struct cebuf *);
 void		ce_buffer_line_columns(struct celine *);

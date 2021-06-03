@@ -171,10 +171,9 @@ ce_buffer_internal(const char *name)
 	buf = ce_buffer_alloc(1);
 	ce_buffer_setname(buf, name);
 
-	if ((buf->data = calloc(1, 1024)) == NULL)
-		fatal("%s: calloc(%zu): %s", __func__, buf->maxsz, errno_s);
-
 	buf->maxsz = 1024;
+	if ((buf->data = calloc(1, buf->maxsz)) == NULL)
+		fatal("%s: calloc(%zu): %s", __func__, buf->maxsz, errno_s);
 
 	ce_buffer_line_alloc_empty(buf);
 
@@ -229,6 +228,8 @@ ce_buffer_file(const char *path)
 
 	if ((rp = realpath(path, NULL)) != NULL) {
 		TAILQ_FOREACH(buf, &buffers, list) {
+			if (buf->buftype != CE_BUF_TYPE_DEFAULT)
+				continue;
 			if (!strcmp(buf->path, rp)) {
 				active = buf;
 				ce_editor_settings(active);
@@ -495,17 +496,13 @@ ce_buffer_as_string(struct cebuf *buf)
 }
 
 void
-ce_buffer_map(struct cebuf *buf, size_t start)
+ce_buffer_map(struct cebuf *buf)
 {
 	size_t		idx, line, towrite;
 
 	ce_syntax_init();
 
-	if (start == 0)
-		line = buf->orig_line;
-	else
-		line = start;
-
+	line = buf->orig_line;
 	ce_term_setpos(buf->orig_line, buf->orig_column);
 
 	for (idx = buf->top; idx < buf->lcnt; idx++) {
@@ -865,7 +862,7 @@ ce_buffer_list(struct cebuf *output)
 			output->cursor_line = idx;
 		}
 
-		if (buf->internal || buf->buftype == CE_BUF_TYPE_DIRLIST)
+		if (buf->internal || buf->buftype != CE_BUF_TYPE_DEFAULT)
 			name = buf->name;
 		else
 			name = ce_editor_shortpath(buf->path);
