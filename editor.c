@@ -2093,8 +2093,13 @@ editor_cmd_paste(void)
 
 	buf = ce_buffer_active();
 	if (buf == cmdbuf) {
-		ce_buffer_append(buf, pbuffer->data, pbuffer->length);
-		buf->column += pbuffer->length;
+		len = ce_term_width() * 0.75;
+		if (cmdbuf->length + pbuffer->length > len)
+			len = len - cmdbuf->length;
+		else
+			len = pbuffer->length;
+		ce_buffer_append(buf, pbuffer->data, len);
+		buf->column += len;
 #if defined(__APPLE__)
 		goto reset;
 #else
