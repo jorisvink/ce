@@ -1141,6 +1141,9 @@ editor_cmdbuf_input(struct cebuf *buf, u_int8_t key)
 	hist = NULL;
 
 	switch (key) {
+	case EDITOR_CMD_PASTE:
+		editor_cmd_paste();
+		break;
 	case '\n':
 		ce_buffer_restore();
 		cmd = ce_buffer_as_string(buf);
@@ -2089,6 +2092,16 @@ editor_cmd_paste(void)
 		return;
 
 	buf = ce_buffer_active();
+	if (buf == cmdbuf) {
+		ce_buffer_append(buf, pbuffer->data, pbuffer->length);
+		buf->column += pbuffer->length;
+#if defined(__APPLE__)
+		goto reset;
+#else
+		return;
+#endif
+	}
+
 	if (buf->lcnt > 0) {
 		idx = ce_buffer_line_index(buf);
 		line = &buf->lines[idx];
@@ -2139,6 +2152,7 @@ editor_cmd_paste(void)
 		ce_buffer_jump_line(buf, prev, 0);
 
 #if defined(__APPLE__)
+reset:
 	pbuffer->data = old;
 	pbuffer->length = old_len;
 #endif
