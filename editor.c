@@ -84,6 +84,7 @@ static void	editor_autocomplete_path(struct cebuf *);
 static void	editor_yank_lines(struct cebuf *, size_t, size_t, int);
 
 static void	editor_draw_status(void);
+static void	editor_draw_cmdbuf(void);
 
 static void	editor_cmd_quit(int);
 static void	editor_cmd_grep(void);
@@ -387,7 +388,7 @@ ce_editor_loop(void)
 		}
 
 		if (buf == cmdbuf)
-			ce_buffer_map(cmdbuf);
+			editor_draw_cmdbuf();
 
 		if (splash) {
 			ce_term_writestr(TERM_SEQUENCE_CURSOR_SAVE);
@@ -961,6 +962,27 @@ editor_draw_status(void)
 }
 
 static void
+editor_draw_cmdbuf(void)
+{
+	const u_int8_t	*ptr;
+	size_t		width, off;
+
+	off = ce_term_width() * 0.75f;
+	width = off - 10;
+
+	ce_term_setpos(ce_term_height(), TERM_CURSOR_MIN);
+	ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
+
+	if (cmdbuf->length > width)
+		off = cmdbuf->length - width - 1;
+	else
+		off = 0;
+
+	ptr = cmdbuf->data;
+	ce_term_write(&ptr[off], cmdbuf->length - off);
+}
+
+static void
 editor_autocomplete_path(struct cebuf *buf)
 {
 	struct stat		st;
@@ -1192,8 +1214,10 @@ editor_cmdbuf_input(struct cebuf *buf, u_int8_t key)
 					ce_buffer_close_nonactive();
 					ce_editor_dirty();
 				} else {
-					if (ce_buffer_active() == shellbuf)
+					if (ce_buffer_active() == shellbuf) {
+						ce_debug("closed shellbuf");
 						shellbuf = NULL;
+					}
 					ce_buffer_free(ce_buffer_active());
 					ce_editor_dirty();
 				}
@@ -1984,7 +2008,9 @@ editor_cmd_execute(char *cmd)
 		shellbuf = ce_buffer_alloc(0);
 		shellbuf->flags |= CE_BUFFER_RO;
 		shellbuf->buftype = CE_BUF_TYPE_SHELLCMD;
+
 		ce_buffer_setname(shellbuf, "shell command output");
+		ce_buffer_activate(shellbuf);
 
 		shellbuf->maxsz = 1024;
 		if ((shellbuf->data = calloc(1, shellbuf->maxsz)) == NULL) {
@@ -2093,13 +2119,8 @@ editor_cmd_paste(void)
 
 	buf = ce_buffer_active();
 	if (buf == cmdbuf) {
-		len = ce_term_width() * 0.75;
-		if (cmdbuf->length + pbuffer->length > len)
-			len = len - cmdbuf->length;
-		else
-			len = pbuffer->length;
-		ce_buffer_append(buf, pbuffer->data, len);
-		buf->column += len;
+		ce_buffer_append(buf, pbuffer->data, pbuffer->length);
+		buf->column += pbuffer->length;
 #if defined(__APPLE__)
 		goto reset;
 #else

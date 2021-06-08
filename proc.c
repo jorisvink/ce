@@ -52,6 +52,7 @@ static const char	*noscroll[] = {
 	"rg",
 	"grep",
 	"git",
+	"svn",
 	NULL
 };
 

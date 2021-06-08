@@ -128,10 +128,12 @@ ce_buffer_close_nonactive(void)
 
 	for (buf = TAILQ_FIRST(&buffers); buf != NULL; buf = next) {
 		next = TAILQ_NEXT(buf, list);
-		if (buf == active)
+		if (buf == active || buf->buftype == CE_BUF_TYPE_SHELLCMD)
 			continue;
 		ce_buffer_free(buf);
 	}
+
+	active->prev = scratch;
 }
 
 const char *
