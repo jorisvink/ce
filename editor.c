@@ -2370,6 +2370,7 @@ editor_allowed_command_key(char key)
 	case '>':
 	case '"':
 	case '\'':
+	case '=':
 		return (1);
 	}
 
