@@ -2286,8 +2286,8 @@ buffer_update_cursor_line(struct cebuf *buf)
 		buf->cursor_line += span;
 		if (buf->cursor_line > buf->height) {
 			buf->cursor_line -= span;
-			buf->top += span;
-			buf->line -= span;
+			buf->top++;
+			buf->line--;
 			buffer_update_cursor_line(buf);
 			break;
 		}
