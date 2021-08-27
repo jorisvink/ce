@@ -365,8 +365,9 @@ ce_editor_loop(void)
 				}
 			} else {
 				if (buf->selstart.line != buf->selmark.line &&
-			    buf->selstart.col != buf->selmark.col)
+				    buf->selstart.col != buf->selmark.col) {
 					buf->selstart = buf->selmark;
+				}
 				buf->selend = tmp;
 			}
 
@@ -1206,6 +1207,16 @@ editor_cmdbuf_input(struct cebuf *buf, u_int8_t key)
 		case 'l':
 			if (strlen(cmd) > 3)
 				editor_directory_list(&cmd[3]);
+			break;
+		case 't':
+			if (strlen(cmd) > 3) {
+				if (!strcmp(&cmd[3], "show")) {
+					config.tab_show = 1;
+				} else if (!strcmp(&cmd[3], "hide")) {
+					config.tab_show = 0;
+				}
+				ce_editor_dirty();
+			}
 			break;
 		case 'b':
 			switch (cmd[2]) {

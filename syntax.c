@@ -226,6 +226,7 @@ ce_syntax_write(struct cebuf *buf, struct celine *line, size_t index,
 {
 	const u_int8_t		*p;
 	size_t			spaces, i, tw;
+	const char		*tabstart, *tabpos;
 
 	p = line->data;
 	tw = config.tab_width;
@@ -256,8 +257,16 @@ ce_syntax_write(struct cebuf *buf, struct celine *line, size_t index,
 	while (syntax_state.off != towrite) {
 		switch (p[syntax_state.off]) {
 		case '\t':
-			syntax_state_term_bold(&syntax_state, 0);
-			syntax_state_color(&syntax_state, TERM_COLOR_BLUE);
+			if (config.tab_show) {
+				tabpos = ".";
+				tabstart = ">";
+				syntax_state_term_bold(&syntax_state, 0);
+				syntax_state_color(&syntax_state,
+				    TERM_COLOR_BLUE);
+			} else {
+				tabpos = " ";
+				tabstart = " ";
+			}
 
 			if ((syntax_state.col % tw) == 0)
 				spaces = 1;
@@ -265,9 +274,10 @@ ce_syntax_write(struct cebuf *buf, struct celine *line, size_t index,
 				spaces = tw - (syntax_state.col % tw) + 1;
 
 			syntax_state.col += spaces;
-			syntax_term_write(&syntax_state, ">", 1, 0);
+
+			syntax_term_write(&syntax_state, tabstart, 1, 0);
 			for (i = 1; i < spaces; i++)
-				syntax_term_write(&syntax_state, ".", 1, 0);
+				syntax_term_write(&syntax_state, tabpos, 1, 0);
 
 			syntax_state.off++;
 

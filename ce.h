@@ -97,6 +97,9 @@ struct ceconf {
 
 	/* Tab expand (default: no). */
 	int		tab_expand;
+
+	/* Show visual tabs (default: yes). */
+	int		tab_show;
 };
 
 extern struct ceconf		config;

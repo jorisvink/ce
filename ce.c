@@ -46,6 +46,7 @@ static int	lame_mode = 0;
 
 /* joris' config. */
 struct ceconf config = {
+	.tab_show = 1,
 	.tab_width = CE_TAB_WIDTH_DEFAULT,
 	.tab_expand = CE_TAB_EXPAND_DEFAULT,
 };
