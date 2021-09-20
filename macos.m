@@ -23,12 +23,16 @@
 void
 ce_macos_set_pasteboard_contents(const void *data, size_t len)
 {
+	NSString	*str;
 	NSPasteboard	*pb = [NSPasteboard generalPasteboard];
 
 	[pb clearContents];
 
-	[pb setString:[[NSString alloc] initWithBytes:data length:len
-	    encoding:NSUTF8StringEncoding] forType:NSPasteboardTypeString];
+	str = [[NSString alloc] initWithBytes:data length:len
+	    encoding:NSUTF8StringEncoding];
+
+	[pb setString:str forType:NSPasteboardTypeString];
+	[str release];
 
 	ce_debug("added %zu bytes to macos pasteboard", len);
 }
@@ -42,7 +46,12 @@ ce_macos_get_pasteboard_contents(u_int8_t **out, size_t *len)
 	NSPasteboard	*pb = [NSPasteboard generalPasteboard];
 
 	res = [pb stringForType:NSPasteboardTypeString];
+	if (res == NULL)
+		return;
+
 	ptr = [res UTF8String];
+	if (ptr == NULL)
+		return;
 
 	slen = strlen(ptr);
 	if (slen > 1 && ptr[slen - 2] == '\n')
