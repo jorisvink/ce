@@ -132,14 +132,13 @@ dirlist_load(struct cebuf *buf, const char *path)
 	list = buf->intdata;
 
 	while ((ent = fts_read(fts)) != NULL) {
+		if (!strcmp(ent->fts_accpath, path))
+			continue;
+
 		if ((entry = calloc(1, sizeof(*entry))) == NULL) {
 			fatal("%s: calloc failed while allocating entry",
 			    __func__);
 		}
-
-		if (!strcmp(ent->fts_accpath, path))
-			continue;
-
 		entry->info = ent->fts_info;
 		entry->level = ent->fts_level;
 		entry->size = ent->fts_statp->st_size;
