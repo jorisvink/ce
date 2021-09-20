@@ -32,7 +32,6 @@ ce_macos_set_pasteboard_contents(const void *data, size_t len)
 	    encoding:NSUTF8StringEncoding];
 
 	[pb setString:str forType:NSPasteboardTypeString];
-	[str release];
 
 	ce_debug("added %zu bytes to macos pasteboard", len);
 }
