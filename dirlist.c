@@ -139,6 +139,7 @@ dirlist_load(struct cebuf *buf, const char *path)
 			fatal("%s: calloc failed while allocating entry",
 			    __func__);
 		}
+
 		entry->info = ent->fts_info;
 		entry->level = ent->fts_level;
 		entry->size = ent->fts_statp->st_size;
