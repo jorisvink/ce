@@ -711,7 +711,8 @@ ce_buffer_word_erase(struct cebuf *buf)
 		buf->loff--;
 	}
 
-	if (buf->loff != 0 || ce_editor_word_separator(ptr[buf->loff]))
+	if (buf->loff != 0 ||
+	    (ce_editor_word_separator(ptr[buf->loff]) && ptr[buf->loff] != ' '))
 		buf->loff++;
 
 	chars = 0;
