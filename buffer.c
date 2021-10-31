@@ -1684,16 +1684,12 @@ ce_buffer_save_active(int force, const char *dstpath)
 {
 	struct stat		st;
 	struct iovec		*iov;
-	const char		*file, *dir;
-	int			fd, len, ret;
-	char			path[PATH_MAX], *copy, *rp;
+	int			fd, ret;
 	size_t			elms, off, cnt, line, maxsz, next;
 
 	fd = -1;
 	ret = -1;
 	iov = NULL;
-	copy = NULL;
-	path[0] = '\0';
 
 	if (dstpath == NULL) {
 		if (active->path == NULL) {
@@ -1729,26 +1725,14 @@ ce_buffer_save_active(int force, const char *dstpath)
 		goto cleanup;
 	}
 
-	copy = ce_strdup(dstpath);
-
-	if ((file = basename(copy)) == NULL) {
-		buffer_seterr("basename failed: %s", errno_s);
+	if ((fd = open(dstpath,
+	    O_CREAT | O_TRUNC | O_WRONLY, active->mode)) == -1) {
+		buffer_seterr("open(%s): %s", dstpath, errno_s);
 		goto cleanup;
 	}
 
-	if ((dir = dirname(copy)) == NULL) {
-		buffer_seterr("dirname failed: %s", errno_s);
-		goto cleanup;
-	}
-
-	len = snprintf(path, sizeof(path), "%s/.#%s.tmp", dir, file);
-	if (len == -1 || (size_t)len >= sizeof(path)) {
-		buffer_seterr("failed to create path for saving file");
-		goto cleanup;
-	}
-
-	if ((fd = open(path, O_CREAT | O_TRUNC | O_WRONLY, 0600)) == -1) {
-		buffer_seterr("open(%s): %s", path, errno_s);
+	if (ftruncate(fd, 0) == -1) {
+		buffer_seterr("ftruncate(%s): %s", dstpath, errno_s);
 		goto cleanup;
 	}
 
@@ -1821,7 +1805,8 @@ ce_buffer_save_active(int force, const char *dstpath)
 			if (writev(fd, iov + off, cnt) == -1) {
 				if (errno == EINTR)
 					continue;
-				buffer_seterr("writev(%s): %s", path, errno_s);
+				buffer_seterr("writev(%s): %s",
+				    dstpath, errno_s);
 				goto cleanup;
 			}
 
@@ -1832,31 +1817,12 @@ ce_buffer_save_active(int force, const char *dstpath)
 		off += cnt;
 	}
 
-	if (fchmod(fd, active->mode) == -1) {
-		buffer_seterr("fchmod(%s): %s", path, errno_s);
-		goto cleanup;
-	}
+	if (fstat(fd, &st) == -1)
+		buffer_seterr("mtime update failed: %s", errno_s);
 
 	if (close(fd) == -1) {
-		buffer_seterr("close(%s): %s", path, errno_s);
+		buffer_seterr("close(%s): %s", dstpath, errno_s);
 		goto cleanup;
-	}
-
-	fd = -1;
-
-	if (rename(path, dstpath) == -1) {
-		buffer_seterr("rename(%s): %s", path, errno_s);
-		goto cleanup;
-	}
-
-	if (stat(dstpath, &st) == -1) {
-		buffer_seterr("stat failed: %s", errno_s);
-		goto cleanup;
-	}
-
-	if ((rp = realpath(dstpath, NULL)) != NULL) {
-		free(active->path);
-		active->path = rp;
 	}
 
 	ret = 0;
@@ -1867,10 +1833,6 @@ ce_buffer_save_active(int force, const char *dstpath)
 
 cleanup:
 	free(iov);
-	free(copy);
-
-	if (path[0] != '\0')
-		(void)unlink(path);
 
 	if (fd != -1)
 		(void)close(fd);
