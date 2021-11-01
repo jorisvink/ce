@@ -16,7 +16,6 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <sys/mman.h>
 #include <sys/uio.h>
 
 #include <ctype.h>
@@ -223,6 +222,7 @@ ce_buffer_file(const char *path)
 	int			fd;
 	struct stat		st;
 	char			*rp;
+	ssize_t			bytes;
 	struct cebuf		*buf, *ret;
 
 	fd = -1;
@@ -286,8 +286,9 @@ ce_buffer_file(const char *path)
 		goto cleanup;
 	}
 
-	if ((uintmax_t)st.st_size > SIZE_MAX) {
-		buffer_seterr("%s: too large", path);
+	if ((uintmax_t)st.st_size > CE_MAX_FILE_SIZE) {
+		buffer_seterr("%s: too large (> %u bytes)",
+		    path, CE_MAX_FILE_SIZE);
 		goto cleanup;
 	}
 
@@ -297,15 +298,21 @@ ce_buffer_file(const char *path)
 	buf->mtime = st.st_mtime;
 
 	if (buf->maxsz > 0) {
-		buf->data = mmap(NULL, buf->maxsz,
-		    PROT_READ, MAP_PRIVATE, fd, 0);
-
-		if (buf->data == MAP_FAILED) {
-			fatal("%s: mmap(%zu): %s",
-			    __func__, buf->maxsz, errno_s);
+		if ((buf->data = calloc(1, buf->maxsz)) == NULL) {
+			fatal("%s: calloc(%zu): %s", __func__, buf->maxsz,
+			    errno_s);
 		}
 
-		buf->flags |= CE_BUFFER_MMAP;
+		if ((bytes = read(fd, buf->data, buf->maxsz)) == -1) {
+			buffer_seterr("%s: read failed: %s", __func__, errno_s);
+			goto cleanup;
+		}
+
+		if ((size_t)bytes != buf->maxsz) {
+			buffer_seterr("%s: only read %zd/%zu bytes",
+			    __func__, bytes, buf->maxsz);
+			goto cleanup;
+		}
 	}
 
 finalize:
@@ -371,12 +378,7 @@ ce_buffer_free(struct cebuf *buf)
 			bp->prev = active;
 	}
 
-	if (buf->flags & CE_BUFFER_MMAP) {
-		if (munmap(buf->data, buf->length) == -1)
-			ce_editor_message("munmap: %s", errno_s);
-	} else {
-		free(buf->data);
-	}
+	free(buf->data);
 
 	for (idx = 0; idx < buf->lcnt; idx++) {
 		line = &buf->lines[idx];
@@ -1629,16 +1631,11 @@ ce_buffer_line_columns(struct celine *line)
 void
 ce_buffer_line_alloc_empty(struct cebuf *buf)
 {
-	if (buf->flags & CE_BUFFER_MMAP) {
-		if (munmap(buf->data, buf->maxsz) == -1)
-			buffer_seterr("%s: munmap: %s", buf->name, errno_s);
+	free(buf->data);
 
-		buf->maxsz = 0;
-		buf->length = 0;
-		buf->data = NULL;
-
-		buf->flags &= ~CE_BUFFER_MMAP;
-	}
+	buf->maxsz = 0;
+	buf->length = 0;
+	buf->data = NULL;
 
 	buf->lcnt = 1;
 	free(buf->lines);
@@ -1763,7 +1760,7 @@ ce_buffer_save_active(int force, const char *dstpath)
 			for (next = line + 1; next < active->lcnt; next++) {
 				if (active->lines[next].flags &
 				    CE_LINE_ALLOCATED) {
-					ce_debug("line %zu breaks mmap chain",
+					ce_debug("line %zu breaks data chain",
 					    next);
 					break;
 				}

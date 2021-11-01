@@ -25,6 +25,8 @@
 #define CE_GREP_CMD		"!rg -uuu --line-number "
 #define errno_s			strerror(errno)
 
+#define CE_MAX_FILE_SIZE		(1024 * 1024 * 1024)
+
 #define CE_BUFFER_SEARCH_NORMAL		0
 #define CE_BUFFER_SEARCH_PREVIOUS	1
 #define CE_BUFFER_SEARCH_NEXT		2
@@ -163,7 +165,6 @@ struct cemark {
  * A buffer from either a file or internal.
  */
 #define CE_BUFFER_DIRTY		0x0001
-#define CE_BUFFER_MMAP		0x0002
 #define CE_BUFFER_RO		0x0004
 
 #define CE_BUF_TYPE_DEFAULT	0
