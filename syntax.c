@@ -284,6 +284,7 @@ ce_syntax_write(struct cebuf *buf, struct celine *line, size_t index,
 			if (syntax_state.inside_comment)
 				syntax_state_term_bold(&syntax_state, 1);
 			break;
+		case '\f':
 		case '\n':
 			syntax_state.off++;
 			break;
