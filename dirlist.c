@@ -19,7 +19,7 @@
 #include <sys/queue.h>
 #include <sys/stat.h>
 
-#include <fts.h>
+#include <dirent.h>
 #include <fnmatch.h>
 #include <inttypes.h>
 #include <stdio.h>
@@ -29,9 +29,6 @@
 #include "ce.h"
 
 struct dentry {
-	u_int16_t		info;
-	int			level;
-	off_t			size;
 	char			*path;
 	TAILQ_ENTRY(dentry)	list;
 };
@@ -48,7 +45,6 @@ union cp {
 
 static void	dirlist_load(struct cebuf *, const char *);
 static void	dirlist_tobuf(struct cebuf *, const char *);
-static int	dirlist_cmp(const FTSENT **, const FTSENT **);
 
 void
 ce_dirlist_path(struct cebuf *buf, const char *path)
@@ -112,27 +108,23 @@ static void
 dirlist_load(struct cebuf *buf, const char *path)
 {
 	const char		*p;
-	FTS			*fts;
-	FTSENT			*ent;
+	int			len;
+	struct dirent		*dp;
+	DIR			*dir;
 	struct dlist		*list;
 	struct dentry		*entry;
-	union cp		cp = { .cp = path };
-	char			*pathv[] = { cp.p, NULL };
+	char			fpath[PATH_MAX], rpath[PATH_MAX];
 
 	if (buf->intdata == NULL)
 		fatal("%s: no dirlist attached to '%s'", __func__, buf->name);
 
-	fts = fts_open(pathv,
-	    FTS_NOCHDIR | FTS_PHYSICAL | FTS_XDEV, dirlist_cmp);
-	if (fts == NULL) {
-		ce_editor_message("cannot read '%s': %s", path, errno_s);
-		return;
-	}
+	if ((dir = opendir(path)) == NULL)
+		fatal("%s: opendir: %s", __func__, errno_s);
 
 	list = buf->intdata;
 
-	while ((ent = fts_read(fts)) != NULL) {
-		if (!strcmp(ent->fts_accpath, path))
+	while ((dp = readdir(dir)) != NULL) {
+		if (!strcmp(dp->d_name, ".") || !strcmp(dp->d_name, ".."))
 			continue;
 
 		if ((entry = calloc(1, sizeof(*entry))) == NULL) {
@@ -140,21 +132,21 @@ dirlist_load(struct cebuf *buf, const char *path)
 			    __func__);
 		}
 
-		entry->info = ent->fts_info;
-		entry->level = ent->fts_level;
-		entry->size = ent->fts_statp->st_size;
+		len = snprintf(fpath, sizeof(fpath), "%s/%s", path, dp->d_name);
+		if (len == -1 || (size_t)len >= sizeof(fpath))
+			fatal("%s: %s/%s too long", __func__, path, dp->d_name);
 
-		p = ce_editor_shortpath(ent->fts_accpath);
-
-		if ((entry->path = strdup(p)) == NULL) {
-			fatal("%s: strdup failed on '%s'", __func__,
-			    ent->fts_accpath);
+		if (realpath(fpath, rpath) == NULL) {
+			fatal("%s: realpath for '%s': %s",
+			    __func__, fpath, errno_s);
 		}
+
+		p = ce_editor_shortpath(rpath);
+		if ((entry->path = strdup(p)) == NULL)
+			fatal("%s: strdup failed on '%s'", __func__, rpath);
 
 		TAILQ_INSERT_TAIL(&list->entries, entry, list);
 	}
-
-	fts_close(fts);
 
 	ce_editor_message("loaded directory '%s'", path);
 }
@@ -220,13 +212,4 @@ dirlist_tobuf(struct cebuf *buf, const char *match)
 
 	ce_editor_dirty();
 	ce_buffer_jump_line(buf, TERM_CURSOR_MIN, TERM_CURSOR_MIN);
-}
-
-static int
-dirlist_cmp(const FTSENT **a1, const FTSENT **b1)
-{
-	const FTSENT	*a = *a1;
-	const FTSENT	*b = *b1;
-
-	return (strcmp(a->fts_name, b->fts_name));
 }
