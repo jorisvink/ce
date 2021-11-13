@@ -78,6 +78,7 @@ static void	editor_resume(void);
 static void	editor_signal_setup(void);
 static void	editor_process_input(int);
 static u_int8_t	editor_process_escape(void);
+static void	editor_preset_cmd(const char *);
 static int	editor_allowed_command_key(char);
 static ssize_t	editor_read_byte(u_int8_t *, int);
 static void	editor_autocomplete_path(struct cebuf *);
@@ -88,6 +89,7 @@ static void	editor_draw_cmdbuf(void);
 
 static void	editor_cmd_quit(int);
 static void	editor_cmd_grep(void);
+static void	editor_cmd_find(void);
 static void	editor_cmd_reset(void);
 static void	editor_cmd_paste(void);
 static void	editor_cmd_suspend(void);
@@ -164,6 +166,7 @@ static struct keymap normal_map[] = {
 	{ 's',			editor_cmd_select_mode },
 
 	{ 'g',			editor_cmd_grep },
+	{ 'f',			editor_cmd_find },
 	{ ':',			editor_cmd_command_mode },
 	{ '/',			editor_cmd_search_mode },
 
@@ -2341,19 +2344,30 @@ editor_cmd_normal_mode(void)
 static void
 editor_cmd_grep(void)
 {
+	editor_preset_cmd(CE_GREP_CMD);
+}
+
+static void
+editor_cmd_find(void)
+{
+	editor_preset_cmd(CE_FIND_CMD);
+}
+
+static void
+editor_preset_cmd(const char *cmd)
+{
 	size_t		len;
 
-	len = sizeof(CE_GREP_CMD) - 1;
+	len = strlen(cmd);
 
 	editor_cmd_command_mode();
-	ce_buffer_append(cmdbuf, CE_GREP_CMD, len);
+	ce_buffer_append(cmdbuf, cmd, len);
 
 	cmdbuf->length = 1 + len;
 	cmdbuf->column = 2 + len;
 	cmdbuf->lines[0].length = cmdbuf->length;
 
 	ce_buffer_line_columns(&cmdbuf->lines[0]);
-	ce_debug("column is %zu", cmdbuf->column);
 }
 
 static void
@@ -2367,23 +2381,8 @@ editor_cmd_reset(void)
 static int
 editor_allowed_command_key(char key)
 {
-	if (isalnum((unsigned char)key))
+	if (isprint((unsigned char)key))
 		return (1);
-
-	switch (key) {
-	case ' ':
-	case '.':
-	case '/':
-	case '-':
-	case '_':
-	case '!':
-	case '~':
-	case '>':
-	case '"':
-	case '\'':
-	case '=':
-		return (1);
-	}
 
 	return (0);
 }

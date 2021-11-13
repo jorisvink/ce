@@ -23,6 +23,7 @@
 #include <string.h>
 
 #define CE_GREP_CMD		"!rg -uuu --line-number "
+#define CE_FIND_CMD		"!find . -type f -name "
 #define errno_s			strerror(errno)
 
 #define CE_MAX_FILE_SIZE		(1024 * 1024 * 1024)
