@@ -1308,9 +1308,6 @@ ce_buffer_move_up(void)
 	line = ce_buffer_line_current(active);
 	span = buffer_line_span(active, line);
 
-	ce_debug("UP: index=%zu span=%d cursor_line=%zu top=%zu line=%zu",
-	    index, span, active->cursor_line, active->top, active->line);
-
 	if (active->cursor_line == TERM_CURSOR_MIN) {
 		if (active->top >= active->height / 2) {
 			scroll = 1;
@@ -1383,14 +1380,11 @@ ce_buffer_move_down(void)
 	if (scroll) {
 		span = 0;
 		start = index;
-		ce_debug("index=%zu", index);
 		while (span < (active->height / 2) + 1 &&
 		    index < active->lcnt) {
 			span += buffer_line_span(active, &active->lines[index]);
 			index++;
 		}
-
-		ce_debug("screen spans %zu lines", index - start);
 
 		if (index == active->lcnt) {
 			buffer_update_cursor(active);
@@ -1404,8 +1398,6 @@ ce_buffer_move_down(void)
 			if (index >= active->lcnt)
 				active->line = active->lcnt - active->top;
 		}
-
-		ce_debug("top=%zu line=%zu", active->top, active->line);
 
 	} else {
 		next = active->line + 1;
@@ -1614,9 +1606,6 @@ ce_buffer_appendl(struct cebuf *buf, const void *data, size_t len)
 		memcpy(&ptr[line->length], data, len);
 		line->length += len;
 		line->data = ptr;
-		ce_debug("appended '%.*s' to '%.*s'",
-		    (int)len, (const char *)data,
-		    (int)(line->length - len), (const char *)line->data);
 	}
 
 	ce_buffer_line_columns(&buf->lines[elm]);
@@ -1752,32 +1741,16 @@ ce_buffer_save_active(int force, const char *dstpath)
 		iov[elms].iov_base = active->lines[line].data;
 		iov[elms].iov_len = active->lines[line].length;
 
-		ce_debug("line #%zu (%zu) (allocated:%d)",
-		    line, active->lines[line].length,
-		    active->lines[line].flags & CE_LINE_ALLOCATED);
-
 		if (!(active->lines[line].flags & CE_LINE_ALLOCATED)) {
 			for (next = line + 1; next < active->lcnt; next++) {
 				if (active->lines[next].flags &
 				    CE_LINE_ALLOCATED) {
-					ce_debug("line %zu breaks data chain",
-					    next);
 					break;
 				}
-
-				ce_debug("line %zu extends %zu - %zu '%.*s'",
-				    next, line, active->lines[next].length,
-				    (int)active->lines[next].length,
-				    (const char *)active->lines[next].data);
-				iov[elms].iov_len += active->lines[next].length;
 			}
 
 			line = next - 1;
 		}
-
-		ce_debug("elm %zu = %zu bytes, '%.*s'", elms,
-		    iov[elms].iov_len, (int)iov[elms].iov_len,
-		    (const char *)iov[elms].iov_base);
 
 		elms++;
 

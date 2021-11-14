@@ -57,7 +57,7 @@ static const char	*noscroll[] = {
 };
 
 void
-ce_proc_run(char *cmd, struct cebuf *buf)
+ce_proc_run(char *cmd, struct cebuf *buf, int add)
 {
 	pid_t		pid;
 	char		*argv[32], *copy;
@@ -73,11 +73,19 @@ ce_proc_run(char *cmd, struct cebuf *buf)
 		return;
 	}
 
+	while (isspace(*(unsigned char *)cmd))
+		cmd++;
+
+	if (*cmd == '!')
+		cmd++;
+
+	if (strlen(cmd) == 0) {
+		ce_editor_message("%s: refusing empty command", __func__);
+		return;
+	}
+
 	copy = ce_strdup(cmd);
 	proc_split_cmdline(cmd, argv, 32);
-
-	for (idx = 0; argv[idx] != NULL; idx++)
-		ce_debug("%d %s", idx, argv[idx]);
 
 	if ((pid = fork()) == -1) {
 		close(out_pipe[0]);
@@ -96,8 +104,6 @@ ce_proc_run(char *cmd, struct cebuf *buf)
 		(void)close(STDIN_FILENO);
 
 		execvp(argv[0], argv);
-		ce_debug("execvp: %s", errno_s);
-
 		exit(1);
 	}
 
@@ -106,7 +112,9 @@ ce_proc_run(char *cmd, struct cebuf *buf)
 	if ((active = calloc(1, sizeof(*active))) == NULL)
 		fatal("%s: calloc: %s", __func__, errno_s);
 
-	ce_hist_add(NULL, copy);
+	if (add)
+		ce_hist_add(copy);
+
 	free(copy);
 
 	active->cnt = 0;
@@ -137,8 +145,6 @@ ce_proc_run(char *cmd, struct cebuf *buf)
 
 	if (fcntl(active->ofd, F_SETFL, &flags) == -1)
 		fatal("%s: fcntl(set): %s", __func__, errno_s);
-
-	ce_debug("proc %d started (idx %zu)", active->pid, active->idx);
 }
 
 void
@@ -169,8 +175,6 @@ ce_proc_read(void)
 	if (active == NULL)
 		fatal("%s: called without active proc", __func__);
 
-	ce_debug("%s called", __func__);
-
 	ret = read(active->ofd, buf, sizeof(buf));
 	if (ret == -1) {
 		if (errno == EINTR)
@@ -181,7 +185,6 @@ ce_proc_read(void)
 	}
 
 	active->cnt += ret;
-	ce_debug("read %zd bytes from process", ret);
 
 	if (ret == 0) {
 		ce_proc_reap();
@@ -199,9 +202,6 @@ ce_proc_read(void)
 			idx = -1;
 		}
 	}
-
-	if (ret > 0)
-		ce_buffer_appendl(active->buf, buf, ret);
 
 	if (active->first) {
 		active->first = 0;
@@ -234,8 +234,6 @@ ce_proc_reap(void)
 
 		break;
 	}
-
-	ce_debug("proc %d completed with %d", pid, status);
 
 	close(active->ofd);
 

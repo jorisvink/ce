@@ -373,15 +373,19 @@ int		ce_utf8_continuation_byte(u_int8_t);
 int		ce_utf8_sequence(const void *, size_t, size_t, size_t *);
 
 void		ce_hist_init(void);
+void		ce_hist_add(const char *);
 void		ce_hist_autocomplete(int);
 void		ce_hist_autocomplete_reset(void);
-void		ce_hist_add(struct ce_histlist *, const char *);
+
+struct cehist	*ce_hist_prev(void);
+struct cehist	*ce_hist_next(void);
+struct cehist	*ce_hist_lookup(const void *, size_t, int);
 
 void		ce_proc_reap(void);
 void		ce_proc_read(void);
 int		ce_proc_stdout(void);
 void		ce_proc_cleanup(void);
-void		ce_proc_run(char *, struct cebuf *);
+void		ce_proc_run(char *, struct cebuf *, int);
 
 void		ce_syntax_init(void);
 void		ce_syntax_finalize(void);

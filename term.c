@@ -249,6 +249,5 @@ ce_term_flush(void)
 		break;
 	}
 
-	ce_debug("wrote %zu bytes", termbuf->length);
 	ce_buffer_reset(termbuf);
 }

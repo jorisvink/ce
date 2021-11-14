@@ -33,11 +33,13 @@
 #define HIST_MODE_APPEND	2
 
 static void	hist_file_read(void);
+static int	hist_list_append(const char *);
 static void	hist_file_append(const char *);
 
 static struct ce_histlist	cmdhist;
 static time_t			histtime = 0;
 static struct cehist		*histcur = NULL;
+static struct cehist		*histpos = NULL;
 static struct cehist		*histmatch = NULL;
 static char			*histsearch = NULL;
 
@@ -49,29 +51,10 @@ ce_hist_init(void)
 }
 
 void
-ce_hist_add(struct ce_histlist *list, const char *cmd)
+ce_hist_add(const char *cmd)
 {
-	struct cehist		*hist;
-
-	if (list == NULL) {
-		list = &cmdhist;
+	if (hist_list_append(cmd) == -1)
 		hist_file_append(cmd);
-	}
-
-	TAILQ_FOREACH(hist, list, list) {
-		if (!strcmp(hist->cmd, cmd)) {
-			TAILQ_REMOVE(list, hist, list);
-			TAILQ_INSERT_HEAD(list, hist, list);
-			return;
-		}
-	}
-
-	if ((hist = calloc(1, sizeof(*hist))) == NULL)
-		fatal("%s: calloc: %s", __func__, errno_s);
-
-	hist->cmd = ce_strdup(cmd);
-
-	TAILQ_INSERT_HEAD(list, hist, list);
 }
 
 void
@@ -82,7 +65,6 @@ ce_hist_autocomplete(int up)
 	struct cebuf		*buf;
 	struct celine		*line;
 	struct cehist		*hist;
-	int			match;
 
 	buf = ce_buffer_active();
 	line = ce_buffer_line_current(buf);
@@ -90,15 +72,46 @@ ce_hist_autocomplete(int up)
 	if (line->length == 0)
 		return;
 
-	len = line->length - 1;
+	if ((hist = ce_hist_lookup(line->data, line->length - 1, up)) == NULL)
+		return;
+
+	len = strlen(hist->cmd);
+
+	if (!(line->flags & CE_LINE_ALLOCATED))
+		line->flags |= CE_LINE_ALLOCATED;
+	else
+		free(line->data);
+
+	line->maxsz = len;
+	line->length = len + 1;
+	if ((line->data = malloc(len + 1)) == NULL)
+		fatal("%s: calloc: %s", __func__, errno_s);
+
+	memcpy(line->data, hist->cmd, len);
+
+	ptr = line->data;
+	ptr[len] = '\n';
+
+	ce_buffer_line_columns(line);
+	buf->loff = len;
+	buf->column = line->columns;
+
+	ce_editor_dirty();
+}
+
+struct cehist *
+ce_hist_lookup(const void *buf, size_t len, int up)
+{
+	int			match;
+	struct cehist		*hist;
 
 	if (histsearch == NULL) {
 		hist_file_read();
 		if ((histcur = TAILQ_FIRST(&cmdhist)) == NULL)
-			return;
+			return (NULL);
 		if ((histsearch = malloc(len + 1)) == NULL)
 			fatal("%s: malloc: %s", __func__, errno_s);
-		memcpy(histsearch, line->data, len);
+		memcpy(histsearch, buf, len);
 		histsearch[len] = '\0';
 	}
 
@@ -106,32 +119,8 @@ ce_hist_autocomplete(int up)
 	hist = histcur;
 
 	for (;;) {
+		ce_debug("'%s' vs '%s'", histsearch, hist->cmd);
 		if (histmatch != hist && strstr(hist->cmd, histsearch)) {
-			ce_debug("hit on %s", hist->cmd);
-			len = strlen(hist->cmd);
-
-			if (!(line->flags & CE_LINE_ALLOCATED)) {
-				line->flags |= CE_LINE_ALLOCATED;
-			} else {
-				free(line->data);
-			}
-
-			line->maxsz = len;
-			line->length = len + 1;
-			if ((line->data = malloc(len + 1)) == NULL)
-				fatal("%s: calloc: %s", __func__, errno_s);
-
-			memcpy(line->data, hist->cmd, len);
-
-			ptr = line->data;
-			ptr[len] = '\n';
-
-			ce_buffer_line_columns(line);
-			buf->loff = len;
-			buf->column = line->columns;
-
-			ce_editor_dirty();
-
 			match = 1;
 			histmatch = hist;
 		}
@@ -155,6 +144,57 @@ ce_hist_autocomplete(int up)
 		if (match)
 			break;
 	}
+
+	if (match)
+		return (histmatch);
+
+	return (NULL);
+}
+
+struct cehist *
+ce_hist_next(void)
+{
+	struct cehist	*hist;
+
+	if (TAILQ_FIRST(&cmdhist) == NULL)
+		hist_file_read();
+
+	if ((hist = TAILQ_FIRST(&cmdhist)) == NULL)
+		return (NULL);
+
+	if (histpos == NULL) {
+		histpos = hist;
+		return (hist);
+	}
+
+	hist = TAILQ_NEXT(histpos, list);
+	if (hist == NULL)
+		hist = histpos;
+	else
+		histpos = hist;
+
+	return (hist);
+}
+
+struct cehist *
+ce_hist_prev(void)
+{
+	struct cehist	*hist;
+
+	if (TAILQ_FIRST(&cmdhist) == NULL)
+		hist_file_read();
+
+	hist = NULL;
+
+	if (histpos != NULL) {
+		hist = TAILQ_PREV(histpos, ce_histlist, list);
+		if (hist == NULL)
+			hist = histpos;
+		else
+			histpos = hist;
+	}
+
+	return (hist);
 }
 
 void
@@ -162,9 +202,12 @@ ce_hist_autocomplete_reset(void)
 {
 	free(histsearch);
 
+	histpos = NULL;
 	histcur = NULL;
 	histmatch = NULL;
 	histsearch = NULL;
+
+	ce_debug("history reset");
 }
 
 static FILE *
@@ -239,7 +282,7 @@ hist_file_read(void)
 {
 	FILE			*fp;
 	struct cehist		*hist;
-	char			buf[2048];
+	char			*p, buf[2048];
 
 	if ((fp = hist_file_open(HIST_MODE_READ)) == NULL)
 		return;
@@ -254,7 +297,15 @@ hist_file_read(void)
 
 	while (fgets(buf, sizeof(buf), fp) != NULL) {
 		buf[strcspn(buf, "\n")] = '\0';
-		ce_hist_add(&cmdhist, buf);
+
+		p = &buf[0];
+		while (isspace(*(unsigned char *)p))
+			p++;
+
+		if (buf[0] == '0')
+			continue;
+
+		(void)hist_list_append(p);
 	}
 
 	fclose(fp);
@@ -275,4 +326,27 @@ hist_file_append(const char *cmd)
 		fatal("%s: not all data written", __func__);
 
 	fclose(fp);
+}
+
+static int
+hist_list_append(const char *cmd)
+{
+	struct cehist		*hist;
+
+	TAILQ_FOREACH(hist, &cmdhist, list) {
+		if (!strcmp(hist->cmd, cmd)) {
+			TAILQ_REMOVE(&cmdhist, hist, list);
+			TAILQ_INSERT_HEAD(&cmdhist, hist, list);
+			return (0);
+		}
+	}
+
+	if ((hist = calloc(1, sizeof(*hist))) == NULL)
+		fatal("%s: calloc: %s", __func__, errno_s);
+
+	hist->cmd = ce_strdup(cmd);
+
+	TAILQ_INSERT_HEAD(&cmdhist, hist, list);
+
+	return (-1);
 }
