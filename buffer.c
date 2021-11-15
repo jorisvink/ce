@@ -1747,6 +1747,8 @@ ce_buffer_save_active(int force, const char *dstpath)
 				    CE_LINE_ALLOCATED) {
 					break;
 				}
+
+				iov[elms].iov_len += active->lines[next].length;
 			}
 
 			line = next - 1;
