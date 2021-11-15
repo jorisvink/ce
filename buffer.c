@@ -662,9 +662,6 @@ ce_buffer_word_delete(struct cebuf *buf)
 	ce_buffer_line_allocate(buf, line);
 	ptr = line->data;
 
-	if (buf->loff + 1 == line->length - 1)
-		buf->loff++;
-
 	ce_editor_pbuffer_append(&ptr[start], buf->loff - start);
 	memmove(&ptr[start], &ptr[buf->loff], line->length - buf->loff);
 
