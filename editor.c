@@ -1175,18 +1175,6 @@ editor_cmdbuf_input(struct cebuf *buf, u_int8_t key)
 		ce_buffer_restore();
 		cmd = ce_buffer_as_string(buf);
 
-		if (isdigit((unsigned char)cmd[1])) {
-			errno = 0;
-			linenr = strtol(&cmd[1], &ep, 10);
-			if (*ep == '\0' && errno == 0) {
-				ce_buffer_jump_line(ce_buffer_active(),
-				    linenr, 0);
-				ce_buffer_activate(buf);
-				editor_cmd_normal_mode();
-				return;
-			}
-		}
-
 		off = 1;
 		switch (cmd[1]) {
 		case '!':
@@ -1198,6 +1186,18 @@ editor_cmdbuf_input(struct cebuf *buf, u_int8_t key)
 
 		if (cmd[1] != '\0')
 			ce_hist_add(&cmd[off]);
+
+		if (isdigit((unsigned char)cmd[1])) {
+			errno = 0;
+			linenr = strtol(&cmd[1], &ep, 10);
+			if (*ep == '\0' && errno == 0) {
+				ce_buffer_jump_line(ce_buffer_active(),
+				    linenr, 0);
+				ce_buffer_activate(buf);
+				editor_cmd_normal_mode();
+				return;
+			}
+		}
 
 		switch (cmd[1]) {
 		case 'q':
