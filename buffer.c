@@ -1293,9 +1293,7 @@ ce_buffer_top(void)
 void
 ce_buffer_move_up(void)
 {
-	size_t		index;
-	struct celine	*line;
-	int		scroll, span;
+	int		scroll;
 
 	if (active->cursor_line < TERM_CURSOR_MIN)
 		fatal("%s: line (%zu) < min", __func__, active->cursor_line);
@@ -1304,9 +1302,6 @@ ce_buffer_move_up(void)
 		return;
 
 	scroll = 0;
-	index = ce_buffer_line_index(active);
-	line = ce_buffer_line_current(active);
-	span = buffer_line_span(active, line);
 
 	if (active->cursor_line == TERM_CURSOR_MIN) {
 		if (active->top >= active->height / 2) {
