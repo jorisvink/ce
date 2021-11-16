@@ -53,8 +53,8 @@ ce_hist_init(void)
 void
 ce_hist_add(const char *cmd)
 {
-	if (hist_list_append(cmd) == -1)
-		hist_file_append(cmd);
+	hist_list_append(cmd);
+	hist_file_append(cmd);
 }
 
 void
@@ -119,7 +119,6 @@ ce_hist_lookup(const void *buf, size_t len, int up)
 	hist = histcur;
 
 	for (;;) {
-		ce_debug("'%s' vs '%s'", histsearch, hist->cmd);
 		if (histmatch != hist && strstr(hist->cmd, histsearch)) {
 			match = 1;
 			histmatch = hist;
@@ -198,16 +197,17 @@ ce_hist_prev(void)
 }
 
 void
-ce_hist_autocomplete_reset(void)
+ce_hist_autocomplete_reset(struct cehist **out)
 {
+	if (out != NULL)
+		*out = histmatch;
+
 	free(histsearch);
 
 	histpos = NULL;
 	histcur = NULL;
 	histmatch = NULL;
 	histsearch = NULL;
-
-	ce_debug("history reset");
 }
 
 static FILE *

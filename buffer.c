@@ -356,9 +356,7 @@ ce_buffer_first_dirty(void)
 void
 ce_buffer_free(struct cebuf *buf)
 {
-	size_t			idx;
 	struct cebuf		*bp;
-	struct celine		*line;
 
 	if (buf->internal)
 		return;
@@ -378,15 +376,8 @@ ce_buffer_free(struct cebuf *buf)
 			bp->prev = active;
 	}
 
-	free(buf->data);
+	ce_buffer_erase(buf);
 
-	for (idx = 0; idx < buf->lcnt; idx++) {
-		line = &buf->lines[idx];
-		if (line->flags & CE_LINE_ALLOCATED)
-			free(line->data);
-	}
-
-	free(buf->lines);
 	free(buf->path);
 	free(buf->name);
 	free(buf);
@@ -395,9 +386,6 @@ ce_buffer_free(struct cebuf *buf)
 void
 ce_buffer_free_internal(struct cebuf *buf)
 {
-	size_t			idx;
-	struct celine		*line;
-
 	if (buf->internal == 0) {
 		fatal("%s: called on non internal buffer '%s'",
 		    __func__, buf->name);
@@ -410,14 +398,8 @@ ce_buffer_free_internal(struct cebuf *buf)
 		ce_editor_settings(active);
 	}
 
-	for (idx = 0; idx < buf->lcnt; idx++) {
-		line = &buf->lines[idx];
-		if (line->flags & CE_LINE_ALLOCATED)
-			free(line->data);
-	}
+	ce_buffer_erase(buf);
 
-	free(buf->lines);
-	free(buf->data);
 	free(buf->path);
 	free(buf->name);
 	free(buf);
@@ -431,6 +413,28 @@ ce_buffer_reset(struct cebuf *buf)
 	buf->line = buf->orig_line;
 	buf->column = buf->orig_column;
 	buf->cursor_line = buf->orig_line;
+}
+
+void
+ce_buffer_erase(struct cebuf *buf)
+{
+	size_t			idx;
+	struct celine		*line;
+
+	for (idx = 0; idx < buf->lcnt; idx++) {
+		line = &buf->lines[idx];
+		if (line->flags & CE_LINE_ALLOCATED)
+			free(line->data);
+	}
+
+	free(buf->data);
+	free(buf->lines);
+
+	buf->lcnt = 0;
+	buf->data = NULL;
+	buf->lines = NULL;
+
+	ce_buffer_reset(buf);
 }
 
 void

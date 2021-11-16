@@ -48,7 +48,7 @@ static struct proc	*active = NULL;
 /*
  * Processes where we shouldn't autoscroll.
  */
-static const char	*noscroll[] = {
+static const char *noscroll[] = {
 	"rg",
 	"grep",
 	"git",
@@ -191,7 +191,8 @@ ce_proc_read(void)
 		return;
 	}
 
-	if (ce_buffer_active() != active->buf)
+	if (ce_editor_mode() == CE_EDITOR_MODE_NORMAL &&
+	    ce_buffer_active() != active->buf)
 		ce_buffer_activate(active->buf);
 
 	for (idx = 0; idx < ret; idx++) {
@@ -202,6 +203,9 @@ ce_proc_read(void)
 			idx = -1;
 		}
 	}
+
+	if (ret > 0)
+		ce_buffer_appendl(active->buf, buf, ret);
 
 	if (active->first) {
 		active->first = 0;
@@ -253,13 +257,9 @@ ce_proc_reap(void)
 	if (len == -1 || (size_t)len >= sizeof(buf))
 		fatal("%s: failed to construct status buf", __func__);
 
-	if (active->flags & PROC_AUTO_SCROLL) {
-		ce_buffer_appendl(active->buf, "\n", 1);
-		ce_buffer_jump_line(active->buf, active->buf->lcnt, 0);
-	}
-
-	ce_buffer_appendl(active->buf, "\n", 1);
+	ce_editor_settings(active->buf);
 	ce_editor_message(buf);
+
 	ce_editor_dirty();
 
 	free(active->cmd);

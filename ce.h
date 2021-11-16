@@ -259,6 +259,7 @@ void		ce_buffer_map(struct cebuf *);
 void		ce_buffer_free(struct cebuf *);
 void		ce_buffer_list(struct cebuf *);
 void		ce_buffer_reset(struct cebuf *);
+void		ce_buffer_erase(struct cebuf *);
 void		ce_buffer_close_nonactive(void);
 void		ce_buffer_activate_index(size_t);
 void		ce_buffer_activate(struct cebuf *);
@@ -339,10 +340,12 @@ void		ce_term_attr_off(void);
 void		ce_term_attr_bold(void);
 void		ce_term_attr_reverse(void);
 
+void		ce_dirlist_rmfile(const void *);
 void		ce_dirlist_close(struct cebuf *);
 void		ce_dirlist_rescan(struct cebuf *);
 void		ce_dirlist_path(struct cebuf *, const char *);
 void		ce_dirlist_narrow(struct cebuf *, const char *);
+const char	*ce_dirlist_full_path(struct cebuf *, const char *);
 
 void		ce_editor_init(void);
 void		ce_editor_loop(void);
@@ -359,6 +362,10 @@ void		ce_editor_settings(struct cebuf *);
 const char	*ce_editor_shortpath(const char *);
 int		ce_editor_word_separator(u_int8_t);
 void		ce_editor_message(const char *, ...);
+void		ce_editor_messagev(const char *, va_list);
+int		ce_editor_yesno(void (*)(const void *),
+		    const void *, const char *, ...)
+		    __attribute__((format (printf, 3, 4)));
 
 void		ce_editor_pbuffer_sync(void);
 void		ce_editor_pbuffer_reset(void);
@@ -375,7 +382,7 @@ int		ce_utf8_sequence(const void *, size_t, size_t, size_t *);
 void		ce_hist_init(void);
 void		ce_hist_add(const char *);
 void		ce_hist_autocomplete(int);
-void		ce_hist_autocomplete_reset(void);
+void		ce_hist_autocomplete_reset(struct cehist **);
 
 struct cehist	*ce_hist_prev(void);
 struct cehist	*ce_hist_next(void);
@@ -389,6 +396,7 @@ void		ce_proc_run(char *, struct cebuf *, int);
 
 void		ce_syntax_init(void);
 void		ce_syntax_finalize(void);
+void		ce_syntax_guess(struct cebuf *);
 void		ce_syntax_write(struct cebuf *, struct celine *,
 		    size_t, size_t);
 

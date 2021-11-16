@@ -116,7 +116,7 @@ static const char *c_type[] = {
 	"int8_t", "int16_t", "int32_t", "int64_t",
 	"u_int8_t", "u_int16_t", "u_int32_t", "u_int64_t",
 	"extern", "volatile", "sig_atomic_t", "time_t", "FILE",
-	"enum", "union", "va_list",
+	"enum", "union", "va_list", "bool",
 	NULL
 };
 
@@ -322,6 +322,28 @@ ce_syntax_write(struct cebuf *buf, struct celine *line, size_t index,
 				break;
 			}
 
+			break;
+		}
+	}
+}
+
+void
+ce_syntax_guess(struct cebuf *buf)
+{
+	size_t			idx;
+	const char		*ptr;
+	struct celine		*line;
+
+	for (idx = 0; idx < buf->lcnt; idx++) {
+		line = &buf->lines[idx];
+		ptr = (const char *)line->data;
+
+		if (line->length <= 1)
+			continue;
+
+		if (line->length >= 4 && ptr[3] == ' ' &&
+		    (!strncmp(ptr, "+++", 3) || !strncmp(ptr, "---", 3))) {
+			buf->type = CE_FILE_TYPE_DIFF;
 			break;
 		}
 	}

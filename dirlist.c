@@ -47,6 +47,13 @@ static void	dirlist_load(struct cebuf *, const char *);
 static void	dirlist_tobuf(struct cebuf *, const char *);
 static int	dirlist_cmp(const FTSENT **, const FTSENT **);
 
+static const char *ignored[] = {
+	"*.git*",
+	"*.svn*",
+	"*.o",
+	NULL,
+};
+
 void
 ce_dirlist_path(struct cebuf *buf, const char *path)
 {
@@ -105,14 +112,52 @@ ce_dirlist_narrow(struct cebuf *buf, const char *pattern)
 	dirlist_tobuf(buf, pattern);
 }
 
+void
+ce_dirlist_rmfile(const void *arg)
+{
+	struct stat		st;
+	const char		*fp = arg;
+
+	if (stat(fp, &st) == -1) {
+		ce_editor_message("stat(%s): %s", fp, errno_s);
+		return;
+	}
+
+	if (!S_ISREG(st.st_mode)) {
+		ce_editor_message("refusing to delete directory %s", fp);
+		return;
+	}
+
+	if (unlink(fp) == -1) {
+		ce_editor_message("unlink(%s): %s", fp, errno_s);
+		return;
+	}
+}
+
+const char *
+ce_dirlist_full_path(struct cebuf *buf, const char *name)
+{
+	int		len;
+	char		fpath[PATH_MAX];
+
+	len = snprintf(fpath, sizeof(fpath), "%s/%s", buf->path, name);
+	if (len == -1 || (size_t)len >= sizeof(fpath)) {
+		fatal("%s: failed to construct %s/%s",
+		    __func__, buf->path, name);
+	}
+
+	return (ce_editor_fullpath(fpath));
+}
+
 static void
 dirlist_load(struct cebuf *buf, const char *path)
 {
-	const char		*p;
 	FTS			*fts;
 	FTSENT			*ent;
+	const char		*name;
 	struct dlist		*list;
 	struct dentry		*entry;
+	size_t			i, rootlen;
 	union cp		cp = { .cp = path };
 	char			*pathv[] = { cp.p, NULL };
 
@@ -127,9 +172,21 @@ dirlist_load(struct cebuf *buf, const char *path)
 	}
 
 	list = buf->intdata;
+	rootlen = strlen(path) + 1;
 
 	while ((ent = fts_read(fts)) != NULL) {
 		if (!strcmp(ent->fts_accpath, path))
+			continue;
+
+		name = ent->fts_path + rootlen;
+
+		for (i = 0; ignored[i] != NULL; i++) {
+			if (fnmatch(ignored[i],
+			    name, FNM_NOESCAPE | FNM_CASEFOLD) == 0)
+				break;
+		}
+
+		if (ignored[i] != NULL)
 			continue;
 
 		if ((entry = calloc(1, sizeof(*entry))) == NULL) {
@@ -137,13 +194,7 @@ dirlist_load(struct cebuf *buf, const char *path)
 			    __func__);
 		}
 
-		p = ce_editor_shortpath(ent->fts_accpath);
-
-		if ((entry->path = strdup(p)) == NULL) {
-			fatal("%s: strdup failed on '%s'", __func__,
-			    ent->fts_accpath);
-		}
-
+		entry->path = ce_strdup(name);
 		TAILQ_INSERT_TAIL(&list->entries, entry, list);
 	}
 
@@ -173,14 +224,10 @@ dirlist_tobuf(struct cebuf *buf, const char *match)
 	if (len == -1 || (size_t)len >= sizeof(title))
 		fatal("%s: failed to construct buf title", __func__);
 
-	list = buf->intdata;
-
-	free(buf->lines);
-	buf->lcnt = 0;
-	buf->lines = NULL;
-
-	ce_buffer_reset(buf);
+	ce_buffer_erase(buf);
 	ce_buffer_setname(buf, title);
+
+	list = buf->intdata;
 
 	len = snprintf(title, sizeof(title), "Directory listing for '%s'\n",
 	    list->path);
@@ -188,7 +235,17 @@ dirlist_tobuf(struct cebuf *buf, const char *match)
 		fatal("%s: failed to construct title", __func__);
 
 	ce_buffer_appendl(buf, title, len);
-	ce_buffer_appendl(buf, "\n", 1);
+
+	if (match) {
+		len = snprintf(title, sizeof(title), "filter '%s'\n", match);
+		if (len == -1 || (size_t)len >= sizeof(title))
+			fatal("%s: failed to construct title", __func__);
+
+		ce_buffer_appendl(buf, title, len);
+		ce_buffer_appendl(buf, "\n", 1);
+	} else {
+		ce_buffer_appendl(buf, "\n", 1);
+	}
 
 	TAILQ_FOREACH(entry, &list->entries, list) {
 		show = 0;
