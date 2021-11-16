@@ -65,9 +65,7 @@ ce_dirlist_path(struct cebuf *buf, const char *path)
 	if ((list = calloc(1, sizeof(*list))) == NULL)
 		fatal("%s: calloc failed while allocating list", __func__);
 
-	if ((list->path = strdup(path)) == NULL)
-		fatal("%s: strdup: %s", __func__, errno_s);
-
+	list->path = ce_strdup(path);
 	TAILQ_INIT(&list->entries);
 
 	buf->intdata = list;

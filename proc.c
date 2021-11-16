@@ -123,11 +123,9 @@ ce_proc_run(char *cmd, struct cebuf *buf, int add)
 	active->pid = pid;
 	active->idx = buf->lcnt;
 	active->ofd = out_pipe[0];
-
-	if ((active->cmd = strdup(cmd)) == NULL)
-		fatal("%s: strdup: %s", __func__, errno_s);
-
+	active->cmd = ce_strdup(cmd);
 	active->flags = PROC_AUTO_SCROLL;
+
 	for (idx = 0; noscroll[idx] != NULL; idx++) {
 		if (!strcmp(noscroll[idx], active->cmd)) {
 			active->flags = 0;

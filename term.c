@@ -154,9 +154,7 @@ ce_term_update_title(void)
 	buf = ce_buffer_active();
 
 	if (buf->name[0] == '/') {
-		if ((cp = strdup(buf->name)) == NULL)
-			fatal("%s: strdup: %s", __func__, errno_s);
-
+		cp = ce_strdup(buf->name);
 		if ((name = basename(cp)) == NULL)
 			fatal("%s: basename: %s", __func__, errno_s);
 	} else {
