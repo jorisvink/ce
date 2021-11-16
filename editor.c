@@ -104,6 +104,7 @@ static void	editor_cmd_history_prev(void);
 static void	editor_cmd_history_next(void);
 
 static void	editor_cmd_directory_list(void);
+static void	editor_directory_from_buffer(void);
 static void	editor_directory_list(const char *);
 static void	editor_directory_change(const char *);
 
@@ -1249,6 +1250,11 @@ editor_cmdbuf_input(struct cebuf *buf, u_int8_t key)
 			}
 			break;
 		case 'c':
+			if (!strcmp(&cmd[1], "cdb")) {
+				editor_directory_from_buffer();
+				break;
+			}
+
 			switch (cmd[2]) {
 			case 'd':
 				if (strlen(cmd) > 4)
@@ -2034,6 +2040,26 @@ editor_directory_change(const char *path)
 
 		ce_editor_message("%s", ce_editor_shortpath(curdir));
 	}
+}
+
+static void
+editor_directory_from_buffer(void)
+{
+	struct cebuf	*buf;
+	char		*str, *dir;
+
+	buf = ce_buffer_active();
+	if (buf->path == NULL) {
+		ce_editor_message("active buffer has no path");
+		return;
+	}
+
+	str = ce_strdup(buf->path);
+	dir = dirname(str);
+
+	editor_directory_change(dir);
+
+	free(str);
 }
 
 static void
