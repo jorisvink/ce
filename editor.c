@@ -197,7 +197,7 @@ static struct keymap insert_map[] = {
 };
 
 static struct keymap command_map[] = {
-	{ EDITOR_KEY_ESC,	editor_cmd_normal_mode },
+	{ 0, NULL },
 };
 
 static struct keymap buflist_map[] = {
@@ -1369,6 +1369,9 @@ editor_cmdbuf_input(struct cebuf *buf, u_int8_t key)
 		hist = ce_hist_lookup(histcmd, histlen, 1);
 		break;
 	case '\t':
+		editor_autocomplete_path(buf);
+		break;
+	case EDITOR_KEY_ESC:
 		ce_hist_autocomplete_reset(&hist);
 		if (hist != NULL) {
 			editor_cmd_reset();
@@ -1382,7 +1385,7 @@ editor_cmdbuf_input(struct cebuf *buf, u_int8_t key)
 			cmdbuf->column += strlen(hist->cmd);
 			hist = NULL;
 		} else {
-			editor_autocomplete_path(buf);
+			editor_cmd_normal_mode();
 		}
 		break;
 	case EDITOR_KEY_UP:
@@ -1463,6 +1466,19 @@ editor_cmdbuf_search(struct cebuf *buf, u_int8_t key)
 		ce_term_setpos(buf->orig_line, TERM_CURSOR_MIN);
 		ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
 		break;
+	case EDITOR_KEY_ESC:
+		ce_hist_autocomplete_reset(&hist);
+		if (hist != NULL) {
+			editor_cmd_reset();
+			cmdbuf->column = 1;
+			ce_buffer_append(cmdbuf, "/", 1);
+			ce_buffer_append(cmdbuf, hist->cmd, strlen(hist->cmd));
+			cmdbuf->column += strlen(hist->cmd);
+			hist = NULL;
+		} else {
+			editor_cmd_normal_mode();
+		}
+		break;
 	case EDITOR_CMD_HIST_NEXT:
 		ptr = buf->data;
 		hist = ce_hist_lookup(&ptr[1], buf->length - 1, 0);
@@ -1473,18 +1489,21 @@ editor_cmdbuf_search(struct cebuf *buf, u_int8_t key)
 		break;
 	default:
 		if (isprint((unsigned char)key)) {
+			ce_hist_autocomplete_reset(NULL);
 			ce_buffer_append(buf, &key, sizeof(key));
+
+			ptr = buf->data;
+			hist = ce_hist_lookup(&ptr[1], buf->length, 1);
 			buf->column++;
 		}
 		break;
 	}
 
 	if (hist != NULL) {
-		editor_cmd_reset();
-		ce_buffer_append(cmdbuf, "/", 1);
-		ce_buffer_append(cmdbuf, hist->cmd, strlen(hist->cmd));
-		cmdbuf->length = 1 + strlen(hist->cmd);
-		cmdbuf->column = 2 + strlen(hist->cmd);
+		ce_buffer_reset(suggestions);
+		ce_buffer_appendf(suggestions, "%s\n", hist->cmd);
+		ce_buffer_populate_lines(suggestions);
+		editor_draw_suggestions(2);
 	}
 
 	cmdbuf->lines[0].length = buf->length;
