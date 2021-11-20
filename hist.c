@@ -22,6 +22,7 @@
 
 #include <ctype.h>
 #include <fcntl.h>
+#include <fnmatch.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <signal.h>
@@ -109,17 +110,24 @@ ce_hist_lookup(const void *buf, size_t len, int up)
 		hist_file_read();
 		if ((histcur = TAILQ_FIRST(&cmdhist)) == NULL)
 			return (NULL);
-		if ((histsearch = malloc(len + 1)) == NULL)
+		if ((histsearch = malloc(len + 3)) == NULL)
 			fatal("%s: malloc: %s", __func__, errno_s);
-		memcpy(histsearch, buf, len);
-		histsearch[len] = '\0';
+		histsearch[0] = '*';
+		memcpy(&histsearch[1], buf, len);
+		histsearch[len + 1] = '*';
+		histsearch[len + 2] = '\0';
 	}
 
 	match = 0;
+
+	if (histmatch != NULL)
+		histcur = histmatch;
+
 	hist = histcur;
 
 	for (;;) {
-		if (histmatch != hist && strstr(hist->cmd, histsearch)) {
+		if (histmatch != hist && fnmatch(histsearch, hist->cmd,
+		    FNM_NOESCAPE | FNM_CASEFOLD) == 0) {
 			match = 1;
 			histmatch = hist;
 		}
@@ -144,8 +152,10 @@ ce_hist_lookup(const void *buf, size_t len, int up)
 			break;
 	}
 
-	if (match)
+	if (match) {
+		ce_debug("returning '%s'", histmatch->cmd);
 		return (histmatch);
+	}
 
 	return (NULL);
 }
@@ -194,6 +204,24 @@ ce_hist_prev(void)
 	}
 
 	return (hist);
+}
+
+int
+ce_hist_matches(struct cehist *hist)
+{
+	if (histsearch == NULL)
+		return (0);
+
+	if (fnmatch(histsearch, hist->cmd, FNM_NOESCAPE | FNM_CASEFOLD) == 0)
+		return (1);
+
+	return (0);
+}
+
+struct cehist *
+ce_hist_current(void)
+{
+	return (histmatch);
 }
 
 void

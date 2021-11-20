@@ -382,10 +382,12 @@ int		ce_utf8_sequence(const void *, size_t, size_t, size_t *);
 void		ce_hist_init(void);
 void		ce_hist_add(const char *);
 void		ce_hist_autocomplete(int);
+int		ce_hist_matches(struct cehist *);
 void		ce_hist_autocomplete_reset(struct cehist **);
 
 struct cehist	*ce_hist_prev(void);
 struct cehist	*ce_hist_next(void);
+struct cehist	*ce_hist_current(void);
 struct cehist	*ce_hist_lookup(const void *, size_t, int);
 
 void		ce_proc_reap(void);

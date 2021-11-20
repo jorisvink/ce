@@ -82,6 +82,7 @@ static void	editor_shellbuf_reset(void);
 static u_int8_t	editor_process_escape(void);
 static void	editor_preset_cmd(const char *);
 static int	editor_allowed_command_key(char);
+static int	editor_cmd_can_autocomplete(void);
 static ssize_t	editor_read_byte(u_int8_t *, int);
 static void	editor_autocomplete_path(struct cebuf *);
 static void	editor_yank_lines(struct cebuf *, size_t, size_t, int);
@@ -106,6 +107,7 @@ static void	editor_cmd_buffer_list(void);
 
 static void	editor_cmd_history_prev(void);
 static void	editor_cmd_history_next(void);
+static void	editor_cmd_suggestions(struct cehist *, size_t);
 
 static void	editor_cmd_directory_list(void);
 static void	editor_directory_from_buffer(void);
@@ -269,6 +271,7 @@ static struct cebuf		*buflist = NULL;
 static struct cebuf		*pbuffer = NULL;
 static struct cebuf		*shellbuf = NULL;
 static struct cebuf		*suggestions = NULL;
+static int			suggestions_wipe = 0;
 static int			mode = CE_EDITOR_MODE_NORMAL;
 static int			lastmode = CE_EDITOR_MODE_NORMAL;
 
@@ -390,9 +393,14 @@ ce_editor_loop(void)
 			} else if (buf != cmdbuf) {
 				ce_term_writestr(TERM_SEQUENCE_CLEAR_ONLY);
 				ce_buffer_map(buf);
+			} else if (suggestions_wipe) {
+				ce_debug("wiping suggestions");
+				ce_term_writestr(TERM_SEQUENCE_CLEAR_ONLY);
+				ce_buffer_map(buf->prev);
 			}
 
 			dirty = 0;
+			suggestions_wipe = 0;
 		}
 
 		if (buf == cmdbuf)
@@ -1135,7 +1143,7 @@ editor_autocomplete_path(struct cebuf *buf)
 	len = strlen(name);
 
 	width = 0;
-	ce_buffer_reset(suggestions);
+	ce_buffer_erase(suggestions);
 
 	while ((dp = readdir(dir)) != NULL) {
 		if (!strcmp(dp->d_name, ".") ||
@@ -1249,24 +1257,14 @@ editor_cmdbuf_input(struct cebuf *buf, u_int8_t key)
 
 	switch (key) {
 	case EDITOR_CMD_PASTE:
+		suggestions_wipe = 1;
+		ce_hist_autocomplete_reset(NULL);
 		editor_cmd_paste();
 		break;
 	case '\n':
 		ce_buffer_restore();
+
 		cmd = ce_buffer_as_string(buf);
-
-		off = 1;
-		switch (cmd[1]) {
-		case '!':
-			off = 2;
-			break;
-		default:
-			break;
-		}
-
-		if (cmd[1] != '\0')
-			ce_hist_add(&cmd[off]);
-
 		if (isdigit((unsigned char)cmd[1])) {
 			errno = 0;
 			linenr = strtol(&cmd[1], &ep, 10);
@@ -1278,6 +1276,33 @@ editor_cmdbuf_input(struct cebuf *buf, u_int8_t key)
 				return;
 			}
 		}
+
+		ce_hist_autocomplete_reset(&hist);
+		if (hist != NULL) {
+			editor_cmd_reset();
+			cmdbuf->column = 1;
+			ce_buffer_append(cmdbuf, ":", 1);
+			if (extcmd) {
+				cmdbuf->column++;
+				ce_buffer_append(cmdbuf, "!", 1);
+			}
+			ce_buffer_append(cmdbuf, hist->cmd, strlen(hist->cmd));
+			cmdbuf->column += strlen(hist->cmd);
+			cmd = ce_buffer_as_string(buf);
+		}
+
+		off = 1;
+		switch (cmd[1]) {
+		case '!':
+			off = 2;
+			break;
+		default:
+			break;
+		}
+
+		if (cmd[1] != '\0' && hist == NULL &&
+		    editor_cmd_can_autocomplete())
+			ce_hist_add(&cmd[off]);
 
 		switch (cmd[1]) {
 		case 'q':
@@ -1366,58 +1391,72 @@ editor_cmdbuf_input(struct cebuf *buf, u_int8_t key)
 		buf->column--;
 		ce_term_setpos(buf->orig_line, TERM_CURSOR_MIN);
 		ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
-		hist = ce_hist_lookup(histcmd, histlen, 1);
-		break;
-	case '\t':
-		editor_autocomplete_path(buf);
+		if (histlen > 1) {
+			if (editor_cmd_can_autocomplete()) {
+				hist = ce_hist_lookup(histcmd, histlen - 1, 1);
+			} else {
+				histlen = 0;
+				hist = NULL;
+				suggestions_wipe = 1;
+			}
+		} else {
+			hist = ce_hist_lookup("*", 1, 1);
+		}
 		break;
 	case EDITOR_KEY_ESC:
-		ce_hist_autocomplete_reset(&hist);
-		if (hist != NULL) {
-			editor_cmd_reset();
-			cmdbuf->column = 1;
-			ce_buffer_append(cmdbuf, ":", 1);
-			if (extcmd) {
-				cmdbuf->column++;
-				ce_buffer_append(cmdbuf, "!", 1);
-			}
-			ce_buffer_append(cmdbuf, hist->cmd, strlen(hist->cmd));
-			cmdbuf->column += strlen(hist->cmd);
+		if ((hist = ce_hist_current()) != NULL) {
 			hist = NULL;
+			histlen = 0;
+			suggestions_wipe = 1;
+			ce_hist_autocomplete_reset(NULL);
 		} else {
 			editor_cmd_normal_mode();
 		}
 		break;
-	case EDITOR_KEY_UP:
-		hist = ce_hist_next();
-		break;
-	case EDITOR_KEY_DOWN:
-		hist = ce_hist_prev();
+	case '\t':
+		histlen = 0;
+		hist = NULL;
+		//suggestions_wipe = 1;
+		ce_hist_autocomplete_reset(NULL);
+		editor_autocomplete_path(buf);
 		break;
 	case EDITOR_CMD_HIST_NEXT:
 		ptr = buf->data;
-		hist = ce_hist_lookup(histcmd, histlen, 0);
+		if (histlen > 0) {
+			hist = ce_hist_lookup(histcmd, histlen, 0);
+			if (hist == NULL)
+				hist = ce_hist_current();
+		}
 		break;
 	case EDITOR_CMD_HIST_PREV:
 		ptr = buf->data;
-		hist = ce_hist_lookup(histcmd, histlen, 1);
+		if (histlen > 0) {
+			hist = ce_hist_lookup(histcmd, histlen, 1);
+			if (hist == NULL)
+				hist = ce_hist_current();
+		}
 		break;
 	default:
 		if (editor_allowed_command_key(key)) {
-			ce_hist_autocomplete_reset(NULL);
 			ce_buffer_append(buf, &key, sizeof(key));
-			hist = ce_hist_lookup(histcmd, histlen + 1, 1);
 			buf->column++;
+
+			ce_hist_autocomplete_reset(NULL);
+
+			if (editor_cmd_can_autocomplete()) {
+				histlen++;
+				hist = ce_hist_lookup(histcmd, histlen, 1);
+			} else {
+				histlen = 0;
+				hist = NULL;
+				suggestions_wipe = 1;
+			}
 		}
 		break;
 	}
 
-	if (hist != NULL) {
-		ce_buffer_reset(suggestions);
-		ce_buffer_appendf(suggestions, "%s\n", hist->cmd);
-		ce_buffer_populate_lines(suggestions);
-		editor_draw_suggestions(2);
-	}
+	if (key != '\t')
+		editor_cmd_suggestions(hist, histlen);
 
 	cmdbuf->lines[0].length = cmdbuf->length;
 	ce_buffer_line_columns(&cmdbuf->lines[0]);
@@ -1431,9 +1470,19 @@ editor_cmdbuf_search(struct cebuf *buf, u_int8_t key)
 	struct cehist		*hist;
 
 	hist = NULL;
+	ptr = buf->data;
 
 	switch (key) {
 	case '\n':
+		ce_hist_autocomplete_reset(&hist);
+		if (hist != NULL) {
+			editor_cmd_reset();
+			cmdbuf->column = 1;
+			ce_buffer_append(cmdbuf, ":", 1);
+			ce_buffer_append(cmdbuf, hist->cmd, strlen(hist->cmd));
+			cmdbuf->column += strlen(hist->cmd);
+		}
+
 		cmd = ce_buffer_as_string(buf);
 		if (buf->prev->buftype == CE_BUF_TYPE_DIRLIST) {
 			ce_dirlist_narrow(buf->prev, &cmd[1]);
@@ -1465,49 +1514,128 @@ editor_cmdbuf_search(struct cebuf *buf, u_int8_t key)
 		buf->column--;
 		ce_term_setpos(buf->orig_line, TERM_CURSOR_MIN);
 		ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
+		if (buf->length > 1)
+			hist = ce_hist_lookup(&ptr[1], buf->length, 1);
+		else
+			hist = ce_hist_lookup("*", 1, 1);
+		break;
+	case EDITOR_CMD_HIST_NEXT:
+		if (buf->length > 1)
+			hist = ce_hist_lookup(&ptr[1], buf->length - 1, 0);
+		if (hist == NULL)
+			hist = ce_hist_current();
+		break;
+	case EDITOR_CMD_HIST_PREV:
+		if (buf->length > 1)
+			hist = ce_hist_lookup(&ptr[1], buf->length - 1, 1);
+		if (hist == NULL)
+			hist = ce_hist_current();
 		break;
 	case EDITOR_KEY_ESC:
-		ce_hist_autocomplete_reset(&hist);
-		if (hist != NULL) {
-			editor_cmd_reset();
-			cmdbuf->column = 1;
-			ce_buffer_append(cmdbuf, "/", 1);
-			ce_buffer_append(cmdbuf, hist->cmd, strlen(hist->cmd));
-			cmdbuf->column += strlen(hist->cmd);
+		if ((hist = ce_hist_current()) != NULL) {
 			hist = NULL;
+			suggestions_wipe = 1;
+			ce_hist_autocomplete_reset(NULL);
 		} else {
 			editor_cmd_normal_mode();
 		}
 		break;
-	case EDITOR_CMD_HIST_NEXT:
-		ptr = buf->data;
-		hist = ce_hist_lookup(&ptr[1], buf->length - 1, 0);
-		break;
-	case EDITOR_CMD_HIST_PREV:
-		ptr = buf->data;
-		hist = ce_hist_lookup(&ptr[1], buf->length - 1, 1);
-		break;
+	case EDITOR_KEY_UP:
+	case EDITOR_KEY_DOWN:
+		return;
 	default:
-		if (isprint((unsigned char)key)) {
-			ce_hist_autocomplete_reset(NULL);
+		if (editor_allowed_command_key(key)) {
 			ce_buffer_append(buf, &key, sizeof(key));
-
-			ptr = buf->data;
-			hist = ce_hist_lookup(&ptr[1], buf->length, 1);
 			buf->column++;
+			ce_hist_autocomplete_reset(NULL);
+			hist = ce_hist_lookup(&ptr[1], buf->length - 1, 1);
 		}
 		break;
 	}
 
-	if (hist != NULL) {
-		ce_buffer_reset(suggestions);
-		ce_buffer_appendf(suggestions, "%s\n", hist->cmd);
-		ce_buffer_populate_lines(suggestions);
-		editor_draw_suggestions(2);
-	}
+	editor_cmd_suggestions(hist, buf->length);
 
 	cmdbuf->lines[0].length = buf->length;
 	ce_buffer_line_columns(&cmdbuf->lines[0]);
+}
+
+static void
+editor_cmd_suggestions(struct cehist *hist, size_t histlen)
+{
+	struct cehist	*histp;
+	char		*txt[10];
+	int		count, idx;
+
+	for (idx = 0; idx < 10; idx++)
+		txt[idx] = NULL;
+
+	ce_buffer_erase(suggestions);
+
+	if (hist != NULL) {
+		histp = hist;
+
+		count = 4;
+		txt[5] = hist->cmd;
+
+		while (count >= 0) {
+			if ((histp = TAILQ_NEXT(histp, list)) == NULL)
+				break;
+			if (ce_hist_matches(histp))
+				txt[count--] = histp->cmd;
+		}
+
+		count = 6;
+		histp = hist;
+
+		while (count < 10) {
+			histp = TAILQ_PREV(histp, ce_histlist, list);
+			if (histp == NULL)
+				break;
+			if (ce_hist_matches(histp))
+				txt[count++] = histp->cmd;
+		}
+
+		for (idx = 0; idx < 10; idx++) {
+			if (txt[idx] == NULL)
+				continue;
+
+			if (idx == 5) {
+				ce_buffer_appendf(suggestions,
+				    TERM_SEQUENCE_FMT_SET_COLOR,
+				    TERM_COLOR_GREEN + TERM_COLOR_FG);
+				ce_buffer_appendf(suggestions, "%s%s\n",
+				    txt[idx], TERM_SEQUENCE_ATTR_OFF);
+			} else {
+				ce_buffer_appendf(suggestions,
+				    "%s\n", txt[idx]);
+			}
+		}
+
+	} else if (histlen > 0) {
+		ce_buffer_appendf(suggestions, "no history matches\n");
+	}
+
+	ce_buffer_populate_lines(suggestions);
+	editor_draw_suggestions(2);
+}
+
+static int
+editor_cmd_can_autocomplete(void)
+{
+	size_t		idx;
+	u_int8_t	*ptr;
+
+	ptr = cmdbuf->data;
+
+	for (idx = 0; idx < cmdbuf->length; idx++) {
+		if (isspace(ptr[idx]))
+			return (1);
+	}
+
+	if (cmdbuf->length > 4)
+		return (1);
+
+	return (0);
 }
 
 static void
@@ -1709,7 +1837,6 @@ editor_dirlist_mode_command(u_int8_t key)
 	char			*name;
 
 	buf = ce_buffer_active();
-	ce_debug("%s: 0x%02x", __func__, key);
 
 	idx = ce_buffer_line_index(buf);
 	line = ce_buffer_line_current(buf);
@@ -1825,8 +1952,6 @@ editor_cmd_select_execute(void)
 	} else {
 		fp = ce_strdup(ce_editor_fullpath(cmd));
 	}
-
-	ce_debug("fp = %s", fp);
 
 	if (try_file && lstat(fp, &st) != -1) {
 		if (S_ISREG(st.st_mode) && !(st.st_mode & S_IXUSR)) {
@@ -2510,6 +2635,8 @@ editor_cmd_command_mode(void)
 static void
 editor_cmd_search_mode(void)
 {
+	struct cehist	*hist;
+
 	free(msg.message);
 	msg.message = NULL;
 
@@ -2526,8 +2653,12 @@ editor_cmd_search_mode(void)
 	lastmode = mode;
 	mode = CE_EDITOR_MODE_SEARCH;
 
-	if (cmdbuf->prev->buftype == CE_BUF_TYPE_DIRLIST)
+	if (cmdbuf->prev->buftype == CE_BUF_TYPE_DIRLIST) {
 		ce_dirlist_narrow(cmdbuf->prev, NULL);
+	} else {
+		hist = ce_hist_lookup("*", 1, 1);
+		editor_cmd_suggestions(hist, 0);
+	}
 }
 
 static void
@@ -2595,6 +2726,7 @@ static void
 editor_preset_cmd(const char *cmd)
 {
 	size_t		len;
+	struct cehist	*hist;
 
 	len = strlen(cmd);
 
@@ -2606,6 +2738,15 @@ editor_preset_cmd(const char *cmd)
 	cmdbuf->lines[0].length = cmdbuf->length;
 
 	ce_buffer_line_columns(&cmdbuf->lines[0]);
+
+	ce_hist_autocomplete_reset(NULL);
+
+	if (cmd[0] == '!')
+		hist = ce_hist_lookup(&cmd[1], strlen(cmd) - 1, 1);
+	else
+		hist = ce_hist_lookup(cmd, strlen(cmd), 1);
+
+	editor_cmd_suggestions(hist, 0);
 }
 
 static void

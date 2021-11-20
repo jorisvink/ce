@@ -421,16 +421,19 @@ ce_buffer_erase(struct cebuf *buf)
 	size_t			idx;
 	struct celine		*line;
 
-	for (idx = 0; idx < buf->lcnt; idx++) {
-		line = &buf->lines[idx];
-		if (line->flags & CE_LINE_ALLOCATED)
-			free(line->data);
+	if (buf->lines) {
+		for (idx = 0; idx < buf->lcnt; idx++) {
+			line = &buf->lines[idx];
+			if (line->flags & CE_LINE_ALLOCATED)
+				free(line->data);
+		}
 	}
 
 	free(buf->data);
 	free(buf->lines);
 
 	buf->lcnt = 0;
+	buf->maxsz = 0;
 	buf->data = NULL;
 	buf->lines = NULL;
 
