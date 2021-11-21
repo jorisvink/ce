@@ -366,6 +366,9 @@ ce_buffer_free(struct cebuf *buf)
 
 	TAILQ_REMOVE(&buffers, buf, list);
 
+	if (buf->proc != NULL)
+		ce_proc_kill(buf->proc);
+
 	if (active == buf) {
 		active = buf->prev;
 		ce_editor_settings(active);
@@ -392,6 +395,9 @@ ce_buffer_free_internal(struct cebuf *buf)
 	}
 
 	TAILQ_REMOVE(&internals, buf, list);
+
+	if (buf->proc != NULL)
+		ce_proc_kill(buf->proc);
 
 	if (active == buf) {
 		active = buf->prev;
@@ -876,9 +882,14 @@ ce_buffer_list(struct cebuf *output)
 		else
 			name = ce_editor_shortpath(buf->path);
 
-		ce_buffer_appendf(output, "[%zd] [%s%s] (%zu lines)\n", idx - 1,
+		ce_buffer_appendf(output, "[%zd] [%s%s] (%zu lines)", idx - 1,
 		    name, (buf->flags & CE_BUFFER_DIRTY) ? "*" : "",
 		    buf->lcnt);
+
+		if (buf->proc != NULL)
+			ce_buffer_appendf(output, "*");
+
+		ce_buffer_appendf(output, "\n");
 		idx++;
 	}
 

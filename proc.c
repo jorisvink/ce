@@ -29,9 +29,6 @@
 
 static void	proc_split_cmdline(char *, char **, size_t);
 
-/* The only running background process. */
-static struct ceproc	*active = NULL;
-
 /*
  * Processes where we shouldn't autoscroll.
  */
@@ -50,7 +47,7 @@ ce_proc_run(char *cmd, struct cebuf *buf, int add)
 	char		*argv[32], *copy;
 	int		flags, idx, out_pipe[2];
 
-	if (active != NULL) {
+	if (buf->proc != NULL) {
 		ce_editor_message("execute failed, another proc is pending");
 		return;
 	}
@@ -67,6 +64,8 @@ ce_proc_run(char *cmd, struct cebuf *buf, int add)
 		cmd++;
 
 	if (strlen(cmd) == 0) {
+		close(out_pipe[0]);
+		close(out_pipe[1]);
 		ce_editor_message("%s: refusing empty command", __func__);
 		return;
 	}
@@ -89,35 +88,33 @@ ce_proc_run(char *cmd, struct cebuf *buf, int add)
 			fatal("dup2: %s", errno_s);
 
 		(void)close(STDIN_FILENO);
-
 		execvp(argv[0], argv);
+		printf("failed to execute '%s': %s\n", copy, errno_s);
 		exit(1);
 	}
 
 	close(out_pipe[1]);
-
-	if ((active = calloc(1, sizeof(*active))) == NULL)
-		fatal("%s: calloc: %s", __func__, errno_s);
 
 	if (add)
 		ce_hist_add(copy);
 
 	free(copy);
 
-	active->cnt = 0;
-	active->first = 1;
-	active->buf = buf;
-	active->pid = pid;
-	active->idx = buf->lcnt;
-	active->ofd = out_pipe[0];
-	active->cmd = ce_strdup(cmd);
-	active->flags = CE_PROC_AUTO_SCROLL;
+	if ((buf->proc = calloc(1, sizeof(struct ceproc))) == NULL)
+		fatal("%s: calloc: %s", __func__, errno_s);
 
-	buf->proc = active;
+	buf->proc->cnt = 0;
+	buf->proc->first = 1;
+	buf->proc->buf = buf;
+	buf->proc->pid = pid;
+	buf->proc->idx = buf->lcnt;
+	buf->proc->ofd = out_pipe[0];
+	buf->proc->cmd = ce_strdup(cmd);
+	buf->proc->flags = CE_PROC_AUTO_SCROLL;
 
 	for (idx = 0; noscroll[idx] != NULL; idx++) {
-		if (!strcmp(noscroll[idx], active->cmd)) {
-			active->flags = 0;
+		if (!strcmp(noscroll[idx], buf->proc->cmd)) {
+			buf->proc->flags = 0;
 			break;
 		}
 	}
@@ -125,44 +122,36 @@ ce_proc_run(char *cmd, struct cebuf *buf, int add)
 	buf->selexec.set = 1;
 	buf->selexec.line = buf->lcnt;
 
-	if (fcntl(active->ofd, F_GETFL, &flags) == -1)
+	if (fcntl(buf->proc->ofd, F_GETFL, &flags) == -1)
 		fatal("%s: fcntl(get): %s", __func__, errno_s);
 
 	flags |= O_NONBLOCK;
 
-	if (fcntl(active->ofd, F_SETFL, &flags) == -1)
+	if (fcntl(buf->proc->ofd, F_SETFL, &flags) == -1)
 		fatal("%s: fcntl(set): %s", __func__, errno_s);
 }
 
 void
-ce_proc_cleanup(void)
+ce_proc_kill(struct ceproc *proc)
 {
-	if (active == NULL)
+	if (proc == NULL)
 		return;
 
-	if (kill(active->pid, SIGKILL) == -1)
-		printf("warning: failed to kill proc: %s\n", errno_s);
-
-	ce_proc_reap();
-	ce_editor_message("active process killed");
-}
-
-int
-ce_proc_stdout(void)
-{
-	return (active ? active->ofd : -1);
+	if (kill(proc->pid, SIGKILL) == -1) {
+		ce_editor_message("failed to kill proc: %s\n", errno_s);
+	} else {
+		ce_proc_reap(proc);
+		ce_editor_message("buffer process killed");
+	}
 }
 
 void
-ce_proc_read(void)
+ce_proc_read(struct ceproc *proc)
 {
 	ssize_t		ret, idx;
-	u_int8_t	buf[4096];
+	u_int8_t	data[4096];
 
-	if (active == NULL)
-		fatal("%s: called without active proc", __func__);
-
-	ret = read(active->ofd, buf, sizeof(buf));
+	ret = read(proc->ofd, data, sizeof(data));
 	if (ret == -1) {
 		if (errno == EINTR)
 			return;
@@ -171,52 +160,53 @@ ce_proc_read(void)
 		fatal("%s: read: %s", __func__, errno_s);
 	}
 
-	active->cnt += ret;
+	proc->cnt += ret;
 
 	if (ret == 0) {
-		ce_proc_reap();
+		ce_proc_reap(proc);
 		return;
 	}
 
-	if (ce_editor_mode() == CE_EDITOR_MODE_NORMAL &&
-	    ce_buffer_active() != active->buf)
-		ce_buffer_activate(active->buf);
-
 	for (idx = 0; idx < ret; idx++) {
-		if (buf[idx] == '\n') {
-			ce_buffer_appendl(active->buf, buf, idx + 1);
-			memmove(&buf[0], &buf[idx + 1], ret - idx - 1);
+		if (data[idx] == '\n') {
+			ce_buffer_appendl(proc->buf, data, idx + 1);
+			memmove(&data[0], &data[idx + 1], ret - idx - 1);
 			ret -= idx + 1;
 			idx = -1;
 		}
 	}
 
 	if (ret > 0)
-		ce_buffer_appendl(active->buf, buf, ret);
+		ce_buffer_appendl(proc->buf, data, ret);
 
-	if (active->first) {
-		active->first = 0;
-		ce_buffer_center_line(active->buf, active->idx - 1);
+	if (proc->first) {
+		proc->first = 0;
+		ce_buffer_center_line(proc->buf, proc->idx - 1);
 		ce_buffer_top();
-	} else if (active->flags & CE_PROC_AUTO_SCROLL) {
-		ce_buffer_jump_line(active->buf, active->buf->lcnt, 0);
+		if (ce_editor_mode() == CE_EDITOR_MODE_NORMAL &&
+		    ce_buffer_active() != proc->buf)
+			ce_buffer_activate(proc->buf);
+	} else if (proc->flags & CE_PROC_AUTO_SCROLL) {
+		ce_buffer_jump_line(proc->buf, proc->buf->lcnt, 0);
 	}
 
 	ce_editor_dirty();
 }
 
 void
-ce_proc_reap(void)
+ce_proc_reap(struct ceproc *proc)
 {
-	pid_t		pid;
-	char		buf[80];
-	int		len, status;
+	pid_t			pid;
+	char			str[80];
+	int			len, status;
 
-	if (active == NULL)
+	if (proc == NULL)
 		return;
 
+	proc->buf->proc = NULL;
+
 	for (;;) {
-		pid = waitpid(active->pid, &status, 0);
+		pid = waitpid(proc->pid, &status, 0);
 		if (pid == -1) {
 			if (errno == EINTR)
 				continue;
@@ -226,35 +216,31 @@ ce_proc_reap(void)
 		break;
 	}
 
-	active->buf->proc = NULL;
-
-	close(active->ofd);
+	close(proc->ofd);
 
 	if (WIFEXITED(status)) {
-		len = snprintf(buf, sizeof(buf),
+		len = snprintf(str, sizeof(str),
 		    "%s exited with %d",
-		    active->cmd, WEXITSTATUS(status));
+		    proc->cmd, WEXITSTATUS(status));
 	} else if (WIFSIGNALED(status)) {
-		len = snprintf(buf, sizeof(buf),
+		len = snprintf(str, sizeof(str),
 		    "%s aborted due to signal %d",
-		    active->cmd, WSTOPSIG(status));
+		    proc->cmd, WSTOPSIG(status));
 	} else {
-		len = snprintf(buf, sizeof(buf),
-		    "%s exited with status %d", active->cmd, status);
+		len = snprintf(str, sizeof(str),
+		    "%s exited with status %d", proc->cmd, status);
 	}
 
-	if (len == -1 || (size_t)len >= sizeof(buf))
+	if (len == -1 || (size_t)len >= sizeof(str))
 		fatal("%s: failed to construct status buf", __func__);
 
-	ce_editor_settings(active->buf);
-	ce_editor_message(buf);
+	ce_editor_settings(proc->buf);
+	ce_editor_message(str);
 
 	ce_editor_dirty();
 
-	free(active->cmd);
-	free(active);
-
-	active = NULL;
+	free(proc->cmd);
+	free(proc);
 }
 
 static void

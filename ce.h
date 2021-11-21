@@ -424,10 +424,9 @@ struct cehist	*ce_hist_next(void);
 struct cehist	*ce_hist_current(void);
 struct cehist	*ce_hist_lookup(const void *, size_t, int);
 
-void		ce_proc_reap(void);
-void		ce_proc_read(void);
-int		ce_proc_stdout(void);
-void		ce_proc_cleanup(void);
+void		ce_proc_reap(struct ceproc *);
+void		ce_proc_read(struct ceproc *);
+void		ce_proc_kill(struct ceproc *);
 void		ce_proc_run(char *, struct cebuf *, int);
 
 void		ce_syntax_init(void);

@@ -749,7 +749,8 @@ editor_process_input(int delay)
 	}
 
 	for (idx = 0; idx < keymaps[mode].maplen; idx++) {
-		if (key == keymaps[mode].map[idx].key) {
+		if (key == keymaps[mode].map[idx].key &&
+		    keymaps[mode].map[idx].command != NULL) {
 			keymaps[mode].map[idx].command();
 			return;
 		}
@@ -820,10 +821,13 @@ editor_read_byte(u_int8_t *out, int ms)
 	struct pollfd		pfd[2];
 	int			nfd, proc_fd;
 
+	nfd = 1;
 	*out = 0;
 
-	nfd = 1;
-	proc_fd = ce_proc_stdout();
+	if (shellbuf != NULL && shellbuf->proc != NULL)
+		proc_fd = shellbuf->proc->ofd;
+	else
+		proc_fd = -1;
 
 	pfd[0].events = POLLIN;
 	pfd[0].fd = STDIN_FILENO;
@@ -848,7 +852,7 @@ editor_read_byte(u_int8_t *out, int ms)
 
 	if (proc_fd != -1) {
 		if (pfd[1].revents & (POLLIN | POLLHUP | POLLERR))
-			ce_proc_read();
+			ce_proc_read(shellbuf->proc);
 	}
 
 	if (pfd[0].revents & POLLIN) {
@@ -909,7 +913,7 @@ editor_draw_status(void)
 	else
 		filemode = "rw";
 
-	procfd = ce_proc_stdout();
+	procfd = (curbuf->proc != NULL) ? curbuf->proc->ofd : -1;
 
 	if (curbuf->top == 0) {
 		llen = snprintf(lline, sizeof(lline), "%zuL [Top]%s",
@@ -1800,7 +1804,7 @@ direct:
 		case EDITOR_COMMAND_PROCESS:
 			switch (key) {
 			case 'k':
-				ce_proc_cleanup();
+				ce_proc_kill(buf->proc);
 				break;
 			}
 			break;
@@ -2358,7 +2362,7 @@ static void
 editor_shellbuf_close(void)
 {
 	if (shellbuf != NULL) {
-		if (ce_proc_stdout() != -1) {
+		if (shellbuf->proc != NULL) {
 			ce_editor_message("not closing, has active process");
 			return;
 		}
@@ -2372,7 +2376,7 @@ static void
 editor_shellbuf_reset(void)
 {
 	if (shellbuf != NULL) {
-		if (ce_proc_stdout() != -1)
+		if (shellbuf->proc != NULL)
 			return;
 		ce_buffer_free(shellbuf);
 	}
