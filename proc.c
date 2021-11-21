@@ -27,23 +27,10 @@
 
 #include "ce.h"
 
-#define PROC_AUTO_SCROLL	(1 << 1)
-
-struct proc {
-	pid_t			pid;
-	int			ofd;
-	int			first;
-	int			flags;
-	size_t			idx;
-	size_t			cnt;
-	char			*cmd;
-	struct cebuf		*buf;
-};
-
 static void	proc_split_cmdline(char *, char **, size_t);
 
 /* The only running background process. */
-static struct proc	*active = NULL;
+static struct ceproc	*active = NULL;
 
 /*
  * Processes where we shouldn't autoscroll.
@@ -124,7 +111,9 @@ ce_proc_run(char *cmd, struct cebuf *buf, int add)
 	active->idx = buf->lcnt;
 	active->ofd = out_pipe[0];
 	active->cmd = ce_strdup(cmd);
-	active->flags = PROC_AUTO_SCROLL;
+	active->flags = CE_PROC_AUTO_SCROLL;
+
+	buf->proc = active;
 
 	for (idx = 0; noscroll[idx] != NULL; idx++) {
 		if (!strcmp(noscroll[idx], active->cmd)) {
@@ -209,7 +198,7 @@ ce_proc_read(void)
 		active->first = 0;
 		ce_buffer_center_line(active->buf, active->idx - 1);
 		ce_buffer_top();
-	} else if (active->flags & PROC_AUTO_SCROLL) {
+	} else if (active->flags & CE_PROC_AUTO_SCROLL) {
 		ce_buffer_jump_line(active->buf, active->buf->lcnt, 0);
 	}
 
@@ -236,6 +225,8 @@ ce_proc_reap(void)
 
 		break;
 	}
+
+	active->buf->proc = NULL;
 
 	close(active->ofd);
 

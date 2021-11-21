@@ -163,6 +163,37 @@ struct cemark {
 };
 
 /*
+ * A running process that is attached to a buffer.
+ */
+#define CE_PROC_AUTO_SCROLL	(1 << 1)
+
+struct ceproc {
+	/* Process id. */
+	pid_t			pid;
+
+	/* File descriptor to read from. */
+	int			ofd;
+
+	/* XXX merge into flags? */
+	int			first;
+
+	/* Aux flags. */
+	int			flags;
+
+	/* Line number index when command started. */
+	size_t			idx;
+
+	/* Number of bytes read in total. */
+	size_t			cnt;
+
+	/* The command that was run. */
+	char			*cmd;
+
+	/* Pointer back to owning buffer. */
+	struct cebuf		*buf;
+};
+
+/*
  * A buffer from either a file or internal.
  */
 #define CE_BUFFER_DIRTY		0x0001
@@ -239,6 +270,9 @@ struct cebuf {
 	struct cemark		selmark;
 	struct cemark		selstart;
 	struct cemark		selexec;
+
+	/* Attached, proc or NULL if none. */
+	struct ceproc		*proc;
 
 	/* Callback for special buffers (like cmdbuf). */
 	void			(*cb)(struct cebuf *, u_int8_t);
