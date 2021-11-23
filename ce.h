@@ -19,6 +19,7 @@
 #include <sys/queue.h>
 
 #include <errno.h>
+#include <poll.h>
 #include <stdarg.h>
 #include <string.h>
 
@@ -26,6 +27,7 @@
 #define CE_FIND_CMD		"!find . -type f -name "
 #define errno_s			strerror(errno)
 
+#define CE_MAX_POLL			128
 #define CE_MAX_FILE_SIZE		(1024 * 1024 * 1024)
 
 #define CE_BUFFER_SEARCH_NORMAL		0
@@ -174,6 +176,9 @@ struct ceproc {
 	/* File descriptor to read from. */
 	int			ofd;
 
+	/* Set from ce_buffer_proc_gather() until ce_buffer_proc_dispatch(). */
+	struct pollfd		*pfd;
+
 	/* XXX merge into flags? */
 	int			first;
 
@@ -289,6 +294,7 @@ void		ce_buffer_resize(void);
 void		ce_buffer_cleanup(void);
 void		ce_buffer_restore(void);
 void		ce_buffer_init(int, char **);
+void		ce_buffer_proc_dispatch(void);
 void		ce_buffer_map(struct cebuf *);
 void		ce_buffer_free(struct cebuf *);
 void		ce_buffer_list(struct cebuf *);
@@ -313,6 +319,7 @@ void		ce_buffer_line_alloc_empty(struct cebuf *);
 void		ce_buffer_delete_line(struct cebuf *, int);
 void		ce_buffer_mark_last(struct cebuf *, size_t);
 void		ce_buffer_center_line(struct cebuf *, size_t);
+int		ce_buffer_proc_gather(struct pollfd *, size_t);
 void		ce_buffer_setname(struct cebuf *, const char *);
 void		ce_buffer_jump_line(struct cebuf *, long, size_t);
 void		ce_buffer_constrain_cursor_column(struct cebuf *);

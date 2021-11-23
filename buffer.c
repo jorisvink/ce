@@ -2013,6 +2013,52 @@ ce_buffer_alloc(int internal)
 	return (buf);
 }
 
+int
+ce_buffer_proc_gather(struct pollfd *pfd, size_t elm)
+{
+	int		idx;
+	struct cebuf	*buf;
+
+	idx = 0;
+
+	TAILQ_FOREACH(buf, &buffers, list) {
+		if (buf->proc == NULL)
+			continue;
+
+		if ((size_t)idx >= elm) {
+			ce_editor_message("not all process events handled");
+			break;
+		}
+
+		pfd[idx].fd = buf->proc->ofd;
+		pfd[idx].events = POLLIN;
+		buf->proc->pfd = &pfd[idx++];
+	}
+
+	return (idx);
+}
+
+void
+ce_buffer_proc_dispatch(void)
+{
+	struct pollfd	*pfd;
+	struct cebuf	*buf;
+
+	TAILQ_FOREACH(buf, &buffers, list) {
+		if (buf->proc == NULL)
+			continue;
+
+		if (buf->proc->pfd == NULL)
+			fatal("%s: proc without active pfd", __func__);
+
+		pfd = buf->proc->pfd;
+		buf->proc->pfd = NULL;
+
+		if (pfd->revents & (POLLIN | POLLHUP | POLLERR))
+			ce_proc_read(buf->proc);
+	}
+}
+
 static size_t
 buffer_line_span(struct cebuf *buf, struct celine *line)
 {

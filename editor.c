@@ -22,7 +22,6 @@
 #include <dirent.h>
 #include <pwd.h>
 #include <libgen.h>
-#include <poll.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -75,15 +74,17 @@ struct keymap {
 
 static void	editor_signal(int);
 static void	editor_resume(void);
+static void	editor_event_wait(void);
+static void	editor_read_input(void);
 static void	editor_signal_setup(void);
-static void	editor_process_input(int);
+static void	editor_consume_input(void);
 static void	editor_shellbuf_close(void);
 static void	editor_shellbuf_reset(void);
 static u_int8_t	editor_process_escape(void);
 static void	editor_preset_cmd(const char *);
 static int	editor_allowed_command_key(char);
+static int	editor_get_input(u_int8_t *, int);
 static int	editor_cmd_can_autocomplete(void);
-static ssize_t	editor_read_byte(u_int8_t *, int);
 static void	editor_autocomplete_path(struct cebuf *);
 static void	editor_yank_lines(struct cebuf *, size_t, size_t, int);
 
@@ -257,6 +258,12 @@ static struct {
 	time_t			when;
 } msg;
 
+static struct {
+	size_t			sz;
+	size_t			off;
+	u_int8_t		data[4];
+} inq;
+
 static int			quit = 0;
 static int			dirty = 1;
 static int			splash = 0;
@@ -297,6 +304,7 @@ ce_editor_init(void)
 		fatal("%s: getpwd: %s", __func__, errno_s);
 
 	memset(&msg, 0, sizeof(msg));
+	memset(&inq, 0, sizeof(inq));
 	editor_directory_change(pwd);
 
 	ce_debug("homedir is '%s'", home);
@@ -394,7 +402,6 @@ ce_editor_loop(void)
 				ce_term_writestr(TERM_SEQUENCE_CLEAR_ONLY);
 				ce_buffer_map(buf);
 			} else if (suggestions_wipe) {
-				ce_debug("wiping suggestions");
 				ce_term_writestr(TERM_SEQUENCE_CLEAR_ONLY);
 				ce_buffer_map(buf->prev);
 			}
@@ -423,7 +430,8 @@ ce_editor_loop(void)
 		editor_draw_message(&ts);
 
 		ce_term_flush();
-		editor_process_input(-1);
+		editor_event_wait();
+		editor_consume_input();
 
 		if (splash) {
 			dirty = 1;
@@ -502,7 +510,7 @@ ce_editor_yesno(void (*cb)(const void *), const void *arg, const char *fmt, ...)
 		editor_draw_message(NULL);
 		ce_term_flush();
 
-		if (editor_read_byte(&key, -1) == 0)
+		if (editor_get_input(&key, 1) == 0)
 			return (-1);
 
 		switch (key) {
@@ -728,7 +736,57 @@ editor_signal_setup(void)
 }
 
 static void
-editor_process_input(int delay)
+editor_event_wait(void)
+{
+	int			nfd;
+	struct pollfd		pfd[CE_MAX_POLL];
+
+	pfd[0].events = POLLIN;
+	pfd[0].fd = STDIN_FILENO;
+	nfd = 1 + ce_buffer_proc_gather(&pfd[1], CE_MAX_POLL - 1);
+
+	if ((nfd = poll(pfd, nfd, -1)) == -1) {
+		if (errno == EINTR)
+			return;
+		fatal("%s: poll %s", __func__, errno_s);
+	}
+
+	if (nfd == 0)
+		return;
+
+	if (pfd[0].revents & (POLLHUP | POLLERR))
+		fatal("%s: stdin error", __func__);
+
+	if (pfd[0].revents & POLLIN)
+		editor_read_input();
+
+	ce_buffer_proc_dispatch();
+}
+
+static void
+editor_read_input(void)
+{
+	ssize_t		sz;
+
+	for (;;) {
+		sz = read(STDIN_FILENO, inq.data, sizeof(inq.data));
+		if (sz == -1) {
+			if (errno == EINTR)
+				continue;
+			fatal("%s: read: %s", __func__, errno_s);
+		}
+
+		if (sz == 0)
+			fatal("%s: stdin eof", __func__);
+
+		inq.sz = sz;
+		inq.off = 0;
+		break;
+	}
+}
+
+static void
+editor_consume_input(void)
 {
 	size_t			idx;
 	u_int8_t		key;
@@ -737,7 +795,7 @@ editor_process_input(int delay)
 	if (mode >= CE_EDITOR_MODE_MAX)
 		fatal("%s: mode %d invalid", __func__, mode);
 
-	if (editor_read_byte(&key, delay) == 0)
+	if (editor_get_input(&key, 0) == 0)
 		return;
 
 	if (key == EDITOR_KEY_ESC)
@@ -786,13 +844,13 @@ editor_process_escape(void)
 
 	ret = EDITOR_KEY_ESC;
 
-	if (editor_read_byte(&key, 5) == 0)
+	if (editor_get_input(&key, 0) == 0)
 		goto cleanup;
 
 	if (key != 0x5b)
 		goto cleanup;
 
-	if (editor_read_byte(&key, 50) == 0)
+	if (editor_get_input(&key, 0) == 0)
 		goto cleanup;
 
 	switch (key) {
@@ -814,58 +872,19 @@ cleanup:
 	return (ret);
 }
 
-static ssize_t
-editor_read_byte(u_int8_t *out, int ms)
+static int
+editor_get_input(u_int8_t *out, int fetch)
 {
-	ssize_t			sz;
-	struct pollfd		pfd[2];
-	int			nfd, proc_fd;
-
-	nfd = 1;
 	*out = 0;
 
-	if (shellbuf != NULL && shellbuf->proc != NULL)
-		proc_fd = shellbuf->proc->ofd;
-	else
-		proc_fd = -1;
+	if ((inq.sz == 0 || inq.off == inq.sz) && fetch)
+		editor_read_input();
 
-	pfd[0].events = POLLIN;
-	pfd[0].fd = STDIN_FILENO;
-
-	if (proc_fd != -1) {
-		nfd = 2;
-		pfd[1].fd = proc_fd;
-		pfd[1].events = POLLIN;
-	}
-
-	if ((nfd = poll(pfd, nfd, ms)) == -1) {
-		if (errno == EINTR)
-			return (0);
-		fatal("%s: poll %s", __func__, errno_s);
-	}
-
-	if (nfd == 0)
+	if (inq.sz == 0 || inq.off == inq.sz)
 		return (0);
 
-	if (pfd[0].revents & (POLLHUP | POLLERR))
-		fatal("%s: poll error", __func__);
-
-	if (proc_fd != -1) {
-		if (pfd[1].revents & (POLLIN | POLLHUP | POLLERR))
-			ce_proc_read(shellbuf->proc);
-	}
-
-	if (pfd[0].revents & POLLIN) {
-		sz = read(STDIN_FILENO,  out, 1);
-		if (sz == -1) {
-			if (errno == EINTR)
-				return (0);
-			fatal("%s: read: %s", __func__, errno_s);
-		}
-
-		if (sz == 0)
-			fatal("%s: stdin eof", __func__);
-	}
+	*out = inq.data[inq.off];
+	inq.off++;
 
 	return (1);
 }
@@ -2113,7 +2132,7 @@ editor_cmd_change_string(struct cebuf *buf)
 {
 	u_int8_t		key;
 
-	if (editor_read_byte(&key, -1) == 0)
+	if (editor_get_input(&key, 1) == 0)
 		return;
 
 	switch (key) {
