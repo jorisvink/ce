@@ -261,7 +261,7 @@ static struct {
 static struct {
 	size_t			sz;
 	size_t			off;
-	u_int8_t		data[4];
+	u_int8_t		data[512];
 } inq;
 
 static int			quit = 0;
@@ -431,7 +431,9 @@ ce_editor_loop(void)
 
 		ce_term_flush();
 		editor_event_wait();
-		editor_consume_input();
+
+		while (inq.off != inq.sz)
+			editor_consume_input();
 
 		if (splash) {
 			dirty = 1;
