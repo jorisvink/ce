@@ -175,6 +175,8 @@ dirlist_load(struct cebuf *buf, const char *path)
 	while ((ent = fts_read(fts)) != NULL) {
 		if (!strcmp(ent->fts_accpath, path))
 			continue;
+		if (S_ISDIR(ent->fts_statp->st_mode))
+			continue;
 
 		name = ent->fts_path + rootlen;
 
