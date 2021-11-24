@@ -1189,17 +1189,17 @@ syntax_highlight_dirlist(struct state *state)
 		syntax_state_term_bold(state, 1);
 		syntax_write(state, state->len - 1);
 		syntax_state_term_bold(state, 0);
-		return;
+		goto out;
 	case 1:
 		syntax_state_term_bold(state, 1);
 		syntax_state_color(state, TERM_COLOR_BLUE);
 		syntax_write(state, state->len - 1);
 		syntax_state_color_clear(state);
 		syntax_state_term_bold(state, 0);
-		return;
+		goto out;
 	case 2:
 		syntax_write(state, state->len - 1);
-		return;
+		goto out;
 	}
 
 	mode = ce_dirlist_index2mode(state->buf, state->index - 3);
@@ -1208,8 +1208,11 @@ syntax_highlight_dirlist(struct state *state)
 		syntax_state_color(state, TERM_COLOR_GREEN);
 		syntax_write(state, state->len - 1);
 		syntax_state_color_clear(state);
-		return;
+		goto out;
 	}
 
 	syntax_write(state, state->len - 1);
+
+out:
+	state->off++;
 }
