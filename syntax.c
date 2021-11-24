@@ -15,6 +15,7 @@
  */
 
 #include <sys/types.h>
+#include <sys/stat.h>
 
 #include <ctype.h>
 #include <regex.h>
@@ -86,6 +87,7 @@ static int	syntax_highlight_c_preproc(struct state *);
 
 static void	syntax_highlight_yaml(struct state *);
 static void	syntax_highlight_swift(struct state *);
+static void	syntax_highlight_dirlist(struct state *);
 
 static void	syntax_highlight_python(struct state *);
 static int	syntax_highlight_python_decorator(struct state *);
@@ -316,12 +318,14 @@ ce_syntax_write(struct cebuf *buf, struct celine *line, size_t index,
 			case CE_FILE_TYPE_YAML:
 				syntax_highlight_yaml(&syntax_state);
 				break;
+			case CE_FILE_TYPE_DIRLIST:
+				syntax_highlight_dirlist(&syntax_state);
+				break;
 			default:
 				syntax_state_color_clear(&syntax_state);
 				syntax_write(&syntax_state, 1);
 				break;
 			}
-
 			break;
 		}
 	}
@@ -1173,4 +1177,39 @@ syntax_highlight_yaml(struct state *state)
 
 	syntax_state_color_clear(state);
 	syntax_write(state, 1);
+}
+
+static void
+syntax_highlight_dirlist(struct state *state)
+{
+	mode_t		mode;
+
+	switch (state->index) {
+	case 0:
+		syntax_state_term_bold(state, 1);
+		syntax_write(state, state->len - 1);
+		syntax_state_term_bold(state, 0);
+		return;
+	case 1:
+		syntax_state_term_bold(state, 1);
+		syntax_state_color(state, TERM_COLOR_BLUE);
+		syntax_write(state, state->len - 1);
+		syntax_state_color_clear(state);
+		syntax_state_term_bold(state, 0);
+		return;
+	case 2:
+		syntax_write(state, state->len - 1);
+		return;
+	}
+
+	mode = ce_dirlist_index2mode(state->buf, state->index - 3);
+
+	if (mode & (S_IXUSR | S_IXGRP | S_IXOTH)) {
+		syntax_state_color(state, TERM_COLOR_GREEN);
+		syntax_write(state, state->len - 1);
+		syntax_state_color_clear(state);
+		return;
+	}
+
+	syntax_write(state, state->len - 1);
 }

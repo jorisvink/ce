@@ -208,6 +208,7 @@ ce_buffer_dirlist(const char *path)
 
 	buf->path = rp;
 	buf->flags |= CE_BUFFER_RO;
+	buf->type = CE_FILE_TYPE_DIRLIST;
 	buf->buftype = CE_BUF_TYPE_DIRLIST;
 
 	ce_dirlist_path(buf, buf->path);

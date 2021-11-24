@@ -89,6 +89,7 @@
 #define CE_FILE_TYPE_SWIFT		6
 #define CE_FILE_TYPE_YAML		7
 #define CE_FILE_TYPE_JSON		8
+#define CE_FILE_TYPE_DIRLIST		9
 
 #define CE_TAB_WIDTH_DEFAULT		8
 #define CE_TAB_EXPAND_DEFAULT		0
@@ -384,6 +385,7 @@ void		ce_term_attr_reverse(void);
 void		ce_dirlist_rmfile(const void *);
 void		ce_dirlist_close(struct cebuf *);
 void		ce_dirlist_rescan(struct cebuf *);
+mode_t		ce_dirlist_index2mode(struct cebuf *, size_t);
 void		ce_dirlist_path(struct cebuf *, const char *);
 void		ce_dirlist_narrow(struct cebuf *, const char *);
 const char	*ce_dirlist_full_path(struct cebuf *, const char *);

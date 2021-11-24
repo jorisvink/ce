@@ -16,7 +16,6 @@
 
 #include <sys/param.h>
 #include <sys/types.h>
-#include <sys/queue.h>
 #include <sys/stat.h>
 
 #include <fts.h>
@@ -28,14 +27,19 @@
 
 #include "ce.h"
 
+#define DENTRY_FLAG_HIDDEN	(1 << 1)
+
 struct dentry {
 	char			*path;
-	TAILQ_ENTRY(dentry)	list;
+	u_int16_t		flags;
+	mode_t			mode;
+	mode_t			vmode;
 };
 
 struct dlist {
+	size_t			nelm;
 	char			*path;
-	TAILQ_HEAD(, dentry)	entries;
+	struct dentry		*entries;
 };
 
 union cp {
@@ -66,7 +70,6 @@ ce_dirlist_path(struct cebuf *buf, const char *path)
 		fatal("%s: calloc failed while allocating list", __func__);
 
 	list->path = ce_strdup(path);
-	TAILQ_INIT(&list->entries);
 
 	buf->intdata = list;
 	buf->flags |= CE_BUFFER_RO;
@@ -85,6 +88,7 @@ ce_dirlist_rescan(struct cebuf *buf)
 void
 ce_dirlist_close(struct cebuf *buf)
 {
+	size_t			idx;
 	struct dlist		*list;
 	struct dentry		*entry;
 
@@ -94,12 +98,12 @@ ce_dirlist_close(struct cebuf *buf)
 	list = buf->intdata;
 	buf->intdata = NULL;
 
-	while ((entry = TAILQ_FIRST(&list->entries)) != NULL) {
-		TAILQ_REMOVE(&list->entries, entry, list);
+	for (idx = 0; idx < list->nelm; idx++) {
+		entry = &list->entries[idx];
 		free(entry->path);
-		free(entry);
 	}
 
+	free(list->entries);
 	free(list->path);
 	free(list);
 }
@@ -147,6 +151,19 @@ ce_dirlist_full_path(struct cebuf *buf, const char *name)
 	return (ce_editor_fullpath(fpath));
 }
 
+mode_t
+ce_dirlist_index2mode(struct cebuf *buf, size_t index)
+{
+	struct dlist	*list;
+
+	list = buf->intdata;
+
+	if (index >= list->nelm)
+		return (0);
+
+	return (list->entries[index].vmode);
+}
+
 static void
 dirlist_load(struct cebuf *buf, const char *path)
 {
@@ -154,9 +171,8 @@ dirlist_load(struct cebuf *buf, const char *path)
 	FTSENT			*ent;
 	const char		*name;
 	struct dlist		*list;
-	struct dentry		*entry;
-	size_t			i, rootlen;
 	union cp		cp = { .cp = path };
+	size_t			i, rootlen, cnt, len;
 	char			*pathv[] = { cp.p, NULL };
 
 	if (buf->intdata == NULL)
@@ -169,6 +185,7 @@ dirlist_load(struct cebuf *buf, const char *path)
 		return;
 	}
 
+	cnt = 0;
 	list = buf->intdata;
 	rootlen = strlen(path) + 1;
 
@@ -189,15 +206,23 @@ dirlist_load(struct cebuf *buf, const char *path)
 		if (ignored[i] != NULL)
 			continue;
 
-		if ((entry = calloc(1, sizeof(*entry))) == NULL) {
-			fatal("%s: calloc failed while allocating entry",
-			    __func__);
+		if (cnt >= list->nelm) {
+			len = (list->nelm + 64) * sizeof(struct dentry);
+			list->entries = realloc(list->entries, len);
+			if (list->entries == NULL)
+				fatal("%s: calloc (%zu)", __func__, len);
+
+			list->nelm += 64;
 		}
 
-		entry->path = ce_strdup(name);
-		TAILQ_INSERT_TAIL(&list->entries, entry, list);
+		list->entries[cnt].path = ce_strdup(name);
+		list->entries[cnt].mode = ent->fts_statp->st_mode;
+		list->entries[cnt].vmode = list->entries[cnt].mode;
+
+		cnt++;
 	}
 
+	list->nelm = cnt;
 	fts_close(fts);
 
 	ce_editor_message("loaded directory '%s'", path);
@@ -206,9 +231,10 @@ dirlist_load(struct cebuf *buf, const char *path)
 static void
 dirlist_tobuf(struct cebuf *buf, const char *match)
 {
+	int			len;
 	struct dlist		*list;
 	struct dentry		*entry;
-	int			len, show;
+	size_t			idx, line;
 	char			title[PATH_MAX], pattern[PATH_MAX];
 
 	if (buf->intdata == NULL)
@@ -245,27 +271,34 @@ dirlist_tobuf(struct cebuf *buf, const char *match)
 		ce_buffer_appendl(buf, "\n", 1);
 	} else {
 		ce_buffer_appendl(buf, "\n", 1);
+		ce_buffer_appendl(buf, "\n", 1);
 	}
 
-	TAILQ_FOREACH(entry, &list->entries, list) {
-		show = 0;
+	line = 0;
+
+	for (idx = 0; idx < list->nelm; idx++) {
+		entry = &list->entries[idx];
 
 		if (match) {
 			if (fnmatch(pattern,
 			    entry->path, FNM_NOESCAPE | FNM_CASEFOLD) == 0)
-				show = 1;
+				entry->flags &= ~DENTRY_FLAG_HIDDEN;
+			else
+				entry->flags = DENTRY_FLAG_HIDDEN;
 		} else {
-			show = 1;
+			entry->flags &= ~DENTRY_FLAG_HIDDEN;
 		}
 
-		if (show == 0)
+		if (entry->flags & DENTRY_FLAG_HIDDEN)
 			continue;
 
-		len = snprintf(title, sizeof(title), "%s\n", entry->path);
+		len = snprintf(title, sizeof(title), "%o %s\n",
+		    entry->mode, entry->path);
 		if (len == -1 || (size_t)len >= sizeof(title))
 			fatal("%s: snprintf failed", __func__);
 
 		ce_buffer_appendl(buf, title, len);
+		list->entries[line++].vmode = entry->mode;
 	}
 
 	ce_editor_dirty();
