@@ -31,6 +31,7 @@
 
 struct dentry {
 	char			*path;
+	const char		*vpath;
 	u_int16_t		flags;
 	mode_t			mode;
 	mode_t			vmode;
@@ -137,15 +138,22 @@ ce_dirlist_rmfile(const void *arg)
 }
 
 const char *
-ce_dirlist_full_path(struct cebuf *buf, const char *name)
+ce_dirlist_index2path(struct cebuf *buf, size_t index)
 {
 	int		len;
+	struct dlist	*list;
 	char		fpath[PATH_MAX];
 
-	len = snprintf(fpath, sizeof(fpath), "%s/%s", buf->path, name);
+	list = buf->intdata;
+
+	if (index >= list->nelm)
+		return (0);
+
+	len = snprintf(fpath, sizeof(fpath), "%s/%s",
+	    buf->path, list->entries[index].vpath);
 	if (len == -1 || (size_t)len >= sizeof(fpath)) {
 		fatal("%s: failed to construct %s/%s",
-		    __func__, buf->path, name);
+		    __func__, buf->path, list->entries[index].vpath);
 	}
 
 	return (ce_editor_fullpath(fpath));
@@ -217,6 +225,8 @@ dirlist_load(struct cebuf *buf, const char *path)
 
 		list->entries[cnt].path = ce_strdup(name);
 		list->entries[cnt].mode = ent->fts_statp->st_mode;
+
+		list->entries[cnt].vpath = list->entries[cnt].path;
 		list->entries[cnt].vmode = list->entries[cnt].mode;
 
 		cnt++;
@@ -298,7 +308,11 @@ dirlist_tobuf(struct cebuf *buf, const char *match)
 			fatal("%s: snprintf failed", __func__);
 
 		ce_buffer_appendl(buf, title, len);
-		list->entries[line++].vmode = entry->mode;
+
+		list->entries[line].vpath = entry->path;
+		list->entries[line].vmode = entry->mode;
+
+		line++;
 	}
 
 	ce_editor_dirty();

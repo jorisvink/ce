@@ -387,8 +387,8 @@ void		ce_dirlist_close(struct cebuf *);
 void		ce_dirlist_rescan(struct cebuf *);
 mode_t		ce_dirlist_index2mode(struct cebuf *, size_t);
 void		ce_dirlist_path(struct cebuf *, const char *);
+const char	*ce_dirlist_index2path(struct cebuf *, size_t);
 void		ce_dirlist_narrow(struct cebuf *, const char *);
-const char	*ce_dirlist_full_path(struct cebuf *, const char *);
 
 void		ce_editor_init(void);
 void		ce_editor_loop(void);

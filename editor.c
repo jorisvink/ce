@@ -1860,6 +1860,7 @@ editor_dirlist_mode_command(u_int8_t key)
 	struct cebuf		*buf;
 	struct celine		*line;
 	char			*name;
+	mode_t			filemode;
 
 	buf = ce_buffer_active();
 
@@ -1875,9 +1876,22 @@ editor_dirlist_mode_command(u_int8_t key)
 	memcpy(name, line->data, line->length - 1);
 	name[line->length - 1] = '\0';
 
-	fp = ce_dirlist_full_path(buf, name);
+	fp = ce_dirlist_index2path(buf, idx - 3);
 
 	switch (key) {
+	case 'b':
+		editor_cmd_word_prev(buf, 1);
+		break;
+	case 'w':
+		editor_cmd_word_next(buf, 1);
+		break;
+	case 0x05:
+		filemode = ce_dirlist_index2mode(buf, idx - 3);
+		if (S_ISREG(filemode)) {
+			if (ce_buffer_file(fp) == NULL)
+				ce_editor_message("%s", ce_buffer_strerror());
+		}
+		break;
 	case 'd':
 		if (ce_editor_yesno(ce_dirlist_rmfile, fp,
 		    "delete %s? (y/n)", name) == 0)
