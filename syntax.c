@@ -250,6 +250,8 @@ ce_syntax_write(struct cebuf *buf, struct celine *line, size_t index,
 	}
 
 	if (towrite == 1 && p[0] == '\n') {
+		syntax_state.ppwlen = 0;
+		syntax_state.ppword = NULL;
 		syntax_state.inside_preproc = 0;
 		if (syntax_state.inside_string == 0)
 			syntax_state_color_clear(&syntax_state);
@@ -706,6 +708,9 @@ syntax_highlight_c_preproc(struct state *state)
 			if (state->p[0] == '<') {
 				syntax_highlight_span(state,
 				    '<', '>', TERM_COLOR_RED);
+				syntax_state.ppwlen = 0;
+				syntax_state.ppword = NULL;
+				syntax_state.inside_preproc = 0;
 				return (0);
 			}
 		}
@@ -989,6 +994,9 @@ syntax_highlight_span(struct state *state, char start, char end, int color)
 	syntax_state_color(state, color);
 
 	while (len < state->len) {
+		if (p[len] == '\n')
+			break;
+
 		if (p[len] == end) {
 			len++;
 			break;
