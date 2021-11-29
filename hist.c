@@ -54,8 +54,8 @@ ce_hist_init(void)
 void
 ce_hist_add(const char *cmd)
 {
-	hist_list_append(cmd);
-	hist_file_append(cmd);
+	if (hist_list_append(cmd) == 0)
+		hist_file_append(cmd);
 }
 
 void
@@ -359,14 +359,19 @@ hist_file_append(const char *cmd)
 static int
 hist_list_append(const char *cmd)
 {
+	int			first;
 	struct cehist		*hist;
+
+	first = 1;
 
 	TAILQ_FOREACH(hist, &cmdhist, list) {
 		if (!strcmp(hist->cmd, cmd)) {
 			TAILQ_REMOVE(&cmdhist, hist, list);
 			TAILQ_INSERT_HEAD(&cmdhist, hist, list);
-			return (0);
+			return (first);
 		}
+
+		first = 0;
 	}
 
 	if ((hist = calloc(1, sizeof(*hist))) == NULL)
@@ -376,5 +381,5 @@ hist_list_append(const char *cmd)
 
 	TAILQ_INSERT_HEAD(&cmdhist, hist, list);
 
-	return (-1);
+	return (first);
 }

@@ -108,6 +108,7 @@ static void	editor_cmd_buffer_list(void);
 
 static void	editor_cmd_history_prev(void);
 static void	editor_cmd_history_next(void);
+static void	editor_cmd_history_cycle(int, int);
 static void	editor_cmd_suggestions(struct cehist *, size_t);
 
 static void	editor_cmd_directory_list(void);
@@ -1325,8 +1326,7 @@ editor_cmdbuf_input(struct cebuf *buf, u_int8_t key)
 			break;
 		}
 
-		if (cmd[1] != '\0' && hist == NULL &&
-		    editor_cmd_can_autocomplete())
+		if (cmd[1] != '\0' && editor_cmd_can_autocomplete())
 			ce_hist_add(&cmd[off]);
 
 		switch (cmd[1]) {
@@ -1441,9 +1441,14 @@ editor_cmdbuf_input(struct cebuf *buf, u_int8_t key)
 	case '\t':
 		histlen = 0;
 		hist = NULL;
-		//suggestions_wipe = 1;
 		ce_hist_autocomplete_reset(NULL);
 		editor_autocomplete_path(buf);
+		break;
+	case EDITOR_KEY_UP:
+		editor_cmd_history_cycle(1, extcmd);
+		break;
+	case EDITOR_KEY_DOWN:
+		editor_cmd_history_cycle(0, extcmd);
 		break;
 	case EDITOR_CMD_HIST_NEXT:
 		ptr = buf->data;
@@ -2443,6 +2448,32 @@ static void
 editor_cmd_history_next(void)
 {
 	ce_hist_autocomplete(0);
+}
+
+static void
+editor_cmd_history_cycle(int next, int extcmd)
+{
+	struct cehist		*hist;
+
+	if (next)
+		hist = ce_hist_next();
+	else
+		hist = ce_hist_prev();
+
+	if (hist == NULL)
+		return;
+
+	editor_cmd_reset();
+	cmdbuf->column = 1;
+	ce_buffer_append(cmdbuf, ":", 1);
+
+	if (extcmd) {
+		cmdbuf->column++;
+		ce_buffer_append(cmdbuf, "!", 1);
+	}
+
+	ce_buffer_append(cmdbuf, hist->cmd, strlen(hist->cmd));
+	cmdbuf->column += strlen(hist->cmd);
 }
 
 static void
