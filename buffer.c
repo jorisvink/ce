@@ -1402,14 +1402,13 @@ ce_buffer_move_down(void)
 			ce_buffer_center();
 		} else {
 			active->top += index - start;
-			active->line = index - start;
+			active->line = (index - start) - 1;
 
 			index = active->top +
 			    (active->line - active->orig_line);
 			if (index >= active->lcnt)
 				active->line = active->lcnt - active->top;
 		}
-
 	} else {
 		next = active->line + 1;
 		if (next <= active->lcnt)
