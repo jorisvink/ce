@@ -469,6 +469,9 @@ ce_buffer_activate(struct cebuf *buf)
 	buf->prev = active;
 	active = buf;
 
+	if (buf->buftype == CE_BUF_TYPE_SHELLCMD)
+		cursor_column = TERM_CURSOR_MIN;
+
 	ce_editor_dirty();
 	ce_term_update_title();
 	ce_editor_settings(active);
