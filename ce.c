@@ -38,6 +38,8 @@ static struct {
 	{ ".yml",	CE_FILE_TYPE_YAML },
 	{ ".yaml",	CE_FILE_TYPE_YAML },
 	{ ".json",	CE_FILE_TYPE_JSON },
+	{ ".html",	CE_FILE_TYPE_HTML },
+	{ ".css",	CE_FILE_TYPE_CSS },
 	{ NULL,		0 },
 };
 

@@ -352,6 +352,12 @@ ce_syntax_guess(struct cebuf *buf)
 			buf->type = CE_FILE_TYPE_DIFF;
 			break;
 		}
+
+		if (idx == 0 && line->length >= 10 &&
+		    !strncasecmp(ptr, "<!DOCTYPE>", 10)) {
+			buf->type = CE_FILE_TYPE_HTML;
+			break;
+		}
 	}
 }
 
