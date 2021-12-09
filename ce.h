@@ -125,7 +125,7 @@ TAILQ_HEAD(ce_histlist, cehist);
 /*
  * Represents a single line in a file.
  */
-#define CE_LINE_ALLOCATED	0x0001
+#define CE_LINE_ALLOCATED	(1 << 1)
 
 struct celine {
 	/* Flags. */
