@@ -1430,6 +1430,9 @@ editor_cmdbuf_input(struct cebuf *buf, u_int8_t key)
 			hist = ce_hist_lookup("*", 1, 1);
 		}
 		break;
+	case 0x03:
+		editor_cmd_normal_mode();
+		break;
 	case EDITOR_KEY_ESC:
 		if ((hist = ce_hist_current()) != NULL) {
 			hist = NULL;
