@@ -34,6 +34,7 @@ static void	proc_split_cmdline(char *, char **, size_t);
  */
 static const char *noscroll[] = {
 	"rg",
+	"man",
 	"grep",
 	"git",
 	"svn",
