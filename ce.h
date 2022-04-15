@@ -305,6 +305,7 @@ void		ce_buffer_list(struct cebuf *);
 void		ce_buffer_reset(struct cebuf *);
 void		ce_buffer_erase(struct cebuf *);
 void		ce_buffer_close_nonactive(void);
+void		ce_buffer_close_shellbufs(void);
 void		ce_buffer_activate_index(size_t);
 void		ce_buffer_activate(struct cebuf *);
 size_t		ce_buffer_line_index(struct cebuf *);

@@ -78,14 +78,14 @@ static void	editor_event_wait(void);
 static void	editor_read_input(void);
 static void	editor_signal_setup(void);
 static void	editor_consume_input(void);
-static void	editor_shellbuf_close(void);
-static void	editor_shellbuf_reset(void);
 static u_int8_t	editor_process_escape(void);
 static void	editor_preset_cmd(const char *);
 static int	editor_allowed_command_key(char);
 static int	editor_get_input(u_int8_t *, int);
 static int	editor_cmd_can_autocomplete(void);
+static void	editor_shellbuf_close(struct cebuf *);
 static void	editor_autocomplete_path(struct cebuf *);
+static void	editor_shellbuf_new(const char *, struct cebuf **);
 static void	editor_yank_lines(struct cebuf *, size_t, size_t, int);
 
 static void	editor_draw_status(void);
@@ -277,7 +277,6 @@ static char			*search = NULL;
 static struct cebuf		*cmdbuf = NULL;
 static struct cebuf		*buflist = NULL;
 static struct cebuf		*pbuffer = NULL;
-static struct cebuf		*shellbuf = NULL;
 static struct cebuf		*suggestions = NULL;
 static int			suggestions_wipe = 0;
 static int			mode = CE_EDITOR_MODE_NORMAL;
@@ -1262,6 +1261,7 @@ editor_cmdbuf_input(struct cebuf *buf, u_int8_t key)
 	char			*ep;
 	struct cehist		*hist;
 	long			linenr;
+	struct cebuf		*active;
 	const char		*cmd, *path;
 	size_t			off, histlen;
 	int			force, extcmd;
@@ -1368,17 +1368,26 @@ editor_cmdbuf_input(struct cebuf *buf, u_int8_t key)
 		case 'b':
 			switch (cmd[2]) {
 			case 'c':
-				if (cmd[3] == 'o') {
+				switch (cmd[3]) {
+				case 'o':
 					ce_buffer_close_nonactive();
 					ce_editor_dirty();
-				} else {
-					if (ce_buffer_active() == shellbuf) {
-						editor_shellbuf_close();
+					break;
+				case 's':
+					ce_buffer_close_shellbufs();
+					ce_editor_dirty();
+					break;
+				default:
+					active = ce_buffer_active();
+					if (active->buftype ==
+					    CE_BUF_TYPE_SHELLCMD) {
+						editor_shellbuf_close(active);
 						ce_editor_dirty();
 						break;
 					}
 					ce_buffer_free(ce_buffer_active());
 					ce_editor_dirty();
+					break;
 				}
 				break;
 			}
@@ -1945,7 +1954,7 @@ editor_cmd_select_execute(void)
 	struct stat		st;
 	char			nul;
 	long			linenr;
-	struct cebuf		*curbuf;
+	struct cebuf		*curbuf, *buf;
 	int			i, try_file, len;
 	char			*fp, path[PATH_MAX];
 	char			*cmd, *line, *p, *e, *ep, n;
@@ -2027,8 +2036,8 @@ editor_cmd_select_execute(void)
 	if (e)
 		*e = n;
 
-	editor_shellbuf_reset();
-	ce_proc_run((char *)pbuffer->data, shellbuf, 1);
+	editor_shellbuf_new((const char *)pbuffer->data, &buf);
+	ce_proc_run((char *)pbuffer->data, buf, 1);
 
 	ce_editor_pbuffer_reset();
 }
@@ -2404,43 +2413,43 @@ editor_no_input(struct cebuf *buf, u_int8_t key)
 }
 
 static void
-editor_shellbuf_close(void)
+editor_shellbuf_close(struct cebuf *buf)
 {
-	if (shellbuf != NULL) {
-		if (shellbuf->proc != NULL) {
-			ce_editor_message("not closing, has active process");
-			return;
-		}
-
-		ce_buffer_free(shellbuf);
-		shellbuf = NULL;
+	if (buf->proc != NULL) {
+		ce_editor_message("not closing, has active process");
+		return;
 	}
+
+	ce_buffer_free(buf);
 }
 
 static void
-editor_shellbuf_reset(void)
+editor_shellbuf_new(const char *cmd, struct cebuf **out)
 {
-	if (shellbuf != NULL) {
-		if (shellbuf->proc != NULL)
-			return;
-		ce_buffer_free(shellbuf);
-	}
+	struct cebuf	*buf;
+	char		name[128];
 
-	shellbuf = ce_buffer_alloc(0);
-	shellbuf->flags |= CE_BUFFER_RO;
-	shellbuf->buftype = CE_BUF_TYPE_SHELLCMD;
+	(void)snprintf(name, sizeof(name), "command output <%s>", cmd);
 
-	ce_buffer_setname(shellbuf, "shell command output");
+	buf = ce_buffer_alloc(0);
+	buf ->flags |= CE_BUFFER_RO;
+	buf ->buftype = CE_BUF_TYPE_SHELLCMD;
 
-	shellbuf->data = NULL;
-	ce_buffer_line_alloc_empty(shellbuf);
+	ce_buffer_setname(buf, name);
+
+	buf->data = NULL;
+	ce_buffer_line_alloc_empty(buf);
+
+	*out = buf;
 }
 
 static void
 editor_cmd_execute(char *cmd)
 {
-	editor_shellbuf_reset();
-	ce_proc_run(cmd, shellbuf, 0);
+	struct cebuf	*buf;
+
+	editor_shellbuf_new(cmd, &buf);
+	ce_proc_run(cmd, buf, 0);
 }
 
 static void

@@ -135,6 +135,21 @@ ce_buffer_close_nonactive(void)
 	active->prev = scratch;
 }
 
+void
+ce_buffer_close_shellbufs(void)
+{
+	struct cebuf	*buf, *next;
+
+	for (buf = TAILQ_FIRST(&buffers); buf != NULL; buf = next) {
+		next = TAILQ_NEXT(buf, list);
+		if (buf->buftype != CE_BUF_TYPE_SHELLCMD)
+			continue;
+		ce_buffer_free(buf);
+	}
+
+	active->prev = scratch;
+}
+
 const char *
 ce_buffer_strerror(void)
 {
