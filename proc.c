@@ -236,7 +236,12 @@ ce_proc_reap(struct ceproc *proc)
 	if (len == -1 || (size_t)len >= sizeof(str))
 		fatal("%s: failed to construct status buf", __func__);
 
-	ce_editor_settings(proc->buf);
+	if (proc->first) {
+		ce_buffer_free(proc->buf);
+	} else {
+		ce_editor_settings(proc->buf);
+	}
+
 	ce_editor_message(str);
 
 	ce_editor_dirty();
