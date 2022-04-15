@@ -2077,11 +2077,12 @@ int
 ce_buffer_proc_gather(struct pollfd *pfd, size_t elm)
 {
 	int		idx;
-	struct cebuf	*buf;
+	struct cebuf	*buf, *next;
 
 	idx = 0;
 
-	TAILQ_FOREACH(buf, &buffers, list) {
+	for (buf = TAILQ_FIRST(&buffers); buf != NULL; buf = next) {
+		next = TAILQ_NEXT(buf, list);
 		if (buf->proc == NULL)
 			continue;
 
@@ -2102,9 +2103,10 @@ void
 ce_buffer_proc_dispatch(void)
 {
 	struct pollfd	*pfd;
-	struct cebuf	*buf;
+	struct cebuf	*buf, *next;
 
-	TAILQ_FOREACH(buf, &buffers, list) {
+	for (buf = TAILQ_FIRST(&buffers); buf != NULL; buf = next) {
+		next = TAILQ_NEXT(buf, list);
 		if (buf->proc == NULL)
 			continue;
 
