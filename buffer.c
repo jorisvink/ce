@@ -905,7 +905,9 @@ ce_buffer_cycle(int next)
 		return;
 
 	active = buf;
+
 	ce_editor_settings(active);
+	ce_term_update_title();
 	ce_editor_dirty();
 }
 
