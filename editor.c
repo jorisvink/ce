@@ -1954,6 +1954,7 @@ editor_cmd_select_execute(void)
 	struct stat		st;
 	char			nul;
 	long			linenr;
+	size_t			idx, cmdlen;
 	struct cebuf		*curbuf, *buf;
 	int			i, try_file, len;
 	char			*fp, path[PATH_MAX];
@@ -1970,7 +1971,29 @@ editor_cmd_select_execute(void)
 
 	nul = '\0';
 	ce_editor_pbuffer_append(&nul, sizeof(nul));
+
 	cmd = pbuffer->data;
+	cmdlen = strlen(cmd);
+
+	if (cmdlen == 40) {
+		for (idx = 0; idx < cmdlen; idx++) {
+			if ((cmd[idx] >= 'a' && cmd[idx] <= 'f') ||
+			    (cmd[idx] >= '0' && cmd[idx] <= '9'))
+				continue;
+			break;
+		}
+
+		if (idx == cmdlen) {
+			len = snprintf(path, sizeof(path), "git show %s", cmd);
+			if (len == -1 || (size_t)len >= sizeof(path))
+				fatal("failed to create git show command");
+
+			editor_shellbuf_new(path, &buf);
+			ce_proc_run(path, buf, 1);
+			ce_editor_pbuffer_reset();
+			return;
+		}
+	}
 
 	if ((p = strchr(cmd, ' ')) != NULL) {
 		*p = '\0';
@@ -2036,8 +2059,8 @@ editor_cmd_select_execute(void)
 	if (e)
 		*e = n;
 
-	editor_shellbuf_new((const char *)pbuffer->data, &buf);
-	ce_proc_run((char *)pbuffer->data, buf, 1);
+	editor_shellbuf_new(cmd, &buf);
+	ce_proc_run(cmd, buf, 1);
 
 	ce_editor_pbuffer_reset();
 }
