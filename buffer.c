@@ -883,6 +883,33 @@ ce_buffer_search(struct cebuf *buf, const char *needle, int which)
 }
 
 void
+ce_buffer_cycle(int next)
+{
+	struct cebuf	*buf;
+
+	buf = NULL;
+
+	if (active == scratch) {
+		if (next)
+			buf = TAILQ_LAST(&buffers, cebuflist);
+	} else {
+		if (next) {
+			buf = TAILQ_PREV(active, cebuflist, list);
+		} else {
+			if ((buf = TAILQ_NEXT(active, list)) == NULL)
+				buf = scratch;
+		}
+	}
+
+	if (buf == NULL)
+		return;
+
+	active = buf;
+	ce_editor_settings(active);
+	ce_editor_dirty();
+}
+
+void
 ce_buffer_list(struct cebuf *output)
 {
 	size_t		idx;

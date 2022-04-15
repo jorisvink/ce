@@ -105,6 +105,8 @@ static void	editor_cmd_search_next(void);
 static void	editor_cmd_search_prev(void);
 static void	editor_cmd_search_word(void);
 static void	editor_cmd_buffer_list(void);
+static void	editor_cmd_buffer_next(void);
+static void	editor_cmd_buffer_prev(void);
 
 static void	editor_cmd_history_prev(void);
 static void	editor_cmd_history_next(void);
@@ -185,6 +187,9 @@ static struct keymap normal_map[] = {
 	{ 0x04,			editor_cmd_directory_list },
 
 	{ EDITOR_CMD_BUFLIST,	editor_cmd_buffer_list },
+	{ EDITOR_CMD_HIST_PREV,	editor_cmd_buffer_prev },
+	{ EDITOR_CMD_HIST_NEXT,	editor_cmd_buffer_next },
+
 	{ 0x1a,			editor_cmd_suspend },
 };
 
@@ -801,6 +806,8 @@ editor_consume_input(void)
 
 	if (editor_get_input(&key, 0) == 0)
 		return;
+
+	ce_debug("key is 0x%02x", key);
 
 	if (key == EDITOR_KEY_ESC)
 		key = editor_process_escape();
@@ -2332,6 +2339,18 @@ editor_cmd_buffer_list(void)
 
 	lastmode = mode;
 	mode = CE_EDITOR_MODE_BUFLIST;
+}
+
+static void
+editor_cmd_buffer_next(void)
+{
+	ce_buffer_cycle(1);
+}
+
+static void
+editor_cmd_buffer_prev(void)
+{
+	ce_buffer_cycle(0);
 }
 
 static void
