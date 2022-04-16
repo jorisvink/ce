@@ -2663,7 +2663,7 @@ editor_cmd_paste(void)
 
 	ce_editor_dirty();
 
-	if (ptr[len] == '\n')
+	if (len > 0 && ptr[len - 1] == '\n')
 		ce_buffer_jump_left();
 
 	lastmode = mode;
