@@ -27,7 +27,7 @@
 #include "ce.h"
 
 #define TERM_MIN_ROWS		24
-#define TERM_MIN_COLS		50
+#define TERM_MIN_COLS		24
 
 static struct termios	cur;
 static struct termios	old;
