@@ -288,6 +288,9 @@ proc_split_cmdline(char *args, char **argv, size_t elm)
 		while (isspace(*(unsigned char *)line))
 			line++;
 
+		if (*line == '\0')
+			break;
+
 		p = line;
 	}
 
