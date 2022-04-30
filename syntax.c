@@ -120,7 +120,7 @@ static const char *c_type[] = {
 	"int8_t", "int16_t", "int32_t", "int64_t",
 	"u_int8_t", "u_int16_t", "u_int32_t", "u_int64_t",
 	"extern", "volatile", "sig_atomic_t", "time_t", "FILE",
-	"enum", "union", "va_list", "bool", "inline",
+	"enum", "union", "va_list", "bool", "inline", "typedef",
 	NULL
 };
 
