@@ -1740,6 +1740,19 @@ editor_normal_mode_command(u_int8_t key)
 		}
 	}
 
+	if (key == EDITOR_KEY_UTF8_PREFIX) {
+		if (editor_get_input(&key, 25) == 0)
+			return;
+
+		switch (key) {
+		case EDITOR_KEY_UTF8_CONSOLE:
+			ce_buffer_activate_index(0);
+			break;
+		}
+
+		return;
+	}
+
 	reset = 0;
 	buf = ce_buffer_active();
 	next_mode = CE_EDITOR_MODE_NORMAL;
