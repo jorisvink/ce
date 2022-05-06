@@ -61,9 +61,8 @@
 #define EDITOR_COMMAND_MARK_SET		5
 #define EDITOR_COMMAND_MARK_JMP		6
 #define EDITOR_COMMAND_ALTER		7
-#define EDITOR_COMMAND_WINDOW_ALTER	8
-#define EDITOR_COMMAND_PROCESS		9
-#define EDITOR_COMMAND_ALIGN		10
+#define EDITOR_COMMAND_PROCESS		8
+#define EDITOR_COMMAND_ALIGN		9
 
 #define KEY_MAP_LEN(x)		((sizeof(x) / sizeof(x[0])))
 
@@ -1785,11 +1784,8 @@ editor_normal_mode_command(u_int8_t key)
 		case 'z':
 			normalcmd = EDITOR_COMMAND_ALIGN;
 			break;
-		case 0x10:
-			normalcmd = EDITOR_COMMAND_PROCESS;
-			break;
 		case 0x17:
-			normalcmd = EDITOR_COMMAND_WINDOW_ALTER;
+			normalcmd = EDITOR_COMMAND_PROCESS;
 			break;
 		default:
 			reset = 1;
@@ -1867,8 +1863,6 @@ direct:
 				ce_proc_kill(buf->proc);
 				break;
 			}
-			break;
-		case EDITOR_COMMAND_WINDOW_ALTER:
 			break;
 		}
 	}
