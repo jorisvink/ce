@@ -39,9 +39,9 @@ ce uses a modal approach to editing much like vi.
 
 **normal mode key bindings**
 
-C            = center view on line at cursor
+zz           = center view on line at cursor
 
-T            = set current line as top of editor
+zt           = set current line as top of editor
 
 k            = move up one row
 
@@ -55,7 +55,7 @@ $            = jump to end of line
 
 0            = jump to start of line
 
-s            = selection
+s            = enter select mode
 
 ctrl-f       = page down
 
@@ -77,6 +77,8 @@ O            = enter insert mode and add newline above cursor
 
 /            = enter search mode
 
+§            = jump to scratch buffer
+
 ctrl-r       = show list of buffers
 
 ctrl-d       = directory listing of directory of active buffer
@@ -95,11 +97,7 @@ ai<char>     = alter inside string with given character (" or ').
 
 di<char>     = delete inside string with given character (" or ').
 
-ctrl-p-k     = kill active process
-
-ctrl-w +     = increase console window by num rows
-
-ctrl-w -     = decrease console window by num rows
+ctrl-w-k     = kill active process
 
 **insert mode key bindings**
 
@@ -126,6 +124,10 @@ w            = write active buffer
 e            = open specified file
 
 bc           = close current buffer
+
+ctrl-p       = previous buffer
+
+ctrl-n       = next buffer
 
 Select-execute
 --------------
