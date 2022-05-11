@@ -1923,6 +1923,8 @@ editor_dirlist_mode_command(u_int8_t key)
 		if (S_ISREG(filemode)) {
 			if (ce_buffer_file(fp) == NULL)
 				ce_editor_message("%s", ce_buffer_strerror());
+			else
+				dirty = 1;
 		}
 		break;
 	case 'd':
