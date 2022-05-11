@@ -238,8 +238,9 @@ ce_buffer_file(const char *path)
 	int			fd;
 	struct stat		st;
 	char			*rp;
-	ssize_t			bytes;
+	u_int8_t		*ptr;
 	struct cebuf		*buf, *ret;
+	ssize_t			bytes, idx;
 
 	fd = -1;
 	ret = NULL;
@@ -328,6 +329,18 @@ ce_buffer_file(const char *path)
 			buffer_seterr("%s: only read %zd/%zu bytes",
 			    __func__, bytes, buf->maxsz);
 			goto cleanup;
+		}
+
+		ptr = buf->data;
+
+		for (idx = 0; idx < bytes; idx++) {
+			if (ptr[idx] == 0x00 || ptr[idx] == 0x7f ||
+			    (iscntrl(ptr[idx]) && ptr[idx] != '\r' &&
+			    ptr[idx] != '\n' && ptr[idx] != '\t')) {
+				buffer_seterr("%s looks like a binary file",
+				    path);
+				goto cleanup;
+			}
 		}
 	}
 
