@@ -1745,7 +1745,11 @@ editor_normal_mode_command(u_int8_t key)
 
 		switch (key) {
 		case EDITOR_KEY_UTF8_CONSOLE:
-			ce_buffer_activate_index(0);
+			if (ce_buffer_scratch_active()) {
+				ce_buffer_restore();
+			} else {
+				ce_buffer_activate_index(0);
+			}
 			break;
 		}
 
@@ -2004,7 +2008,11 @@ editor_cmd_select_execute(void)
 			if (len == -1 || (size_t)len >= sizeof(path))
 				fatal("failed to create git show command");
 
-			editor_shellbuf_new(path, &buf);
+			if (!ce_buffer_scratch_active())
+				editor_shellbuf_new(path, &buf);
+			else
+				buf = curbuf;
+
 			ce_proc_run(path, buf, 1);
 			ce_editor_pbuffer_reset();
 			return;
@@ -2075,9 +2083,12 @@ editor_cmd_select_execute(void)
 	if (e)
 		*e = n;
 
-	editor_shellbuf_new(cmd, &buf);
-	ce_proc_run(cmd, buf, 1);
+	if (!ce_buffer_scratch_active())
+		editor_shellbuf_new(path, &buf);
+	else
+		buf = curbuf;
 
+	ce_proc_run(cmd, buf, 1);
 	ce_editor_pbuffer_reset();
 }
 
@@ -2723,9 +2734,12 @@ editor_cmd_insert_mode(void)
 static void
 editor_cmd_insert_mode_append(void)
 {
+	size_t			index;
 	struct cebuf		*buf = ce_buffer_active();
 
-	if (buf->lcnt == 0 || buf->line == buf->lcnt) {
+	index = ce_buffer_line_index(buf) + 1;
+
+	if (buf->lcnt == 0 || index == buf->lcnt) {
 		editor_cmd_insert_mode();
 		ce_buffer_jump_right();
 		ce_buffer_input(buf, '\n');

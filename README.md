@@ -135,12 +135,11 @@ Select-execute
 The select-execute function of ce allows you to select a string inside
 the editor and get it to the execute it as a command by hitting enter.
 
-If the contents of the selection points to a file, the file will be opened.
+Depending on the contents of the selection ce will:
+    - Open the selection if its a file.
+    - Create a dirlist if its a directory.
+    - Execute 'git show <selection>' if its a git hash.
+    - Execute the selection as a program if its a binary.
 
-If a command is executed, the output will be placed into the buffer from
-which the command was run.
-
-KNOWN ISSUES
-------------
-
-The fuzzy search is slow on large directory trees.
+The output is either placed in a new buffer or if executed from
+the scratch buffer, at the end of said buffer.

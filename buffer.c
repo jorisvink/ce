@@ -163,6 +163,12 @@ ce_buffer_setname(struct cebuf *buf, const char *name)
 	buf->name = ce_strdup(name);
 }
 
+int
+ce_buffer_scratch_active(void)
+{
+	return (active == scratch);
+}
+
 void
 ce_buffer_resize(void)
 {
@@ -403,6 +409,9 @@ ce_buffer_free(struct cebuf *buf)
 		ce_editor_settings(active);
 	}
 
+	if (scratch->prev == buf)
+		scratch->prev = NULL;
+
 	TAILQ_FOREACH(bp, &buffers, list) {
 		if (bp->prev == buf)
 			bp->prev = active;
@@ -512,6 +521,11 @@ ce_buffer_activate_index(size_t index)
 	struct cebuf		*buf;
 
 	if (index == 0) {
+		if (active->internal)
+			scratch->prev = NULL;
+		else
+			scratch->prev = active;
+
 		active = scratch;
 		ce_term_update_title();
 		ce_editor_dirty();
@@ -565,7 +579,7 @@ ce_buffer_map(struct cebuf *buf)
 	for (idx = buf->top; idx < buf->lcnt; idx++) {
 		ce_term_setpos(line, TERM_CURSOR_MIN);
 
-		towrite = (buf->height- (line - 1)) * buf->width;
+		towrite = (buf->height - (line - 1)) * buf->width;
 		if (towrite > buf->lines[idx].length)
 			towrite = buf->lines[idx].length;
 
@@ -2094,6 +2108,12 @@ ce_buffer_proc_gather(struct pollfd *pfd, size_t elm)
 
 	idx = 0;
 
+	if (scratch->proc != NULL) {
+		pfd[idx].fd = scratch->proc->ofd;
+		pfd[idx].events = POLLIN;
+		scratch->proc->pfd = &pfd[idx++];
+	}
+
 	for (buf = TAILQ_FIRST(&buffers); buf != NULL; buf = next) {
 		next = TAILQ_NEXT(buf, list);
 		if (buf->proc == NULL)
@@ -2117,6 +2137,17 @@ ce_buffer_proc_dispatch(void)
 {
 	struct pollfd	*pfd;
 	struct cebuf	*buf, *next;
+
+	if (scratch->proc != NULL) {
+		if (scratch->proc->pfd == NULL)
+			fatal("%s: scratch has no active pfd", __func__);
+
+		pfd = scratch->proc->pfd;
+		scratch->proc->pfd = NULL;
+
+		if (pfd->revents & (POLLIN | POLLHUP | POLLERR))
+			ce_proc_read(scratch->proc);
+	}
 
 	for (buf = TAILQ_FIRST(&buffers); buf != NULL; buf = next) {
 		next = TAILQ_NEXT(buf, list);

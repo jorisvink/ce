@@ -303,6 +303,7 @@ void		ce_buffer_proc_dispatch(void);
 void		ce_buffer_map(struct cebuf *);
 void		ce_buffer_free(struct cebuf *);
 void		ce_buffer_list(struct cebuf *);
+int		ce_buffer_scratch_active(void);
 void		ce_buffer_reset(struct cebuf *);
 void		ce_buffer_erase(struct cebuf *);
 void		ce_buffer_close_nonactive(void);

@@ -88,7 +88,6 @@ ce_proc_run(char *cmd, struct cebuf *buf, int add)
 		    dup2(out_pipe[1], STDERR_FILENO) == -1)
 			fatal("dup2: %s", errno_s);
 
-		(void)close(STDIN_FILENO);
 		execvp(argv[0], argv);
 		printf("failed to execute '%s': %s\n", copy, errno_s);
 		exit(1);
@@ -121,7 +120,7 @@ ce_proc_run(char *cmd, struct cebuf *buf, int add)
 	}
 
 	buf->selexec.set = 1;
-	buf->selexec.line = buf->lcnt;
+	buf->selexec.line = buf->cursor_line;
 
 	if (fcntl(buf->proc->ofd, F_GETFL, &flags) == -1)
 		fatal("%s: fcntl(get): %s", __func__, errno_s);
@@ -182,7 +181,7 @@ ce_proc_read(struct ceproc *proc)
 
 	if (proc->first) {
 		proc->first = 0;
-		ce_buffer_center_line(proc->buf, proc->idx - 1);
+		ce_buffer_center_line(proc->buf, proc->idx);
 		if (ce_editor_mode() == CE_EDITOR_MODE_NORMAL &&
 		    ce_buffer_active() != proc->buf) {
 			ce_buffer_activate(proc->buf);
