@@ -381,6 +381,8 @@ void		ce_term_update_title(void);
 void		ce_term_setpos(size_t, size_t);
 void		ce_term_writestr(const char *);
 void		ce_term_write(const void *, size_t);
+void		ce_term_foreground_rgb(int, int, int);
+void		ce_term_background_rgb(int, int, int);
 void		ce_term_writef(const char *, ...)
 		    __attribute__((format (printf, 1, 2)));
 

@@ -173,6 +173,18 @@ ce_term_color(int color)
 }
 
 void
+ce_term_foreground_rgb(int r, int g, int b)
+{
+	ce_term_writef("%s38;2;%d;%d;%dm", TERM_ESCAPE, r, g, b);
+}
+
+void
+ce_term_background_rgb(int r, int g, int b)
+{
+	ce_term_writef("%s48;2;%d;%d;%dm", TERM_ESCAPE, r, g, b);
+}
+
+void
 ce_term_attr_off(void)
 {
 	ce_term_writestr(TERM_SEQUENCE_ATTR_OFF);

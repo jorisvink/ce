@@ -418,6 +418,7 @@ ce_editor_loop(void)
 			editor_draw_cmdbuf();
 
 		if (splash) {
+			ce_term_foreground_rgb(52, 119, 115);
 			ce_term_writestr(TERM_SEQUENCE_CURSOR_SAVE);
 			ce_term_setpos(ce_term_height() * 0.45,
 			    (ce_term_width() / 2) -
@@ -428,6 +429,7 @@ ce_editor_loop(void)
 			    (sizeof(CE_SPLASH_TEXT_2) - 1) / 2);
 			ce_term_writestr(CE_SPLASH_TEXT_2);
 			ce_term_writestr(TERM_SEQUENCE_CURSOR_RESTORE);
+			ce_term_attr_off();
 		}
 
 		editor_draw_status();
@@ -945,15 +947,15 @@ editor_draw_status(void)
 	procfd = (curbuf->proc != NULL) ? curbuf->proc->ofd : -1;
 
 	if (curbuf->top == 0) {
-		llen = snprintf(lline, sizeof(lline), "%zuL [Top]%s",
+		llen = snprintf(lline, sizeof(lline), "%zuL [Top]%s ",
 		    curbuf->lcnt, procfd != -1 ? " *" : "");
 	} else if (curbuf->lcnt - (curbuf->top + curbuf->line) <
 	    ((ce_term_height() - 2) / 2)) {
-		llen = snprintf(lline, sizeof(lline), "%zuL [Bot]%s",
+		llen = snprintf(lline, sizeof(lline), "%zuL [Bot]%s ",
 		    curbuf->lcnt, procfd != -1 ? " *" : "");
 	} else {
 		pc = ((curbuf->top + curbuf->line) / (float)curbuf->lcnt) * 100;
-		llen = snprintf(lline, sizeof(lline), "%zuL [%zu%%]%s",
+		llen = snprintf(lline, sizeof(lline), "%zuL [%zu%%]%s ",
 		    curbuf->lcnt, pc, procfd != -1 ? " *" : "");
 	}
 
@@ -998,19 +1000,11 @@ editor_draw_status(void)
 		ce_term_writestr(ce_editor_shortpath(curdir));
 	}
 
-	width = ce_term_width();
-	ce_term_setpos(ce_term_height() - 2, TERM_CURSOR_MIN);
-	ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
-	ce_term_color(TERM_COLOR_WHITE + TERM_COLOR_FG);
-	while (width > 0) {
-		ce_term_writestr(CE_UTF8_U2015);
-		width--;
-	}
-
 	ce_term_setpos(ce_term_height() - 1, TERM_CURSOR_MIN);
 	ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
 	ce_term_color(TERM_COLOR_WHITE + TERM_COLOR_FG);
-	ce_term_writef("%s %s", &fline[cmdoff], sline);
+	ce_term_background_rgb(52, 119, 115);
+	ce_term_writef(" %s %s", &fline[cmdoff], sline);
 
 	if ((size_t)(slen + flen) < (ce_term_width() - llen)) {
 		width = (ce_term_width() - llen) - (slen + flen);
@@ -1652,9 +1646,10 @@ editor_cmd_suggestions(struct cehist *hist, size_t histlen)
 			if (idx == 5) {
 				ce_buffer_appendf(suggestions,
 				    TERM_SEQUENCE_FMT_SET_COLOR,
-				    TERM_COLOR_GREEN + TERM_COLOR_FG);
-				ce_buffer_appendf(suggestions, "%s%s\n",
-				    txt[idx], TERM_SEQUENCE_ATTR_OFF);
+				    TERM_COLOR_BLACK + TERM_COLOR_FG);
+				ce_buffer_appendf(suggestions, "%s%s%s\n",
+				    TERM_SEQUENCE_ATTR_BOLD, txt[idx],
+				    TERM_SEQUENCE_ATTR_OFF);
 			} else {
 				ce_buffer_appendf(suggestions,
 				    "%s\n", txt[idx]);

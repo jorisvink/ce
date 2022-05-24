@@ -592,8 +592,8 @@ ce_buffer_map(struct cebuf *buf)
 
 	ce_syntax_finalize();
 
-	ce_term_writestr(TERM_SEQUENCE_ATTR_BOLD);
-	ce_term_color(TERM_COLOR_BLUE + TERM_COLOR_FG);
+	ce_term_attr_bold();
+	ce_term_foreground_rgb(52, 119, 115);
 
 	while (line <= buf->height)  {
 		ce_term_setpos(line, TERM_CURSOR_MIN);
@@ -2086,7 +2086,7 @@ ce_buffer_alloc(int internal)
 	buf->orig_column = TERM_CURSOR_MIN;
 
 	buf->width = ce_term_width();
-	buf->height = ce_term_height() - 3;
+	buf->height = ce_term_height() - 2;
 
 	buf->line = buf->orig_line;
 	buf->column = buf->orig_column;
