@@ -229,7 +229,8 @@ enum {
 	SYNTAX_COLOR_MAGENTA,
 	SYNTAX_COLOR_CYAN,
 	SYNTAX_COLOR_WHITE,
-	SYNTAX_COLOR_TEAL
+	SYNTAX_COLOR_TEAL,
+	SYNTAX_COLOR_COMMENT
 };
 
 static struct {
@@ -245,7 +246,8 @@ static struct {
 	{ 255, 0, 255 },
 	{ 0, 255, 255 },
 	{ 255, 255, 255 },
-	{ 52, 139, 115 }
+	{ 52, 139, 115 },
+	{ 32, 128, 128 },
 };
 
 static struct state	syntax_state = { 0 };
@@ -337,7 +339,6 @@ ce_syntax_write(struct cebuf *buf, struct celine *line, size_t index,
 			syntax_state.off++;
 
 			if (syntax_state.inside_comment) {
-				syntax_state_term_bold(&syntax_state, 1);
 				syntax_state_color(&syntax_state,
 				    SYNTAX_COLOR_BLACK);
 			}
@@ -739,8 +740,7 @@ syntax_highlight_c_comment(struct state *state)
 		if (state->len >= 2 &&
 		    state->p[0] == '/' && state->p[1] == '/') {
 			state->inside_comment = 1;
-			syntax_state_term_bold(state, 1);
-			syntax_state_color(state, SYNTAX_COLOR_BLACK);
+			syntax_state_color(state, SYNTAX_COLOR_COMMENT);
 			syntax_write(state, 2);
 			state->flags |= SYNTAX_CLEAR_COMMENT;
 			return (0);
@@ -749,8 +749,7 @@ syntax_highlight_c_comment(struct state *state)
 		if (state->len >= 2 &&
 		    state->p[0] == '/' && state->p[1] == '*') {
 			state->inside_comment = 1;
-			syntax_state_term_bold(state, 1);
-			syntax_state_color(state, SYNTAX_COLOR_BLACK);
+			syntax_state_color(state, SYNTAX_COLOR_COMMENT);
 			syntax_write(state, 2);
 			return (0);
 		}
@@ -759,11 +758,10 @@ syntax_highlight_c_comment(struct state *state)
 		    state->p[0] == '*' && state->p[1] == '/') {
 			syntax_write(state, 2);
 			state->inside_comment = 0;
-			syntax_state_term_bold(state, 0);
 			return (0);
 		}
 
-		syntax_state_color(state, SYNTAX_COLOR_BLACK);
+		syntax_state_color(state, SYNTAX_COLOR_COMMENT);
 		syntax_write(state, 1);
 		return (0);
 	}
@@ -928,15 +926,13 @@ syntax_highlight_python_multiline_string(struct state *state)
 	if (state->inside_string == 0) {
 		if (hit) {
 			state->inside_string = 0xff;
-			syntax_state_color(state, SYNTAX_COLOR_BLACK);
-			syntax_state_term_bold(state, 1);
+			syntax_state_color(state, SYNTAX_COLOR_COMMENT);
 			syntax_write(state, 3);
 			return (0);
 		}
 	} else if (state->inside_string == 0xff) {
 		if (hit) {
 			state->inside_string = 0;
-			syntax_state_term_bold(state, 1);
 			syntax_write(state, 3);
 		} else {
 			syntax_write(state, 1);
@@ -945,7 +941,6 @@ syntax_highlight_python_multiline_string(struct state *state)
 		return (0);
 	}
 
-	syntax_state_term_bold(state, 0);
 	return (-1);
 }
 
@@ -1163,8 +1158,7 @@ syntax_highlight_pound_comment(struct state *state)
 	if (state->inside_comment == 0) {
 		if (state->p[0] == '#') {
 			state->inside_comment = 1;
-			ce_term_attr_bold();
-			syntax_state_color(state, SYNTAX_COLOR_BLACK);
+			syntax_state_color(state, SYNTAX_COLOR_COMMENT);
 			syntax_write(state, 1);
 			state->flags |= SYNTAX_CLEAR_COMMENT;
 			return (0);

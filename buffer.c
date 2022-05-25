@@ -564,9 +564,9 @@ ce_buffer_map(struct cebuf *buf)
 	size_t		idx, line, towrite;
 
 	if (ce_term_width() > 80) {
+		ce_term_background_rgb(235, 220, 188);
 		for (idx = 1; idx < ce_term_height(); idx++) {
 			ce_term_setpos(idx, 81);
-			ce_term_color(TERM_COLOR_BLACK + TERM_COLOR_BG);
 			ce_term_writestr(" ");
 		}
 	}
@@ -2294,7 +2294,7 @@ buffer_line_insert_byte(struct cebuf *buf, struct celine *line, u_int8_t byte)
 
 		if (ce_term_width() > 80) {
 			ce_term_setpos(buf->cursor_line, 81);
-			ce_term_color(TERM_COLOR_BLACK + TERM_COLOR_BG);
+			ce_term_background_rgb(235, 220, 188);
 			ce_term_writestr(" ");
 		}
 
@@ -2361,7 +2361,7 @@ buffer_line_erase_character(struct cebuf *buf, struct celine *line, int inplace)
 
 		if (ce_term_width() > 80) {
 			ce_term_setpos(buf->cursor_line, 81);
-			ce_term_color(TERM_COLOR_BLACK + TERM_COLOR_BG);
+			ce_term_background_rgb(235, 220, 188);
 			ce_term_writestr(" ");
 		}
 
