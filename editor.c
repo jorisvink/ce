@@ -311,6 +311,9 @@ ce_editor_init(void)
 	memset(&inq, 0, sizeof(inq));
 	editor_directory_change(pwd);
 
+	free(msg.message);
+	msg.message = NULL;
+
 	ce_debug("homedir is '%s'", home);
 	ce_debug("curdir is '%s'", curdir);
 
@@ -906,10 +909,10 @@ editor_draw_status(void)
 {
 	const u_int8_t		*ptr;
 	struct cebuf		*curbuf;
-	size_t			cmdoff, width, pc;
+	size_t			cmdoff, width, pc, dlen;
 	int			flen, slen, llen, procfd;
-	const char		*isdirty, *filemode, *modestr;
 	char			fline[1024], sline[128], lline[128];
+	const char		*isdirty, *filemode, *modestr, *dname;
 
 	isdirty = "";
 	filemode = "";
@@ -984,20 +987,29 @@ editor_draw_status(void)
 	if (slen == -1 || (size_t)slen >= sizeof(sline))
 		fatal("failed to create status line");
 
+	ce_term_writestr(TERM_SEQUENCE_CURSOR_SAVE);
+
+	if (ce_buffer_active() != cmdbuf) {
+		ce_term_setpos(ce_term_height(), TERM_CURSOR_MIN);
+		ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
+
+		dname = ce_editor_shortpath(curdir);
+		dlen = strlen(dname);
+		width = (ce_term_width() * 0.75) - 4;
+
+		if (dlen > width) {
+			ce_term_writef(">%s", &dname[dlen - width]);
+		} else {
+			ce_term_writestr(dname);
+		}
+	}
+
 	width = (ce_term_width() - 1) - slen - llen;
 	if ((size_t)flen > width) {
 		cmdoff = flen - width;
 		fline[cmdoff] = '>';
 	} else {
 		cmdoff = 0;
-	}
-
-	ce_term_writestr(TERM_SEQUENCE_CURSOR_SAVE);
-
-	if (ce_buffer_active() != cmdbuf) {
-		ce_term_setpos(ce_term_height(), TERM_CURSOR_MIN);
-		ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
-		ce_term_writestr(ce_editor_shortpath(curdir));
 	}
 
 	ce_term_setpos(ce_term_height() - 1, TERM_CURSOR_MIN);

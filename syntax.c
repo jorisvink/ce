@@ -110,6 +110,8 @@ static void	syntax_highlight_span(struct state *, char, char, int);
 
 static const char *tags[] = {
 	"XXX",
+	"@secnote-begin",
+	"@secnote-end",
 	NULL
 };
 
@@ -1140,7 +1142,12 @@ syntax_highlight_word(struct state *state, const char *words[])
 		bold = state->bold;
 
 		syntax_state_term_bold(state, 1);
-		syntax_state_foreground_color(state, 52, 139, 115);
+
+		if (words == tags)
+			syntax_state_foreground_color(state, 64, 192, 192);
+		else
+			syntax_state_foreground_color(state, 52, 139, 115);
+
 		syntax_term_write(state, words[i], len, 1);
 
 		if (!bold)
