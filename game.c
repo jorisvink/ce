@@ -168,8 +168,6 @@ ce_game_level_name(void)
 		if (rank > 0)
 			rank--;
 
-		printf("%u, %u\n", title, rank);
-
 		len = snprintf(name, sizeof(name), "%s %s (lvl %u)",
 		    title_names[title], rank_names[rank], level);
 	}
