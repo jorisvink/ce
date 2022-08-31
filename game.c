@@ -184,8 +184,8 @@ game_file_open(struct cegame *game)
 {
 	struct stat	st;
 	ssize_t		ret;
-	int		fd, len;
 	char		path[PATH_MAX];
+	int		fd, len, tries;
 
 	memset(game, 0, sizeof(*game));
 
@@ -193,8 +193,20 @@ game_file_open(struct cegame *game)
 	if (len == -1 || (size_t)len >= sizeof(path))
 		fatal("failed to construct path to xp file");
 
-	if ((fd = open(path, O_CREAT | O_RDWR | O_EXLOCK, 0600)) == -1) {
+	if ((fd = open(path, O_CREAT | O_RDWR, 0600)) == -1) {
 		ce_editor_message("cannot open game file: %s", errno_s);
+		return (-1);
+	}
+
+	tries = 0;
+	while (flock(fd, LOCK_EX) == -1 && tries < 5) {
+		usleep(50000);
+		tries++;
+	}
+
+	if (tries == 5) {
+		ce_editor_message("cannot lock game file");
+		(void)close(fd);
 		return (-1);
 	}
 
