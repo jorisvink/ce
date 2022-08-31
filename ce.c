@@ -89,6 +89,7 @@ main(int argc, char *argv[])
 	ce_term_setup();
 
 	ce_editor_init();
+	ce_game_init();
 	ce_hist_init();
 
 	ce_buffer_init(argc, argv);

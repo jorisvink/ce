@@ -98,6 +98,19 @@
 #define CE_TAB_EXPAND_DEFAULT		0
 
 /*
+ * Gamified statistics, because I can.
+ */
+
+#define CE_XP_GROWTH		15
+#define CE_XP_INITIAL		100
+#define CE_XP_PER_AWARD		100
+
+struct cegame {
+	u_int32_t	xp;
+	u_int32_t	opens;
+} __attribute__((packed));
+
+/*
  * Configuration options.
  */
 struct ceconf {
@@ -451,6 +464,16 @@ void		ce_syntax_finalize(void);
 void		ce_syntax_guess(struct cebuf *);
 void		ce_syntax_write(struct cebuf *, struct celine *,
 		    size_t, size_t);
+
+u_int32_t	ce_game_xp(void);
+void		ce_game_init(void);
+u_int32_t	ce_game_level(void);
+void		ce_game_add_xp(void);
+void		ce_game_add_open(void);
+u_int32_t	ce_game_open_count(void);
+const char	*ce_game_level_name(void);
+u_int32_t	ce_game_xp_required(u_int32_t);
+void		ce_game_update(struct cegame *);
 
 int		ce_lame_mode(void);
 void		ce_file_type_detect(struct cebuf *);

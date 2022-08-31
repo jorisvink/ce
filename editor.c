@@ -84,6 +84,7 @@ static int	editor_get_input(u_int8_t *, int);
 static int	editor_cmd_can_autocomplete(void);
 static void	editor_shellbuf_close(struct cebuf *);
 static void	editor_autocomplete_path(struct cebuf *);
+static void	editor_splash_text(u_int16_t, const char *, ...);
 static void	editor_shellbuf_new(const char *, struct cebuf **);
 static void	editor_yank_lines(struct cebuf *, size_t, size_t, int);
 
@@ -273,6 +274,7 @@ static int			quit = 0;
 static int			dirty = 1;
 static int			splash = 0;
 static int			pasting = 0;
+static int			award_xp = 0;
 static volatile sig_atomic_t	sig_recv = -1;
 static int			normalcmd = -1;
 static char			*home = NULL;
@@ -326,6 +328,7 @@ ce_editor_loop(void)
 	struct timespec		ts;
 	struct cemark		tmp;
 	struct cebuf		*buf;
+	u_int32_t		level;
 
 	pbuffer = ce_buffer_internal("<pb>");
 	ce_buffer_reset(pbuffer);
@@ -421,16 +424,20 @@ ce_editor_loop(void)
 			editor_draw_cmdbuf();
 
 		if (splash) {
+			level = ce_game_level();
 			ce_term_foreground_rgb(52, 119, 115);
 			ce_term_writestr(TERM_SEQUENCE_CURSOR_SAVE);
-			ce_term_setpos(ce_term_height() * 0.45,
-			    (ce_term_width() / 2) -
-			    (sizeof(CE_SPLASH_TEXT_1) - 1) / 2);
-			ce_term_writestr(CE_SPLASH_TEXT_1);
-			ce_term_setpos((ce_term_height() * 0.45) + 2,
-			    (ce_term_width() / 2) -
-			    (sizeof(CE_SPLASH_TEXT_2) - 1) / 2);
-			ce_term_writestr(CE_SPLASH_TEXT_2);
+			editor_splash_text(0, CE_SPLASH_TEXT_1);
+			editor_splash_text(1, CE_SPLASH_TEXT_2);
+			editor_splash_text(3, "You are a %s",
+			    ce_game_level_name());
+			editor_splash_text(4,
+			    "%u xp required until level %u",
+			    ce_game_xp_required(level + 1) -
+			    ce_game_xp(), level + 1);
+			editor_splash_text(6,
+			    "You have opened ce %u times in total",
+			    ce_game_open_count());
 			ce_term_writestr(TERM_SEQUENCE_CURSOR_RESTORE);
 			ce_term_attr_off();
 		}
@@ -794,6 +801,13 @@ editor_read_input(void)
 
 		inq.sz = sz;
 		inq.off = 0;
+
+		award_xp += sz;
+		if (award_xp >= 100) {
+			ce_game_add_xp();
+			award_xp = 0;
+		}
+
 		break;
 	}
 }
@@ -810,8 +824,6 @@ editor_consume_input(void)
 
 	if (editor_get_input(&key, 0) == 0)
 		return;
-
-	ce_debug("key is 0x%02x", key);
 
 	if (key == EDITOR_KEY_ESC)
 		key = editor_process_escape();
@@ -1118,6 +1130,26 @@ editor_draw_suggestions(int cnt)
 	} else {
 		ce_editor_dirty();
 	}
+}
+
+static void
+editor_splash_text(u_int16_t row, const char *fmt, ...)
+{
+	int		len;
+	va_list		args;
+	char		buf[64];
+
+	va_start(args, fmt);
+	len = vsnprintf(buf, sizeof(buf), fmt, args);
+	va_end(args);
+
+	if (len == -1 || (size_t)len >= sizeof(buf))
+		return;
+
+	ce_term_setpos(ce_term_height() * 0.45 + row,
+	    (ce_term_width() / 2) - (len / 2));
+
+	ce_term_writestr(buf);
 }
 
 static void
