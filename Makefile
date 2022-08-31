@@ -25,6 +25,8 @@ CFLAGS+=-DPREFIX='"$(PREFIX)"' -fstack-protector-all
 
 OBJS=	$(SRC:%.c=$(OBJDIR)/%.o)
 
+LDFLAGS+=-lm
+
 ifneq ("$(SANITIZE)", "")
 	CFLAGS+=-fsanitize=$(SANITIZE)
 	LDFLAGS+=-fsanitize=$(SANITIZE)
