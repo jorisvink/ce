@@ -160,7 +160,7 @@ ce_game_level_name(void)
 
 	if (level >= 100) {
 		len = snprintf(name, sizeof(name),
-		    "High Warlord (prestige lvl %u)", level);
+		    "High Warlord (rank %u)", level - 99);
 	} else {
 		title = level / 10;
 		rank = (level % 10);
