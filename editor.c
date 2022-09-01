@@ -803,7 +803,7 @@ editor_read_input(void)
 		inq.off = 0;
 
 		award_xp += sz;
-		if (award_xp >= 100) {
+		if (award_xp >= 50) {
 			ce_game_add_xp();
 			award_xp = 0;
 		}

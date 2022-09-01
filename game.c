@@ -60,7 +60,6 @@ void
 ce_game_init(void)
 {
 	ce_game_add_open();
-	ce_game_add_xp();
 }
 
 void
