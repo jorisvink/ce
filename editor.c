@@ -1742,6 +1742,9 @@ editor_buflist_input(struct cebuf *buf, u_int8_t key)
 	}
 
 	switch (key) {
+	case EDITOR_CMD_BUFLIST:
+		editor_cmd_normal_mode();
+		break;
 	case '\n':
 		index = buf->top + (buf->line - 1);
 
