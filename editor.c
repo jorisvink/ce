@@ -63,6 +63,8 @@
 #define EDITOR_COMMAND_ALTER		7
 #define EDITOR_COMMAND_PROCESS		8
 #define EDITOR_COMMAND_ALIGN		9
+#define EDITOR_COMMAND_JUMP_DOWN	10
+#define EDITOR_COMMAND_JUMP_UP		11
 
 #define KEY_MAP_LEN(x)		((sizeof(x) / sizeof(x[0])))
 
@@ -1768,6 +1770,7 @@ editor_normal_mode_command(u_int8_t key)
 	long			num;
 	const char		*str;
 	struct cebuf		*buf;
+	size_t			line;
 	int			reset, next_mode;
 
 	if (normalcmd == -1 ||
@@ -1818,9 +1821,12 @@ editor_normal_mode_command(u_int8_t key)
 		case 'm':
 			normalcmd = EDITOR_COMMAND_MARK_SET;
 			break;
-		case '\'':
-			normalcmd = EDITOR_COMMAND_MARK_JMP;
-			break;
+		case 'k':
+			normalcmd = EDITOR_COMMAND_JUMP_UP;
+			goto direct;
+		case 'j':
+			normalcmd = EDITOR_COMMAND_JUMP_DOWN;
+			goto direct;
 		case 'y':
 			normalcmd = EDITOR_COMMAND_YANK;
 			break;
@@ -1832,6 +1838,9 @@ editor_normal_mode_command(u_int8_t key)
 			break;
 		case 0x17:
 			normalcmd = EDITOR_COMMAND_PROCESS;
+			break;
+		case '\'':
+			normalcmd = EDITOR_COMMAND_MARK_JMP;
 			break;
 		default:
 			reset = 1;
@@ -1909,6 +1918,19 @@ direct:
 				ce_proc_kill(buf->proc);
 				break;
 			}
+			break;
+		case EDITOR_COMMAND_JUMP_UP:
+			line = ce_buffer_line_index(buf);
+			if (line > (size_t)num)
+				line -= num;
+			else
+				line = 0;
+			ce_buffer_jump_line(buf, line, TERM_CURSOR_MIN);
+			break;
+		case EDITOR_COMMAND_JUMP_DOWN:
+			line = ce_buffer_line_index(buf);
+			line += num;
+			ce_buffer_jump_line(buf, line, TERM_CURSOR_MIN);
 			break;
 		}
 	}
