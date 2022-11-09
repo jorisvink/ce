@@ -1163,7 +1163,7 @@ static int
 syntax_highlight_pound_comment(struct state *state)
 {
 	if (state->inside_comment == 0) {
-		if (state->p[0] == '#') {
+		if (state->p[0] == '#' && state->inside_string == 0) {
 			state->inside_comment = 1;
 			syntax_state_color(state, SYNTAX_COLOR_COMMENT);
 			syntax_write(state, 1);
