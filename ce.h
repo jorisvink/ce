@@ -93,6 +93,7 @@
 #define CE_FILE_TYPE_HTML		10
 #define CE_FILE_TYPE_CSS		11
 #define CE_FILE_TYPE_GO			12
+#define CE_FILE_TYPE_LATEX		13
 
 #define CE_TAB_WIDTH_DEFAULT		8
 #define CE_TAB_EXPAND_DEFAULT		0

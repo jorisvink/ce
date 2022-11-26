@@ -92,9 +92,9 @@ static int	syntax_highlight_c_comment(struct state *);
 static int	syntax_highlight_c_preproc(struct state *);
 
 static void	syntax_highlight_go(struct state *);
-
 static void	syntax_highlight_yaml(struct state *);
 static void	syntax_highlight_swift(struct state *);
+static void	syntax_highlight_latex(struct state *);
 static void	syntax_highlight_dirlist(struct state *);
 
 static void	syntax_highlight_python(struct state *);
@@ -382,6 +382,9 @@ ce_syntax_write(struct cebuf *buf, struct celine *line, size_t index,
 				break;
 			case CE_FILE_TYPE_GO:
 				syntax_highlight_go(&syntax_state);
+				break;
+			case CE_FILE_TYPE_LATEX:
+				syntax_highlight_latex(&syntax_state);
 				break;
 			default:
 				syntax_state_color_clear(&syntax_state);
@@ -1031,6 +1034,51 @@ syntax_highlight_go(struct state *state)
 
 	syntax_state_color_clear(state);
 	syntax_write(state, 1);
+}
+
+static void
+syntax_highlight_latex(struct state *state)
+{
+	size_t		len;
+	int		prev, bold;
+
+	len = 1;
+	bold = state->bold;
+	prev = state->color;
+
+	switch (state->p[0]) {
+	case '{':
+		syntax_state_color(state, SYNTAX_COLOR_BLACK);
+		syntax_state_term_bold(state, 1);
+		for (len = 0; len < state->len; len++) {
+			if (state->p[len] == '}') {
+				len++;
+				break;
+			}
+		}
+		break;
+	case '\\':
+		syntax_state_color(state, SYNTAX_COLOR_BLACK);
+		for (len = 0; len < state->len; len++) {
+			if (ce_editor_word_byte(state->p[len]) == 0)
+				break;
+		}
+		break;
+	default:
+		syntax_state_color_clear(state);
+		syntax_write(state, 1);
+		return;
+	}
+
+	syntax_write(state, len);
+
+	if (prev != -1)
+		syntax_state_color(state, prev);
+	else
+		syntax_state_color_clear(state);
+
+	if (bold != state->bold)
+		syntax_state_term_bold(state, bold);
 }
 
 static void

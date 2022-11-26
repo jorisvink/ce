@@ -41,6 +41,8 @@ static struct {
 	{ ".html",	CE_FILE_TYPE_HTML },
 	{ ".css",	CE_FILE_TYPE_CSS },
 	{ ".go",	CE_FILE_TYPE_GO },
+	{ ".tex",	CE_FILE_TYPE_LATEX },
+	{ ".latex",	CE_FILE_TYPE_LATEX },
 	{ NULL,		0 },
 };
 
