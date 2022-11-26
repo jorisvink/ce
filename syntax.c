@@ -1048,10 +1048,11 @@ syntax_highlight_latex(struct state *state)
 
 	switch (state->p[0]) {
 	case '{':
+	case '[':
 		syntax_state_color(state, SYNTAX_COLOR_BLACK);
 		syntax_state_term_bold(state, 1);
 		for (len = 0; len < state->len; len++) {
-			if (state->p[len] == '}') {
+			if (state->p[len] == state->p[0] + 2) {
 				len++;
 				break;
 			}
