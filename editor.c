@@ -2148,7 +2148,7 @@ editor_cmd_select_execute(void)
 		*e = n;
 
 	if (!ce_buffer_scratch_active())
-		editor_shellbuf_new(path, &buf);
+		editor_shellbuf_new(cmd, &buf);
 	else
 		buf = curbuf;
 
