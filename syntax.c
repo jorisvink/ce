@@ -211,7 +211,7 @@ static const char *js_other[] = {
 static const char *sh_kw[] = {
 	"if", "fi", "while", "do", "exit", "return",
 	"shift", "case", "esac", "echo", "print", "set",
-	"then", "for", "while", "in", "done", NULL
+	"then", "for", "while", "in", "done", "else", NULL
 };
 
 static const char *go_kw[] = {
