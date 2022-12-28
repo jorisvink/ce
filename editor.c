@@ -1914,6 +1914,12 @@ direct:
 			break;
 		case EDITOR_COMMAND_PROCESS:
 			switch (key) {
+			case 'b':
+				editor_cmd_execute("make");
+				break;
+			case 'c':
+				editor_cmd_execute("make clean");
+				break;
 			case 'k':
 				ce_proc_kill(buf->proc);
 				break;
@@ -2573,9 +2579,14 @@ static void
 editor_cmd_execute(char *cmd)
 {
 	struct cebuf	*buf;
+	char		*copy;
 
-	editor_shellbuf_new(cmd, &buf);
-	ce_proc_run(cmd, buf, 0);
+	copy = ce_strdup(cmd);
+
+	editor_shellbuf_new(copy, &buf);
+	ce_proc_run(copy, buf, 0);
+
+	free(copy);
 }
 
 static void
