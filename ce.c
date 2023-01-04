@@ -165,7 +165,12 @@ void
 fatal(const char *fmt, ...)
 {
 	va_list		args;
+	static int	called = 0;
 
+	if (called)
+		exit(1);
+
+	called = 1;
 	ce_term_restore();
 
 	va_start(args, fmt);
