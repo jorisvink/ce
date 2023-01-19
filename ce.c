@@ -43,6 +43,7 @@ static struct {
 	{ ".go",	CE_FILE_TYPE_GO },
 	{ ".tex",	CE_FILE_TYPE_LATEX },
 	{ ".latex",	CE_FILE_TYPE_LATEX },
+	{ ".lua",	CE_FILE_TYPE_LUA },
 	{ NULL,		0 },
 };
 

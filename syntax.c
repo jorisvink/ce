@@ -91,6 +91,7 @@ static int	syntax_highlight_c_label(struct state *);
 static int	syntax_highlight_c_comment(struct state *);
 static int	syntax_highlight_c_preproc(struct state *);
 
+static void	syntax_highlight_lua(struct state *);
 static void	syntax_highlight_go(struct state *);
 static void	syntax_highlight_yaml(struct state *);
 static void	syntax_highlight_swift(struct state *);
@@ -112,6 +113,14 @@ static const char *tags[] = {
 	"XXX",
 	"@secnote-begin",
 	"@secnote-end",
+	NULL
+};
+
+static const char *lua_kw[] = {
+	"and", "break", "do", "else", "elseif",
+	"end", "false", "for", "function", "if",
+	"in", "local", "nil", "not", "or",
+	"repeat", "return", "then", "true", "until", "while",
 	NULL
 };
 
@@ -385,6 +394,9 @@ ce_syntax_write(struct cebuf *buf, struct celine *line, size_t index,
 				break;
 			case CE_FILE_TYPE_LATEX:
 				syntax_highlight_latex(&syntax_state);
+				break;
+			case CE_FILE_TYPE_LUA:
+				syntax_highlight_lua(&syntax_state);
 				break;
 			default:
 				syntax_state_color_clear(&syntax_state);
@@ -1080,6 +1092,22 @@ syntax_highlight_latex(struct state *state)
 
 	if (bold != state->bold)
 		syntax_state_term_bold(state, bold);
+}
+
+static void
+syntax_highlight_lua(struct state *state)
+{
+	if (syntax_highlight_word(state, lua_kw) == 0)
+		return;
+
+	if (syntax_highlight_numeric(state) == 0)
+		return;
+
+	if (syntax_highlight_string(state) == 0)
+		return;
+
+	syntax_state_color_clear(state);
+	syntax_write(state, 1);
 }
 
 static void
