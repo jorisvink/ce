@@ -92,6 +92,8 @@ static int	syntax_highlight_c_comment(struct state *);
 static int	syntax_highlight_c_preproc(struct state *);
 
 static void	syntax_highlight_lua(struct state *);
+static int	syntax_highlight_lua_comment(struct state *);
+
 static void	syntax_highlight_go(struct state *);
 static void	syntax_highlight_yaml(struct state *);
 static void	syntax_highlight_swift(struct state *);
@@ -1100,6 +1102,9 @@ syntax_highlight_lua(struct state *state)
 	if (syntax_highlight_word(state, lua_kw) == 0)
 		return;
 
+	if (syntax_highlight_lua_comment(state) == 0)
+		return;
+
 	if (syntax_highlight_numeric(state) == 0)
 		return;
 
@@ -1108,6 +1113,23 @@ syntax_highlight_lua(struct state *state)
 
 	syntax_state_color_clear(state);
 	syntax_write(state, 1);
+}
+
+static int
+syntax_highlight_lua_comment(struct state *state)
+{
+	if (state->inside_string)
+		return (-1);
+
+	if (state->len >= 2 &&
+	    state->p[0] == '-' && state->p[1] == '-') {
+		syntax_state_color(state, SYNTAX_COLOR_COMMENT);
+		syntax_write(state, state->len - 1);
+		state->flags |= SYNTAX_CLEAR_COMMENT;
+		return (0);
+	}
+
+	return (-1);
 }
 
 static void
