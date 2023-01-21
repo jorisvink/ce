@@ -1403,9 +1403,9 @@ editor_cmdbuf_input(struct cebuf *buf, u_int8_t key)
 			break;
 		case 't':
 			if (strlen(cmd) > 3) {
-				if (!strcmp(&cmd[2], "show")) {
+				if (!strcmp(&cmd[3], "show")) {
 					config.tab_show = 1;
-				} else if (!strcmp(&cmd[2], "hide")) {
+				} else if (!strcmp(&cmd[3], "hide")) {
 					config.tab_show = 0;
 				}
 				ce_editor_dirty();
