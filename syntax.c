@@ -91,6 +91,8 @@ static int	syntax_highlight_c_label(struct state *);
 static int	syntax_highlight_c_comment(struct state *);
 static int	syntax_highlight_c_preproc(struct state *);
 
+static void	syntax_highlight_zig(struct state *);
+
 static void	syntax_highlight_lua(struct state *);
 static int	syntax_highlight_lua_comment(struct state *);
 
@@ -231,6 +233,20 @@ static const char *go_kw[] = {
 	"else", "goto", "package", "switch", "const",
 	"fallthrough", "if", "range", "type", "continue",
 	"for", "import", "return", "var", NULL
+};
+
+/* I really should add macro support to my editor.... */
+static const char *zig_kw[] = {
+	"addrspace", "align", "and", "asm", "async",
+	"await", "break", "catch", "comptime", "const",
+	"continue", "defer", "else", "enum", "errdefer",
+	"error", "export", "extern", "for", "if", "inline",
+	"noalias", "noinline", "nosuspend", "opaque", "or",
+	"orelse", "packed", "anyframe", "pub", "resume", "return",
+	"linksection", "callconv", "struct", "suspend", "switch",
+	"test", "threadlocal", "try", "union", "unreachable", "usingnamespace",
+	"var", "volatile", "allowzero", "while", "anytype", "fn",
+	NULL
 };
 
 enum {
@@ -399,6 +415,9 @@ ce_syntax_write(struct cebuf *buf, struct celine *line, size_t index,
 				break;
 			case CE_FILE_TYPE_LUA:
 				syntax_highlight_lua(&syntax_state);
+				break;
+			case CE_FILE_TYPE_ZIG:
+				syntax_highlight_zig(&syntax_state);
 				break;
 			default:
 				syntax_state_color_clear(&syntax_state);
@@ -1130,6 +1149,25 @@ syntax_highlight_lua_comment(struct state *state)
 	}
 
 	return (-1);
+}
+
+static void
+syntax_highlight_zig(struct state *state)
+{
+	if (syntax_highlight_c_comment(state) == 0)
+		return;
+
+	if (syntax_highlight_numeric(state) == 0)
+		return;
+
+	if (syntax_highlight_string(state) == 0)
+		return;
+
+	if (syntax_highlight_word(state, zig_kw) == 0)
+		return;
+
+	syntax_state_color_clear(state);
+	syntax_write(state, 1);
 }
 
 static void

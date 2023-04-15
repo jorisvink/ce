@@ -44,6 +44,7 @@ static struct {
 	{ ".tex",	CE_FILE_TYPE_LATEX },
 	{ ".latex",	CE_FILE_TYPE_LATEX },
 	{ ".lua",	CE_FILE_TYPE_LUA },
+	{ ".zig",	CE_FILE_TYPE_ZIG },
 	{ NULL,		0 },
 };
 
