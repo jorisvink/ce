@@ -43,6 +43,7 @@
 #define EDITOR_CMD_HIST_PREV	0x10
 #define EDITOR_CMD_HIST_NEXT	0x0e
 
+#define EDITOR_INTERRUPT	0x03
 #define EDITOR_WORD_ERASE	0x17
 #define EDITOR_KEY_ESC		0x1b
 #define EDITOR_KEY_UP		0xfa
@@ -65,6 +66,7 @@
 #define EDITOR_COMMAND_ALIGN		9
 #define EDITOR_COMMAND_JUMP_DOWN	10
 #define EDITOR_COMMAND_JUMP_UP		11
+#define EDITOR_COMMAND_BUFFER		12
 
 #define KEY_MAP_LEN(x)		((sizeof(x) / sizeof(x[0])))
 
@@ -1836,8 +1838,11 @@ editor_normal_mode_command(u_int8_t key)
 		case 'z':
 			normalcmd = EDITOR_COMMAND_ALIGN;
 			break;
-		case 0x17:
+		case EDITOR_WORD_ERASE:
 			normalcmd = EDITOR_COMMAND_PROCESS;
+			break;
+		case EDITOR_INTERRUPT:
+			normalcmd = EDITOR_COMMAND_BUFFER;
 			break;
 		case '\'':
 			normalcmd = EDITOR_COMMAND_MARK_JMP;
@@ -1922,6 +1927,18 @@ direct:
 				break;
 			case 'k':
 				ce_proc_kill(buf->proc);
+				break;
+			}
+			break;
+		case EDITOR_COMMAND_BUFFER:
+			switch (key) {
+			case 'o':
+				ce_buffer_close_nonactive();
+				ce_editor_dirty();
+				break;
+			case 's':
+				ce_buffer_close_shellbufs();
+				ce_editor_dirty();
 				break;
 			}
 			break;
