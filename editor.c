@@ -75,6 +75,12 @@ struct keymap {
 	void		(*command)(void);
 };
 
+struct inq {
+	size_t			sz;
+	size_t			off;
+	u_int8_t		data[512];
+};
+
 static void	editor_signal(int);
 static void	editor_resume(void);
 static void	editor_event_wait(void);
@@ -84,9 +90,9 @@ static void	editor_consume_input(void);
 static u_int8_t	editor_process_escape(void);
 static void	editor_preset_cmd(const char *);
 static int	editor_allowed_command_key(char);
-static int	editor_get_input(u_int8_t *, int);
 static int	editor_cmd_can_autocomplete(void);
 static void	editor_shellbuf_close(struct cebuf *);
+static int	editor_get_input(u_int8_t *, int,int);
 static void	editor_autocomplete_path(struct cebuf *);
 static void	editor_splash_text(u_int16_t, const char *, ...);
 static void	editor_shellbuf_new(const char *, struct cebuf **);
@@ -103,6 +109,8 @@ static void	editor_cmd_find(void);
 static void	editor_cmd_exec(void);
 static void	editor_cmd_reset(void);
 static void	editor_cmd_paste(void);
+static void	editor_cmd_record(void);
+static void	editor_cmd_replay(void);
 static void	editor_cmd_suspend(void);
 static void	editor_cmd_word_erase(void);
 static void	editor_cmd_search_next(void);
@@ -179,7 +187,6 @@ static struct keymap normal_map[] = {
 	{ 'i',			editor_cmd_insert_mode },
 	{ 'o',			editor_cmd_insert_mode_append },
 	{ 'O',			editor_cmd_insert_mode_prepend },
-
 	{ 's',			editor_cmd_select_mode },
 
 	{ 'g',			editor_cmd_grep },
@@ -187,6 +194,9 @@ static struct keymap normal_map[] = {
 	{ 'e',			editor_cmd_exec },
 	{ ':',			editor_cmd_command_mode },
 	{ '/',			editor_cmd_search_mode },
+
+	{ 'R',			editor_cmd_replay },
+	{ '@',			editor_cmd_record },
 
 	{ 0x04,			editor_cmd_directory_list },
 
@@ -268,11 +278,8 @@ static struct {
 	time_t			when;
 } msg;
 
-static struct {
-	size_t			sz;
-	size_t			off;
-	u_int8_t		data[512];
-} inq;
+static struct inq		inq;
+static struct inq		rec;
 
 static int			quit = 0;
 static int			dirty = 1;
@@ -280,6 +287,7 @@ static int			splash = 0;
 static int			pasting = 0;
 static int			award_xp = 0;
 static volatile sig_atomic_t	sig_recv = -1;
+static int			recording = 0;
 static int			normalcmd = -1;
 static char			*home = NULL;
 static char			*curdir = NULL;
@@ -315,6 +323,7 @@ ce_editor_init(void)
 
 	memset(&msg, 0, sizeof(msg));
 	memset(&inq, 0, sizeof(inq));
+	memset(&rec, 0, sizeof(rec));
 	editor_directory_change(pwd);
 
 	free(msg.message);
@@ -532,7 +541,7 @@ ce_editor_yesno(void (*cb)(const void *), const void *arg, const char *fmt, ...)
 		editor_draw_message(NULL);
 		ce_term_flush();
 
-		if (editor_get_input(&key, 1) == 0)
+		if (editor_get_input(&key, 1, 0) == 0)
 			return (-1);
 
 		switch (key) {
@@ -791,6 +800,7 @@ static void
 editor_read_input(void)
 {
 	ssize_t		sz;
+	size_t		idx;
 
 	for (;;) {
 		sz = read(STDIN_FILENO, inq.data, sizeof(inq.data));
@@ -805,6 +815,12 @@ editor_read_input(void)
 
 		inq.sz = sz;
 		inq.off = 0;
+
+		if (recording) {
+			idx = 0;
+			while (rec.sz != sizeof(rec.data) && idx < inq.sz)
+				rec.data[rec.sz++] = inq.data[idx++];
+		}
 
 		award_xp += sz;
 		if (award_xp >= 50) {
@@ -826,7 +842,7 @@ editor_consume_input(void)
 	if (mode >= CE_EDITOR_MODE_MAX)
 		fatal("%s: mode %d invalid", __func__, mode);
 
-	if (editor_get_input(&key, 0) == 0)
+	if (editor_get_input(&key, 0, 0) == 0)
 		return;
 
 	if (key == EDITOR_KEY_ESC)
@@ -875,26 +891,32 @@ editor_process_escape(void)
 
 	ret = EDITOR_KEY_ESC;
 
-	if (editor_get_input(&key, 0) == 0)
+	if (editor_get_input(&key, 0, 1) == 0)
 		goto cleanup;
 
 	if (key != 0x5b)
 		goto cleanup;
 
-	if (editor_get_input(&key, 0) == 0)
+	inq.off++;
+
+	if (editor_get_input(&key, 0, 1) == 0)
 		goto cleanup;
 
 	switch (key) {
 	case 0x41:
+		inq.off++;
 		ret = EDITOR_KEY_UP;
 		break;
 	case 0x42:
+		inq.off++;
 		ret = EDITOR_KEY_DOWN;
 		break;
 	case 0x43:
+		inq.off++;
 		ret = EDITOR_KEY_RIGHT;
 		break;
 	case 0x44:
+		inq.off++;
 		ret = EDITOR_KEY_LEFT;
 		break;
 	}
@@ -904,7 +926,7 @@ cleanup:
 }
 
 static int
-editor_get_input(u_int8_t *out, int fetch)
+editor_get_input(u_int8_t *out, int fetch, int peek)
 {
 	*out = 0;
 
@@ -915,7 +937,9 @@ editor_get_input(u_int8_t *out, int fetch)
 		return (0);
 
 	*out = inq.data[inq.off];
-	inq.off++;
+
+	if (peek == 0)
+		inq.off++;
 
 	return (1);
 }
@@ -928,9 +952,10 @@ editor_draw_status(void)
 	size_t			cmdoff, width, pc, dlen;
 	int			flen, slen, llen, procfd;
 	char			fline[1024], sline[128], lline[128];
-	const char		*isdirty, *filemode, *modestr, *dname;
+	const char		*isdirty, *filemode, *modestr, *dname, *recmode;
 
 	isdirty = "";
+	recmode = "";
 	filemode = "";
 	modestr = NULL;
 	curbuf = ce_buffer_active();
@@ -963,6 +988,9 @@ editor_draw_status(void)
 	else
 		filemode = "rw";
 
+	if (recording)
+		recmode = "R";
+
 	procfd = (curbuf->proc != NULL) ? curbuf->proc->ofd : -1;
 
 	if (curbuf->top == 0) {
@@ -988,14 +1016,15 @@ editor_draw_status(void)
 
 	if (mode == CE_EDITOR_MODE_SELECT) {
 		slen = snprintf(sline, sizeof(sline),
-		    "[%s] %zu,%zu-%zu %s %zu.%zu <> %zu.%zu", filemode,
+		    "[%s%s] %zu,%zu-%zu %s %zu.%zu <> %zu.%zu",
+		    filemode, recmode,
 		    curbuf->top + curbuf->line, curbuf->loff,
 		    curbuf->column, modestr,
 		    curbuf->selstart.line + 1, curbuf->selstart.col,
 		    curbuf->selend.line + 1, curbuf->selend.col);
 	} else {
 		slen = snprintf(sline, sizeof(sline),
-		    "[%s] %zu,%zu-%zu %s", filemode,
+		    "[%s%s] %zu,%zu-%zu %s", filemode, recmode,
 		    curbuf->top + curbuf->line, curbuf->loff,
 		    curbuf->column, modestr);
 	}
@@ -1787,7 +1816,7 @@ editor_normal_mode_command(u_int8_t key)
 	}
 
 	if (key == EDITOR_KEY_UTF8_PREFIX) {
-		if (editor_get_input(&key, 25) == 0)
+		if (editor_get_input(&key, 25, 0) == 0)
 			return;
 
 		switch (key) {
@@ -2304,7 +2333,7 @@ editor_cmd_change_string(struct cebuf *buf)
 {
 	u_int8_t		key;
 
-	if (editor_get_input(&key, 1) == 0)
+	if (editor_get_input(&key, 1, 0) == 0)
 		return;
 
 	switch (key) {
@@ -2789,6 +2818,38 @@ reset:
 	pbuffer->data = old;
 	pbuffer->length = old_len;
 #endif
+}
+
+static void
+editor_cmd_record(void)
+{
+	if (recording) {
+		recording = 0;
+		if (rec.sz > 0)
+			rec.sz--;
+		return;
+	}
+
+	recording = 1;
+	memset(&rec, 0, sizeof(rec));
+}
+
+static void
+editor_cmd_replay(void)
+{
+	if (recording) {
+		rec.sz--;
+		return;
+	}
+
+	memcpy(&inq, &rec, sizeof(rec));
+
+	inq.off = 0;
+
+	while (inq.off != inq.sz)
+		editor_consume_input();
+
+	memset(&inq, 0, sizeof(inq));
 }
 
 static void
