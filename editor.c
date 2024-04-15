@@ -438,7 +438,7 @@ ce_editor_loop(void)
 
 		if (splash) {
 			level = ce_game_level();
-			ce_term_foreground_rgb(52, 119, 115);
+			ce_term_foreground_rgb(64, 64, 64);
 			ce_term_writestr(TERM_SEQUENCE_CURSOR_SAVE);
 			editor_splash_text(0, CE_SPLASH_TEXT_1);
 			editor_splash_text(1, CE_SPLASH_TEXT_2);
@@ -1060,7 +1060,7 @@ editor_draw_status(void)
 	ce_term_setpos(ce_term_height() - 1, TERM_CURSOR_MIN);
 	ce_term_writestr(TERM_SEQUENCE_LINE_ERASE);
 	ce_term_color(TERM_COLOR_WHITE + TERM_COLOR_FG);
-	ce_term_background_rgb(52, 119, 115);
+	ce_term_background_rgb(64, 64, 64);
 	ce_term_writef(" %s %s", &fline[cmdoff], sline);
 
 	if ((size_t)(slen + flen) < (ce_term_width() - llen)) {

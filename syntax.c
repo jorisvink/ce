@@ -348,7 +348,7 @@ ce_syntax_write(struct cebuf *buf, struct celine *line, size_t index,
 				tabstart = ">";
 				syntax_state_term_bold(&syntax_state, 0);
 				syntax_state_foreground_color(&syntax_state,
-				    192, 192, 192);
+				    64, 64, 64);
 			} else {
 				tabpos = " ";
 				tabstart = " ";
