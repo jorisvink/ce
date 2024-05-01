@@ -438,7 +438,7 @@ ce_editor_loop(void)
 
 		if (splash) {
 			level = ce_game_level();
-			ce_term_foreground_rgb(64, 64, 64);
+			ce_term_foreground_rgb(128, 128, 128);
 			ce_term_writestr(TERM_SEQUENCE_CURSOR_SAVE);
 			editor_splash_text(0, CE_SPLASH_TEXT_1);
 			editor_splash_text(1, CE_SPLASH_TEXT_2);
