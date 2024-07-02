@@ -31,7 +31,7 @@
 #include "ce.h"
 
 #define CE_SPLASH_TEXT_1	"Coma Editor"
-#define CE_SPLASH_TEXT_2	"Peace In Mind"
+#define CE_SPLASH_TEXT_2	"Peace Of Mind"
 
 #define CE_UTF8_U2015		"\xe2\x80\x95"
 
