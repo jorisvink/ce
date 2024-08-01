@@ -115,8 +115,7 @@ static void	syntax_highlight_span(struct state *, char, char, int);
 
 static const char *tags[] = {
 	"XXX",
-	"@secnote-begin",
-	"@secnote-end",
+	"TODO",
 	NULL
 };
 
