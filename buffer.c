@@ -799,8 +799,6 @@ ce_buffer_word_erase(struct cebuf *buf)
 	ce_buffer_line_allocate(buf, line);
 
 	buf->loff = start;
-
-	ptr = line->data;
 	for (idx = 0; idx < chars; idx++)
 		buffer_line_erase_character(buf, line, 1);
 

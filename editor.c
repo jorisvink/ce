@@ -1542,7 +1542,6 @@ editor_cmdbuf_input(struct cebuf *buf, u_int8_t key)
 		editor_cmd_history_cycle(0, extcmd);
 		break;
 	case EDITOR_CMD_HIST_NEXT:
-		ptr = buf->data;
 		if (histlen > 0) {
 			hist = ce_hist_lookup(histcmd, histlen, 0);
 			if (hist == NULL)
@@ -1550,7 +1549,6 @@ editor_cmdbuf_input(struct cebuf *buf, u_int8_t key)
 		}
 		break;
 	case EDITOR_CMD_HIST_PREV:
-		ptr = buf->data;
 		if (histlen > 0) {
 			hist = ce_hist_lookup(histcmd, histlen, 1);
 			if (hist == NULL)

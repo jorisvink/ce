@@ -376,8 +376,6 @@ ce_syntax_write(struct cebuf *buf, struct celine *line, size_t index,
 			syntax_state.off++;
 			break;
 		default:
-			spaces = syntax_state.off;
-
 			syntax_state.p = &p[syntax_state.off];
 			syntax_state.len = towrite - syntax_state.off;
 
@@ -963,7 +961,7 @@ syntax_highlight_python_multiline_string(struct state *state)
 	if (state->inside_string == 0) {
 		if (hit) {
 			state->inside_string = 0xff;
-			syntax_state_color(state, SYNTAX_COLOR_COMMENT);
+			syntax_state_color(state, SYNTAX_COLOR_RED);
 			syntax_write(state, 3);
 			return (0);
 		}
