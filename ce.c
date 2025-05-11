@@ -71,7 +71,6 @@ main(int argc, char *argv[])
 			debug = 1;
 			break;
 		case 'l':
-			/* lame mode. */
 			lame_mode = 1;
 			break;
 		case 'v':
