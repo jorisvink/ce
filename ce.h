@@ -21,6 +21,15 @@
 #include <errno.h>
 #include <poll.h>
 #include <stdarg.h>
+
+/*
+ * Extremely ugly hack to get past glibc 2.43 its insane implementation
+ * of C23 features shoved down a C99 code base.
+ */
+#if defined(__GLIBC__)
+#undef __GLIBC_USE_ISOC23
+#endif
+
 #include <string.h>
 
 #define CE_GREP_CMD		"!rg -uuu --line-number "
