@@ -1959,6 +1959,12 @@ direct:
 			break;
 		case EDITOR_COMMAND_BUFFER:
 			switch (key) {
+			case 'e':
+				if (ce_buffer_scratch_active()) {
+					ce_buffer_erase(buf);
+					ce_editor_dirty();
+				}
+				break;
 			case 'o':
 				ce_buffer_close_nonactive();
 				ce_editor_dirty();
