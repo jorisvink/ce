@@ -92,6 +92,7 @@ static int	syntax_highlight_c_comment(struct state *);
 static int	syntax_highlight_c_preproc(struct state *);
 
 static void	syntax_highlight_zig(struct state *);
+static void	syntax_highlight_config(struct state *);
 
 static void	syntax_highlight_lua(struct state *);
 static int	syntax_highlight_lua_comment(struct state *);
@@ -415,6 +416,9 @@ ce_syntax_write(struct cebuf *buf, struct celine *line, size_t index,
 				break;
 			case CE_FILE_TYPE_ZIG:
 				syntax_highlight_zig(&syntax_state);
+				break;
+			case CE_FILE_TYPE_CONFIG:
+				syntax_highlight_config(&syntax_state);
 				break;
 			default:
 				syntax_state_color_clear(&syntax_state);
@@ -1161,6 +1165,22 @@ syntax_highlight_zig(struct state *state)
 		return;
 
 	if (syntax_highlight_word(state, zig_kw) == 0)
+		return;
+
+	syntax_state_color_clear(state);
+	syntax_write(state, 1);
+}
+
+static void
+syntax_highlight_config(struct state *state)
+{
+	if (syntax_highlight_pound_comment(state) == 0)
+		return;
+
+	if (syntax_highlight_numeric(state) == 0)
+		return;
+
+	if (syntax_highlight_string(state) == 0)
 		return;
 
 	syntax_state_color_clear(state);
