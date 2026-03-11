@@ -372,6 +372,9 @@ cleanup:
 struct cebuf *
 ce_buffer_active(void)
 {
+	if (active->lcnt == 0)
+		ce_buffer_line_alloc_empty(active);
+
 	return (active);
 }
 

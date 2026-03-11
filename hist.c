@@ -68,10 +68,6 @@ ce_hist_autocomplete(int up)
 	struct cehist		*hist;
 
 	buf = ce_buffer_active();
-
-	if (buf->lcnt == 0)
-		ce_buffer_line_alloc_empty(buf);
-
 	line = ce_buffer_line_current(buf);
 
 	if (line->length == 0)
