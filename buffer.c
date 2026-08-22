@@ -1439,7 +1439,7 @@ ce_buffer_page_up(void)
 		return;
 
 	if (active->top > active->height)
-		active->top -= active->height;
+		active->top -= (active->height - 1);
 	else
 		active->top = 0;
 
@@ -1526,7 +1526,7 @@ ce_buffer_page_down(void)
 	if (index >= active->lcnt) {
 		ce_buffer_jump_down();
 	} else {
-		active->top += active->height;
+		active->top += (active->height - 1);
 
 		if (index + (active->height / 2) < active->lcnt - 1)
 			active->line = active->height / 2;
