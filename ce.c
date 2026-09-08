@@ -29,6 +29,7 @@ static struct {
 	{ ".c",		CE_FILE_TYPE_C },
 	{ ".cpp",	CE_FILE_TYPE_C },
 	{ ".h",		CE_FILE_TYPE_C },
+	{ ".ino",	CE_FILE_TYPE_C },
 	{ ".py",	CE_FILE_TYPE_PYTHON },
 	{ ".diff",	CE_FILE_TYPE_DIFF },
 	{ ".patch",	CE_FILE_TYPE_DIFF },
